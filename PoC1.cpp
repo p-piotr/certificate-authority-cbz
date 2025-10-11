@@ -1,5 +1,5 @@
 #include <iostream>
-#include <bitset>
+#include <map>
 #include <sstream>
 #include <cinttypes>
 #include <vector>
@@ -9,8 +9,40 @@ using std::string;
 using std::vector;
 using std::cout;
 using std::endl;
+using std::map;
 
-static vector<uint8_t> der_null = {0x05, 0x00};
+static const vector<uint8_t> der_null = {0x05, 0x00};
+
+
+static const map<string, vector<uint32_t>> AttributesOIDs = {
+    {"countryName",              {2, 5, 4, 6}},
+    {"stateOrProvinceName",      {2, 5, 4, 8}},
+    {"localityName",             {2, 5, 4, 7}},
+    {"organizationName",         {2, 5, 4, 10}},
+    {"organizationalUnitName",   {2, 5, 4, 11}},
+    {"commonName",               {2, 5, 4, 3}},
+    {"emailAddress",             {1, 2, 840, 113549, 1, 9, 1}},
+    {"rsaEncryption",            {1, 2, 840, 113549, 1, 1, 1}},
+    {"unstucturedName",          {1, 2, 840, 113549, 1, 9, 2}},
+    {"challengePassword",        {1, 2, 840, 113549, 1, 9, 7}},
+    {"sha256WithRSAEncryption",  {1, 2, 840, 113549, 1, 9, 11}},
+};
+
+static const map<string, string> OIDsAttributes = {
+    {"2.5.4.6",                 "countryName"},
+    {"2.5.4.8",                 "stateOrProvinceName"},
+    {"2.5.4.7",                 "localityName"},
+    {"2.5.4.10",                "organizationName"},
+    {"2.5.4.11",                "organizationalUnitName"},
+    {"2.5.4.3",                 "commonName"},
+    {"1.2.840.113549.1.9.1",    "emailAddress"},
+    {"1.2.840.113549.1.1.1",    "rsaEncryption"},
+    {"1.2.840.113549.1.9.2",    "unstucturedName"},
+    {"1.2.840.113549.1.9.7",    "challengePassword"}, 
+    {"1.2.840.113549.1.9.11",   "sha256WithRSAEncryption"}, 
+};
+
+
 
 
 vector<uint8_t> encode_der_length(size_t length){
@@ -135,20 +167,11 @@ vector<uint8_t> encode_der_string(string str, string_t str_type){
     }
     vector<uint8_t> der;
     der.push_back(tag);
-    der.push_back(bytes.size());
+    vector<uint8_t> length = encode_der_length(bytes.size());
+    der.insert(der.end(), length.begin(), length.end());
     der.insert(der.end(), bytes.begin(), bytes.end());
     return der;
 }
-
-class AttribiuteTypeAndValue{
-    vector<uint32_t> oid;
-    string value;
-    string_t value_type;
-
-    AttribiuteTypeAndValue(){
-
-    }
-};
 
 vector<uint32_t> split_oid(string oid){
     //https://gist.github.com/mattearly/d8afe122912eb8872bc0fddb62a32376
@@ -164,6 +187,29 @@ vector<uint32_t> split_oid(string oid){
     cout << endl;
     return elements;
 }
+
+class AttribiuteTypeAndValue{
+    vector<uint32_t> type;   // OID;
+    string value;             // Note: Specification doesn't require it to be string;
+    string_t value_type;
+
+    AttribiuteTypeAndValue(string type_, string value_, string_t value_type_) : type(split_oid(type_)), value(value_), value_type(value_type_) {}
+    AttribiuteTypeAndValue(vector<uint32_t> type_, string value_, string_t value_type_) : type(type_), value(value_), value_type(value_type_) {}
+
+    vector<uint8_t> encode() const {
+        vector<uint8_t> type_enc = encode_der_oid(type);
+        vector<uint8_t> value_enc = encode_der_string(value, value_type);
+        vector<uint8_t> der;
+        der.push_back(0x30);
+        vector<uint8_t> length = encode_der_length(type_enc.size() + value_enc.size());
+        der.insert(der.end(), length.begin(), length.end());
+        der.insert(der.end(), type_enc.begin(), type_enc.end());
+        der.insert(der.end(), value_enc.begin(), value_enc.end());
+        return der;
+    }
+
+};
+
 
 
 
