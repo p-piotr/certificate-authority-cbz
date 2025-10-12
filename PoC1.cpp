@@ -7,7 +7,14 @@
 #include <vector>
 #include <gmpxx.h>
 
+#include <openssl/rsa.h>
+#include <openssl/pem.h>
+#include <openssl/evp.h>
+#include <openssl/sha.h>
+
+
 using std::string;
+using std::runtime_error;
 using std::pair;
 using std::vector;
 using std::cout;
@@ -449,7 +456,7 @@ public:
             vector<uint8_t> temp = attr.encode();
             content.insert(content.end(), temp.begin(), temp.end());
         }
-        vector<uint8_t> der = {0x0A};
+        vector<uint8_t> der = {0xA0};
         vector<uint8_t> length = encode_der_length(content.size());
         der.insert(der.end(), length.begin(), length.end());
         der.insert(der.end(), content.begin(), content.end());
@@ -461,6 +468,7 @@ public:
 };
 
 
+// example of how to construct object
 // certificationRequestInfo CRI(
 //     {
 //         {"2.5.4.6", "ab"},
@@ -480,6 +488,55 @@ public:
 // );
 
 
+//https://www.rfc-editor.org/rfc/rfc2313.html
+//https://eprint.iacr.org/2018/855.pdf
+//Sign = hash + padding + encrypt, it is kinda doable
+vector<uint8_t> rsa_sha256_sign(const vector<uint8_t> &data, const string &private_key_path) {
+    FILE *fp = fopen(private_key_path.c_str(), "r");
+    if (!fp) throw runtime_error("Unable to open file: " + private_key_path);
+
+    EVP_PKEY *pkey = PEM_read_PrivateKey(fp, nullptr, nullptr, nullptr);
+    fclose(fp);
+    if (!pkey) throw runtime_error("Unable to parse private key");
+
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    if (!mdctx) {
+        EVP_PKEY_free(pkey);
+        throw runtime_error("Unable to create EVP_MD_CTX");
+    }
+
+    if (EVP_DigestSignInit(mdctx, nullptr, EVP_sha256(), nullptr, pkey) <= 0) {
+        EVP_MD_CTX_free(mdctx);
+        EVP_PKEY_free(pkey);
+        throw runtime_error("EVP_DigestSignInit failed");
+    }
+
+    if (EVP_DigestSignUpdate(mdctx, data.data(), data.size()) <= 0) {
+        EVP_MD_CTX_free(mdctx);
+        EVP_PKEY_free(pkey);
+        throw runtime_error("EVP_DigestSignUpdate failed");
+    }
+
+    size_t siglen = 0;
+    EVP_DigestSignFinal(mdctx, nullptr, &siglen);
+
+    vector<uint8_t> signature(siglen);
+    if (EVP_DigestSignFinal(mdctx, signature.data(), &siglen) <= 0) {
+        EVP_MD_CTX_free(mdctx);
+        EVP_PKEY_free(pkey);
+        throw runtime_error("EVP_DigestSignFinal failed");
+    }
+
+    signature.resize(siglen);
+    for(auto byte : signature)
+        printf("%.2X ", byte);
+    cout << endl;
+
+    EVP_MD_CTX_free(mdctx);
+    EVP_PKEY_free(pkey);
+
+    return signature;
+}
 
 int main(){
     certificationRequestInfo CRI(
@@ -501,6 +558,8 @@ int main(){
     for(auto byte : bytes)
         printf("%.2X ", byte);
     cout << endl;
+    rsa_sha256_sign(bytes, "private-key.pem");
+    
  
     return 0;
 }
