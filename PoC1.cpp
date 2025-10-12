@@ -1,4 +1,6 @@
 #include <iostream>
+#include <unistd.h>
+#include <fstream>
 #include <utility>
 #include <string>
 #include <map>
@@ -20,6 +22,9 @@ using std::vector;
 using std::cout;
 using std::endl;
 using std::map;
+using std::ifstream;
+using std::ofstream;
+using std::cin;
 
 enum string_t{
     IA5STRING,
@@ -149,7 +154,7 @@ static vector<uint8_t> encode_oid_component(uint32_t value) {
     return encoding;
 }
 
-vector<uint8_t> encode_der_oid(const vector<uint32_t>& oid){
+vector<uint8_t> encode_der_oid(const vector<uint32_t> &oid){
     if (oid.size() < 2){
         throw std::invalid_argument("OID must have at least two components");
     }
@@ -419,7 +424,7 @@ public:
     const vector<pair<string,string>> &attrs = {}
     ) : 
         SubjectPublicKeyInfo({ 
-        {"1.2.840.113549.1.1.1"}, // Must be RSA, only this is handled
+        {"1.2.840.113549.1.1.1"}, // Must be RSA, only this is handled, it would require additional argument if we are to do something else
         {modulus, exponent} 
     }) , version(0) 
     {
@@ -527,10 +532,6 @@ vector<uint8_t> rsa_sha256_sign(const vector<uint8_t> &data, const string &priva
         throw runtime_error("EVP_DigestSignFinal failed");
     }
 
-    signature.resize(siglen);
-    for(auto byte : signature)
-        printf("%.2X ", byte);
-    cout << endl;
 
     EVP_MD_CTX_free(mdctx);
     EVP_PKEY_free(pkey);
@@ -538,8 +539,84 @@ vector<uint8_t> rsa_sha256_sign(const vector<uint8_t> &data, const string &priva
     return signature;
 }
 
+class CertificationRequest{
+    certificationRequestInfo CRI;
+    AlgorithmIdentifier signatureAlgorithm;
+    vector<uint8_t> signature;
+public:
+    CertificationRequest(certificationRequestInfo CRI_, AlgorithmIdentifier signatureAlgorithm_) : CRI(CRI_), signatureAlgorithm(signatureAlgorithm_) {}
+    CertificationRequest(
+    const vector<pair<string,string>> & subject,
+    const mpz_class &modulus,
+    const mpz_class &exponent,
+    const vector<pair<string,string>> &attrs = {})
+    : CRI(subject, modulus, exponent, attrs), signatureAlgorithm("1.2.840.113549.1.1.11") // same case as with CRI, if you want other signing algorithms it will require addional argument(s)
+    {}
+
+    vector<uint8_t> encode(const string &path){
+        vector<uint8_t> CRI_enc = CRI.encode();
+        return encode_der_sequence({CRI_enc, signatureAlgorithm.encode(), encode_der_bitstring(rsa_sha256_sign(CRI_enc, path))});
+    }
+};
+
+
+// https://gist.github.com/williamdes/308b95ac9ef1ee89ae0143529c361d37
+string base64_encode(const vector<uint8_t> &in) {
+    static const string b64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    string out;
+    int val = 0, valb = -6;
+
+    for (uint8_t c : in) {
+        val = (val << 8) + c;
+        valb += 8;
+        while (valb >= 0) {
+            out.push_back(b64_chars[(val >> valb) & 0x3F]);
+            valb -= 6;
+        }
+    }
+
+    if (valb > -6) {
+        out.push_back(b64_chars[((val << 8) >> (valb + 8)) & 0x3F]);
+    }
+
+    while (out.size() % 4) {
+        out.push_back('=');
+    }
+
+    return out;
+}
+
+void write_to_file(string base64, string name){
+    string header = "-----BEGIN CERTIFICATE REQUEST-----\n";
+    string trailer = "\n-----END CERTIFICATE REQUEST-----\n";
+    ifstream ifile(name.c_str());
+    if(ifile.good()){
+        string input;
+        cout << "File already exists do you want to overwrite [y/n]: ";
+        cin >> input;
+        if(input[0] != 'y')
+            return;
+    }
+    ifile.close();
+    ofstream ofile(name.c_str());
+    ofile << header;
+
+    int i = 0;
+    for(auto ch : base64){
+        ofile << ch;
+        i++;
+        if(i==64){
+            i=0;
+            ofile << '\n';
+        }
+    }
+
+    ofile << trailer;
+}
+
+
 int main(){
-    certificationRequestInfo CRI(
+    CertificationRequest CR(
         {
             {"2.5.4.6", "AU"},
             {"2.5.4.8", "Meow"},
@@ -553,13 +630,11 @@ int main(){
         }
     );
 
-
-    vector<uint8_t> bytes = CRI.encode();
-    for(auto byte : bytes)
-        printf("%.2X ", byte);
-    cout << endl;
-    rsa_sha256_sign(bytes, "private-key.pem");
     
+    vector<uint8_t> bytes = CR.encode("private-key.pem");
+    string out = base64_encode(bytes);
+    write_to_file(out, "test.pem");
+
  
     return 0;
 }
