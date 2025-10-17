@@ -51,7 +51,7 @@ std::shared_ptr<ASN1Object> ASN1Parser::parse(const std::vector<uint8_t>& data, 
     return obj;
 }
 
-std::shared_ptr<ASN1Object> ASN1Parser::parseAll(const std::vector<uint8_t>& data) {
+std::shared_ptr<ASN1Object> ASN1Parser::parse_all(const std::vector<uint8_t>& data) {
     std::shared_ptr<ASN1Object> root = parse(data, 0);
     std::queue<std::shared_ptr<ASN1Object>> to_process;
     to_process.push(root);

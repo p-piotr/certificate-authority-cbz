@@ -27,7 +27,7 @@ class ASN1Object;
 class ASN1Parser {
 public:
     static std::shared_ptr<ASN1Object> parse(const std::vector<uint8_t>& data, size_t offset);
-    static std::shared_ptr<ASN1Object> parseAll(const std::vector<uint8_t>& data);
+    static std::shared_ptr<ASN1Object> parse_all(const std::vector<uint8_t>& data);
 };
 
 class ASN1Object {
@@ -45,5 +45,5 @@ public:
     }
 
     friend std::shared_ptr<ASN1Object> ASN1Parser::parse(const std::vector<uint8_t>&, size_t);
-    friend std::shared_ptr<ASN1Object> ASN1Parser::parseAll(const std::vector<uint8_t>&);
+    friend std::shared_ptr<ASN1Object> ASN1Parser::parse_all(const std::vector<uint8_t>&);
 };
