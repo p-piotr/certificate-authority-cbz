@@ -8,10 +8,9 @@ using std::ifstream;
 using std::cout;
 using std::endl;
 
-class PrivateKey {
+struct PrivateKey {
     int version;
     mpz_class n, e, d, p, q, dP, dQ, qInv;
-public:
     PrivateKey() : version(0), n(0), e(0), d(0), p(0), q(0), dP(0), dQ(0), qInv(0) {}
     PrivateKey (
     mpz_class &n_,
@@ -87,7 +86,7 @@ PrivateKey parse_der_privateKey(const vector<uint8_t> &der, size_t &start){
         throw std::runtime_error("parse_der_privateKey: Der encoding not matching PrivateKeyInfo ASN1 structure (Version bytes are wrong)" );
 
     if(der_check_finish(der, start))
-        throw std::runtime_error("PrivateKeyInfo::parse_der_privateKey: lacking some fields in private key sequence");
+        throw std::runtime_error("parse_der_privateKey: lacking some fields in private key sequence");
 
     vector<mpz_class> list(7);
     for(int i = 0; i < 7; i++){
@@ -112,7 +111,7 @@ PrivateKeyInfo parse_der(const vector<uint8_t> &der){
 
     // First byte must be 0x30 to indicate SEQUENCE
     if(der[index++] != 0x30){
-        throw std::runtime_error("PrivateKeyInfo::parse_der: Der encoding not matching PrivateKeyInfo ASN1 structure (First byte does not indicate SEQUENCE)" );
+        throw std::runtime_error("parse_der: Der encoding not matching PrivateKeyInfo ASN1 structure (First byte does not indicate SEQUENCE)" );
     }
 
     size_t PrivateKeyInfoSize = decode_der_length(der, index);
@@ -121,11 +120,11 @@ PrivateKeyInfo parse_der(const vector<uint8_t> &der){
     //Version must always be set to 0
     //So we are just handling this case
     if(der[index++] != 0x02)
-        throw std::runtime_error("PrivateKeyInfo::parse_der: Der encoding not matching PrivateKeyInfo ASN1 structure (Version bytes are wrong)" );
+        throw std::runtime_error("parse_der: Der encoding not matching PrivateKeyInfo ASN1 structure (Version bytes are wrong)" );
     if(der[index++] != 0x01)
-        throw std::runtime_error("PrivateKeyInfo::parse_der: Der encoding not matching PrivateKeyInfo ASN1 structure (Version bytes are wrong)" );
+        throw std::runtime_error("parse_der: Der encoding not matching PrivateKeyInfo ASN1 structure (Version bytes are wrong)" );
     if(der[index++] != 0x00)
-        throw std::runtime_error("PrivateKeyInfo::parse_der: Der encoding not matching PrivateKeyInfo ASN1 structure (Version bytes are wrong)" );
+        throw std::runtime_error("parse_der: Der encoding not matching PrivateKeyInfo ASN1 structure (Version bytes are wrong)" );
 
     AlgorithmIdentifier privateKeyAlgorithm = parse_der_algorithmIdentifier(der, index);
     der_check_boundry(PrivateKeyInfoSize, begin, index);
@@ -133,7 +132,7 @@ PrivateKeyInfo parse_der(const vector<uint8_t> &der){
     PrivateKey privateKey = parse_der_privateKey(der, index);
     der_check_boundry(PrivateKeyInfoSize, begin, index);
     if(!der_check_finish(der, index))
-        throw std::runtime_error("PrivateKeyInfo::parse_der_privateKey: extra fields in private key sequence");
+        throw std::runtime_error("parse_der_privateKey: extra fields in private key sequence");
     return PrivateKeyInfo(privateKeyAlgorithm, privateKey, 0);
 }
 

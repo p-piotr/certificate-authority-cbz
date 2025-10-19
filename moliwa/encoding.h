@@ -4,7 +4,7 @@
 #include <vector>
 #include <string>
 #include <gmpxx.h>
-#include <cinttypes>
+#include <cstdint>
 #include "mappings.h"
 
 
