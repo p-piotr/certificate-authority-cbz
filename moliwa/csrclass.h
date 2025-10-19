@@ -2,7 +2,9 @@
 #define csrclass
 
 #include "mappings.h"
+#include "reusable.h"
 #include "encoding.h"
+#include "reusable.h"
 #include "openssl.h"
 
 #include <utility>
@@ -11,9 +13,10 @@ using std::pair;
 using std::endl;
 
 // This is a series of classes nested within one another
-// Most of them only have a constructor (possiblly overloaded) and encode() function
+// Most of them only have a constructor (possibly overloaded) and an encode() function
 // I'm not sure if this is the correct design choice, but why not
-// Example of how to construct object the entire
+// Example of how to construct the entire object:
+// Only RSA is handled so yup
 // CertificationRequest CR(
 //     {
 //         {"2.5.4.6", "NV"},
@@ -31,6 +34,8 @@ using std::endl;
 //         {"1.2.840.113549.1.9.7", "secret"}
 //     }
 // );
+//
+
 class CertificationRequest{
 
     class AttribiuteTypeAndValue{
@@ -98,39 +103,6 @@ class CertificationRequest{
     // }
     //
     //  Note: as of now only rsaEncryption is handled
-    class AlgorithmIdentifier {
-        vector<uint32_t> algorithm; // OID
-        vector<uint8_t> parameters;
-        string attr;
-        void constr(){
-            string serial = serialize_oid(algorithm);
-            try{
-                attr = OIDsToAttributes.at(serial);
-            } catch (const std::out_of_range& e){
-                std::cerr << "Error: not handled algorithm of with OID \'" << serial << "\'" << endl;
-            }
-
-            if(attr == "1.2.840.113549.1.1.1" || attr == "1.2.840.113549.1.1.11")
-                parameters = der_null;
-
-            // If different algorithms to be handled parse parameters here
-        }
-    public:
-        AlgorithmIdentifier(string algorithm_, vector<uint8_t> parameters_ = der_null) : algorithm(split_oid(algorithm_)), parameters(parameters_) {
-            constr();
-        }
-
-        AlgorithmIdentifier(vector<uint32_t> algorithm_, vector<uint8_t> parameters_ = der_null) : algorithm(algorithm_), parameters(parameters_)   {
-            constr();
-        }
-        vector<uint8_t> encode() const {
-            return encode_der_sequence({
-                encode_der_oid(algorithm),
-                parameters
-            });
-        }
-
-    };
 
     class PublicKey{
         mpz_class modulus;
