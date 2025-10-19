@@ -25,27 +25,6 @@ public:
     size_t version_ = 0
     ) : version(version_), n(n_), e(e_), d(d_), p(p_), q(q_), dP(dP_), dQ(dQ_), qInv(qInv_) {}
 
-    // Getters
-    int getVersion() const { return version; }
-    mpz_class getN() const { return n; }
-    mpz_class getE() const { return e; }
-    mpz_class getD() const { return d; }
-    mpz_class getP() const { return p; }
-    mpz_class getQ() const { return q; }
-    mpz_class getDP() const { return dP; }
-    mpz_class getDQ() const { return dQ; }
-    mpz_class getQInv() const { return qInv; }
-
-    // Setters
-    void setVersion(int v) { version = v; }
-    void setN(const mpz_class &val) { n = val; }
-    void setE(const mpz_class &val) { e = val; }
-    void setD(const mpz_class &val) { d = val; }
-    void setP(const mpz_class &val) { p = val; }
-    void setQ(const mpz_class &val) { q = val; }
-    void setDP(const mpz_class &val) { dP = val; }
-    void setDQ(const mpz_class &val) { dQ = val; }
-    void setQInv(const mpz_class &val) { qInv = val; }
 
 
     vector<uint8_t> encode() const {
