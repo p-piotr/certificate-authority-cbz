@@ -281,6 +281,14 @@ vector<uint8_t> encode_der_bitstring(const vector<uint8_t>& bytes) {
     return out;
 }
 
+vector<uint8_t> encode_der_octet_string(const vector<uint8_t> &bytes){
+    vector<uint8_t> der = {0x30};
+    vector<uint8_t> length = encode_der_length(bytes.size());
+    der.insert(der.end(), length.begin(), length.end());
+    der.insert(der.end(), bytes.begin(), bytes.end());
+    return der;
+}
+
 // https://gist.github.com/williamdes/308b95ac9ef1ee89ae0143529c361d37
 string base64_encode(const vector<uint8_t> &in) {
     static const string b64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

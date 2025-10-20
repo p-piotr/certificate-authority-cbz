@@ -20,7 +20,7 @@ struct AlgorithmIdentifier {
             std::cerr << "Error: not handled algorithm of with OID \'" << serial << "\'" << endl;
         }
 
-        if(attr == "1.2.840.113549.1.1.1" || attr == "1.2.840.113549.1.1.11")
+        if(serial == "1.2.840.113549.1.1.1" || serial == "1.2.840.113549.1.1.11" || serial == "2.16.840.1.101.3.4.2.1")
             parameters = der_null;
 
         // If different algorithms to be handled parse parameters here

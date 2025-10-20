@@ -30,6 +30,7 @@ static const map<string, vector<uint32_t>> AttributesToOIDs = {
     {"challengePassword",        {1, 2, 840, 113549, 1, 9, 7}},
     {"rsaEncryption",            {1, 2, 840, 113549, 1, 1, 1}},
     {"sha256WithRSAEncryption",  {1, 2, 840, 113549, 1, 1, 11}},
+    {"sha256",                   {2, 16, 840, 1, 101, 3, 4, 2, 1}},
 };
 
 
@@ -45,6 +46,7 @@ static const map<string, string> OIDsToAttributes = {
     {"1.2.840.113549.1.9.7",   "challengePassword"}, 
     {"1.2.840.113549.1.1.1",   "rsaEncryption"}, 
     {"1.2.840.113549.1.1.11",  "sha256WithRSAEncryption"},
+    {"2.16.840.1.101.3.4.2.1", "sha256"}
 };
 
 static const map<string, string_t> AttributeStringTypes = {

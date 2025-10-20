@@ -1,10 +1,5 @@
-#include <cstdint>
-#include <vector>
-#include <iostream>
+#include "sha256.h"
 
-using std::vector;
-using std::endl;
-using std::cout;
 
 
 const static vector<uint32_t> k = {
@@ -18,27 +13,15 @@ const static vector<uint32_t> k = {
    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 };
 
-uint32_t rotr(uint32_t x, size_t n){
+static uint32_t rotr(uint32_t x, size_t n){
     return (x >> n) | (x << (32 - n));
 }
 
-uint32_t rotl(uint32_t x, size_t n){
+static uint32_t rotl(uint32_t x, size_t n){
     return (x << n) | (x >> (32 - n));
 }
 
 
-
-void print_bits32(uint32_t n){
-    for(uint32_t i = (1 << 31); i > 0; i >>= 1)
-        cout << ((n & i) ? "1" : "0");
-    cout << endl;
-}
-
-void print_bits8(uint8_t n){
-    for(uint32_t i = (1 << 7); i > 0; i >>= 1)
-        cout << ((n & i) ? "1" : "0");
-    cout << endl;
-}
 
 vector<uint8_t> sha256(const vector<uint8_t> &input){
      uint32_t h0 = 0x6a09e667;
@@ -127,19 +110,7 @@ vector<uint8_t> sha256(const vector<uint8_t> &input){
         }
     }
 
-    for(uint8_t byte : digest){
-        printf("%.2x", byte);
-    }
     return digest;
 }
 
 
-int main() {
-    vector<uint8_t> test({0x12, 0x34, 0x56, 0x78});
-    size_t top = 0;
-    for(size_t i = 0; i < top; i++){
-        test.push_back(i);
-    }
-    sha256(test);
-    return 0;
-}

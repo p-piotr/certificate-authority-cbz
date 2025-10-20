@@ -11,6 +11,8 @@
 using std::string;
 using std::vector;
 
+vector<uint8_t> encode_der_octet_string(const vector<uint8_t> &bytes);
+
 vector<uint8_t> encode_der_length(size_t length);
 size_t decode_der_length(const vector<uint8_t> &der, size_t &start);
 
@@ -26,6 +28,7 @@ string serialize_oid(const vector<uint32_t> &oid);
 vector<uint8_t> encode_der_sequence(const vector<vector<uint8_t>> &elements);
 vector<uint8_t> encode_der_set(const vector<vector<uint8_t>> &elements);
 vector<uint8_t> encode_der_bitstring(const vector<uint8_t>& bytes);
+
 string base64_encode(const vector<uint8_t> &in);
 vector<uint8_t> base64_decode(const string &in);
 
