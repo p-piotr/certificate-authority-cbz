@@ -7,6 +7,22 @@
 using std::endl;
 
 
+//  According to RFC
+//  PKCS1Algorithms    ALGORITHM-IDENTIFIER ::= {
+//  { OID rsaEncryption              PARAMETERS NULL } |
+//  { OID md2WithRSAEncryption       PARAMETERS NULL } |
+//  { OID md5WithRSAEncryption       PARAMETERS NULL } |
+//  { OID sha1WithRSAEncryption      PARAMETERS NULL } |
+//  { OID sha256WithRSAEncryption    PARAMETERS NULL } |
+//  { OID sha384WithRSAEncryption    PARAMETERS NULL } |
+//  { OID sha512WithRSAEncryption    PARAMETERS NULL } |
+//  { OID id-RSAES-OAEP PARAMETERS RSAES-OAEP-params } |
+//  PKCS1PSourceAlgorithms                             |
+//  { OID id-RSASSA-PSS PARAMETERS RSASSA-PSS-params } ,
+//  ...  -- Allows for future expansion --
+// }
+//
+//  Note: as of now only rsaEncryption is handled
 
 struct AlgorithmIdentifier {
     vector<uint32_t> algorithm; // OID

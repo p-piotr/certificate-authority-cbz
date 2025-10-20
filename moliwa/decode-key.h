@@ -1,4 +1,5 @@
-#ifndef decode_key
+#ifndef decode_key_h
+#define decode_key_h
 
 #include "reusable.h"
 #include <gmpxx.h>

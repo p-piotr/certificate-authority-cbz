@@ -7,12 +7,13 @@ PrivateKey parse_der_privateKey(const vector<uint8_t> &der, size_t &start){
     if(der[start++] != 0x04)
         throw std::runtime_error("PrivateKeyInfo::parse_der_privateKey: Der encoding not matching PrivateKeyInfo ASN1 structure (PrivateKey first byte does not indicate OCTET STRING)");
     size_t oct_length = decode_der_length(der, start);
-    size_t begin = start;
+    size_t begin_oct = start;
 
     if(der[start++] != 0x30)
         throw std::runtime_error("PrivateKeyInfo::parse_der_privateKey: Der encoding not matching PrivateKeyInfo ASN1 structure (PrivateKey first member of OCTET STRING, lacks bytes indicating SEQUENCE)");
 
     size_t seq_length = decode_der_length(der, start);
+    size_t begin_seq = start;
 
 
     //Version must always be set to 0
@@ -30,15 +31,15 @@ PrivateKey parse_der_privateKey(const vector<uint8_t> &der, size_t &start){
     vector<mpz_class> list(7);
     for(int i = 0; i < 7; i++){
         list[i] = decode_der_integer(der, start);
-        der_check_boundry(seq_length, begin, start);
-        der_check_boundry(oct_length, begin, start);
+        der_check_boundry(seq_length, begin_seq, start);
+        der_check_boundry(oct_length, begin_oct, start);
         if(der_check_finish(der, start))
             throw std::runtime_error("parse_der_privateKey: lacking some fields in private key sequence");
     }
 
     mpz_class qInv = decode_der_integer(der, start);
-    der_check_boundry(seq_length, begin, start);
-    der_check_boundry(oct_length, begin, start);
+    der_check_boundry(seq_length, begin_seq, start);
+    der_check_boundry(oct_length, begin_oct, start);
     if(!der_check_finish(der, start))
         throw std::runtime_error("parse_der_privateKey: extra fields in private key sequence");
 

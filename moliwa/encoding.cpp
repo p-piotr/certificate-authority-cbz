@@ -282,7 +282,7 @@ vector<uint8_t> encode_der_bitstring(const vector<uint8_t>& bytes) {
 }
 
 vector<uint8_t> encode_der_octet_string(const vector<uint8_t> &bytes){
-    vector<uint8_t> der = {0x30};
+    vector<uint8_t> der = {0x04};
     vector<uint8_t> length = encode_der_length(bytes.size());
     der.insert(der.end(), length.begin(), length.end());
     der.insert(der.end(), bytes.begin(), bytes.end());

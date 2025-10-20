@@ -1,14 +1,7 @@
-#include <stdint.h>
-#include <vector>
-#include "sha256.h"
-#include "decode-key.h"
-#include "reusable.h"
-#include "encoding.h"
-
-using std::vector;
+#include "sign.h"
 
 // https://datatracker.ietf.org/doc/html/rfc8017#section-4.2
-mpz_class OS2IP(vector<uint8_t> &in){
+static mpz_class OS2IP(vector<uint8_t> &in){
     mpz_class out = 0;
     for(uint8_t byte : in){
         out <<= 8;
@@ -18,7 +11,7 @@ mpz_class OS2IP(vector<uint8_t> &in){
 }
 
 // https://datatracker.ietf.org/doc/html/rfc8017#section-4.1
-vector<uint8_t> I2OSP(const mpz_class &in, size_t xLen){
+static vector<uint8_t> I2OSP(const mpz_class &in, size_t xLen){
     if (in < 0) {
         throw std::invalid_argument("I2OSP: integer must be nonnegative");
     }
@@ -48,7 +41,7 @@ vector<uint8_t> I2OSP(const mpz_class &in, size_t xLen){
 // Note: according to my best friend there are several security issues here:
 // 1. Bellcore/Lenstra Attacks
 // 2. Timing information leaking
-mpz_class RSAPS1(const PrivateKey &K, mpz_class &m){
+static mpz_class RSAPS1(const PrivateKey &K, mpz_class &m){
     if (m < 0 || m >= K.n) {
         throw std::domain_error("message representative out of range");
     }
@@ -94,10 +87,13 @@ mpz_class RSAPS1(const PrivateKey &K, mpz_class &m){
 }
 
 // https://datatracker.ietf.org/doc/html/rfc8017#section-9.2
-vector<uint8_t> EMSA_PKCS1_V1_5_ENCODE_sha256(const vector<uint8_t> &M, size_t emLen=256){
+static vector<uint8_t> EMSA_PKCS1_V1_5_ENCODE_sha256(const vector<uint8_t> &M, size_t emLen=256){
     AlgorithmIdentifier digestAlgorithm("2.16.840.1.101.3.4.2.1");
     vector<uint8_t> digest = encode_der_octet_string(sha256(M));
     vector<uint8_t> digestInfo = encode_der_sequence({digestAlgorithm.encode(), digest});
+    #ifdef DEBUG
+    print_bytes(digestInfo);
+    #endif
 
     size_t tLen = digestInfo.size();
     if(emLen < tLen + 11){
@@ -114,11 +110,13 @@ vector<uint8_t> EMSA_PKCS1_V1_5_ENCODE_sha256(const vector<uint8_t> &M, size_t e
     EM.push_back(0x00);
     EM.insert(EM.end(), digestInfo.begin(), digestInfo.end());
 
-    //print_bytes(EM);
+    #ifdef DEBUG
+    print_bytes(EM);
+    #endif
     return EM;
 } 
 
-size_t k_for_key(const mpz_class &n){
+static size_t k_for_key(const mpz_class &n){
     size_t bits = mpz_sizeinbase(n.get_mpz_t(), 2);
     return (bits + 7) / 8;
 }
@@ -134,9 +132,3 @@ vector<uint8_t> RSASSA_PKCS1_V1_5_SIGN(const PrivateKey &K, vector<uint8_t> &M, 
 }
 
 
-int main(){
-    std::string temp = "QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm1234567890";
-    vector<uint8_t> input(temp.begin(), temp.end());
-    EMSA_PKCS1_V1_5_ENCODE_sha256(input, 256);
-    return 0;
-}

@@ -1,6 +1,5 @@
 PoC1
 PoC2
-compile.sh
 data.JSON
 csr.pem
 private-key.pem
@@ -11,3 +10,5 @@ csr2.pem
 
 .vscodePoC3
 PoC3
+
+main

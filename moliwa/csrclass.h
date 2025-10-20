@@ -1,6 +1,7 @@
 #ifndef csrclass
 #define csrclass
 
+#include "sign.h"
 #include "mappings.h"
 #include "reusable.h"
 #include "encoding.h"
@@ -87,22 +88,6 @@ class CertificationRequest{
         }
     };
 
-    //  According to RFC
-    //  PKCS1Algorithms    ALGORITHM-IDENTIFIER ::= {
-    //  { OID rsaEncryption              PARAMETERS NULL } |
-    //  { OID md2WithRSAEncryption       PARAMETERS NULL } |
-    //  { OID md5WithRSAEncryption       PARAMETERS NULL } |
-    //  { OID sha1WithRSAEncryption      PARAMETERS NULL } |
-    //  { OID sha256WithRSAEncryption    PARAMETERS NULL } |
-    //  { OID sha384WithRSAEncryption    PARAMETERS NULL } |
-    //  { OID sha512WithRSAEncryption    PARAMETERS NULL } |
-    //  { OID id-RSAES-OAEP PARAMETERS RSAES-OAEP-params } |
-    //  PKCS1PSourceAlgorithms                             |
-    //  { OID id-RSASSA-PSS PARAMETERS RSASSA-PSS-params } ,
-    //  ...  -- Allows for future expansion --
-    // }
-    //
-    //  Note: as of now only rsaEncryption is handled
 
     class PublicKey{
         mpz_class modulus;
@@ -164,7 +149,7 @@ class CertificationRequest{
         //It's far from perfect as it always constructs object that will
         //Encode RSA + SHA256, but we probably won't do anything else so it should do
         certificationRequestInfo(
-        const vector<pair<string,string>> & subject,
+        const vector<pair<string,string>> &subject,
         const mpz_class &modulus,
         const mpz_class &exponent,
         const vector<pair<string,string>> &attrs = {}
@@ -232,9 +217,10 @@ public:
     : CRI(subject, modulus, exponent, attrs), signatureAlgorithm("1.2.840.113549.1.1.11")     {}
     // same case as with CRI, if you want other signing algorithms this constructor will require changes;
 
-    vector<uint8_t> encode(const string &path){
+    vector<uint8_t> encode(const PrivateKey &PKey){
         vector<uint8_t> CRI_enc = CRI.encode();
-        return encode_der_sequence({CRI_enc, signatureAlgorithm.encode(), encode_der_bitstring(rsa_sha256_sign(CRI_enc, path))});
+        vector<uint8_t> mytemp = encode_der_sequence({CRI_enc, signatureAlgorithm.encode(), encode_der_bitstring(RSASSA_PKCS1_V1_5_SIGN(PKey, CRI_enc, 256)) });
+        return mytemp;
     }
 };
 
