@@ -5,7 +5,7 @@
 #include <iostream>
 #include "asn1.h"
 
-ASN1Object::ASN1Object(uint8_t tag, size_t tag_length_size, const std::vector<uint8_t>& value) : tag(tag), tag_length_size(tag_length_size), value(value) {
+ASN1Object::ASN1Object(ASN1Tag tag, size_t tag_length_size, const std::vector<uint8_t>& value) : tag(tag), tag_length_size(tag_length_size), value(value) {
     #ifdef DEBUG
     std::cerr << "ASN1Object created: tag=" << std::hex << (int)tag << ", tag_length_size=" << std::dec << tag_length_size << ", value_length=" << value.size() << std::endl;
     #endif
@@ -17,12 +17,31 @@ ASN1Object::~ASN1Object() {
     #endif
 }
 
-std::shared_ptr<ASN1Object> ASN1Parser::parse(const std::vector<uint8_t>& data, size_t offset) {
+const char* ASN1Parser::get_string_type(ASN1Tag tag) {
+    switch (tag) {
+        case (INTEGER): return "INTEGER";
+        case (BIT_STRING): return "BIT_STRING";
+        case (OCTET_STRING): return "OCTET_STRING";
+        case (NULL_TYPE): return "NULL";
+        case (OBJECT_IDENTIFIER): return "OBJECT_IDENTIFIER";
+        case (UTF8_STRING): return "UTF8_STRING";
+        case (SEQUENCE): return "SEQUENCE";
+        case (SET): return "SET";
+        case (PRINTABLE_STRING): return "PRINTABLE_STRING";
+        case (IA5_STRING): return "IA5_STRING";
+        case (UTC_TIME): return "UTC_TIME";
+        case (GENERALIZED_TIME): return "GENERALIZED_TIME";
+        default:
+        throw std::runtime_error("Unsupported ASN.1 Tag");
+    }
+}
+
+std::shared_ptr<ASN1Object> ASN1Parser::decode(const std::vector<uint8_t>& data, size_t offset) {
     if (offset >= data.size()) {
         throw std::runtime_error("Offset out of bounds");
     }
 
-    uint8_t tag = data[offset++];
+    ASN1Tag tag = static_cast<ASN1Tag>(data[offset++]);
     if (offset >= data.size()) {
         throw std::runtime_error("Incomplete ASN.1 data");
     }
@@ -51,8 +70,8 @@ std::shared_ptr<ASN1Object> ASN1Parser::parse(const std::vector<uint8_t>& data, 
     return obj;
 }
 
-std::shared_ptr<ASN1Object> ASN1Parser::parse_all(const std::vector<uint8_t>& data) {
-    std::shared_ptr<ASN1Object> root = parse(data, 0);
+std::shared_ptr<ASN1Object> ASN1Parser::decode_all(const std::vector<uint8_t>& data) {
+    std::shared_ptr<ASN1Object> root = decode(data, 0);
     std::queue<std::shared_ptr<ASN1Object>> to_process;
     to_process.push(root);
     while (!to_process.empty()) {
@@ -60,7 +79,7 @@ std::shared_ptr<ASN1Object> ASN1Parser::parse_all(const std::vector<uint8_t>& da
         to_process.pop();
         size_t object_size = object_to_process->value.size(), offset = 0;
         while (offset < object_size) {
-            std::shared_ptr<ASN1Object> object = parse(object_to_process->value, offset);
+            std::shared_ptr<ASN1Object> object = decode(object_to_process->value, offset);
             object_to_process->children.push_back(object);
             offset += object->total_length();
             if (object->tag & 0x20) { // field is constructed - it contains "children" to process, too
@@ -69,4 +88,18 @@ std::shared_ptr<ASN1Object> ASN1Parser::parse_all(const std::vector<uint8_t>& da
         }
     }
     return root;
+}
+
+void ASN1Object::print(int indent) {
+    std::string output = "";
+    for (int i = 0; i < indent; i++) {
+        output += '\t';
+    }
+    output += "TYPE: ";
+    output += ASN1Parser::get_string_type(tag);
+    // output value in format depending on the tag
+    std::cout << output << std::endl;
+    for (std::shared_ptr<ASN1Object> child : children) {
+        child->print(indent+1);        
+    }
 }

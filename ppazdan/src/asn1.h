@@ -26,24 +26,26 @@ class ASN1Object;
 
 class ASN1Parser {
 public:
-    static std::shared_ptr<ASN1Object> parse(const std::vector<uint8_t>& data, size_t offset);
-    static std::shared_ptr<ASN1Object> parse_all(const std::vector<uint8_t>& data);
+    static std::shared_ptr<ASN1Object> decode(const std::vector<uint8_t>& data, size_t offset);
+    static std::shared_ptr<ASN1Object> decode_all(const std::vector<uint8_t>& data);
+    static const char* get_string_type(ASN1Tag tag);
 };
 
 class ASN1Object {
 private:
-    uint8_t tag; // ASN.1 tag
+    ASN1Tag tag; // ASN.1 tag
     size_t tag_length_size; // Size of tag+length fields (in bytes)
     std::vector<uint8_t> value; // Value bytes
     std::vector<std::shared_ptr<ASN1Object>> children; // Set of child objects (1 level deep); empty if there're no children
 public:
-    ASN1Object(uint8_t tag, size_t total_length, const std::vector<uint8_t>& value);
+    ASN1Object(ASN1Tag tag, size_t total_length, const std::vector<uint8_t>& value);
     ~ASN1Object();
 
     inline size_t total_length() const {
         return tag_length_size + value.size();
     }
 
-    friend std::shared_ptr<ASN1Object> ASN1Parser::parse(const std::vector<uint8_t>&, size_t);
-    friend std::shared_ptr<ASN1Object> ASN1Parser::parse_all(const std::vector<uint8_t>&);
+    friend std::shared_ptr<ASN1Object> ASN1Parser::decode(const std::vector<uint8_t>&, size_t);
+    friend std::shared_ptr<ASN1Object> ASN1Parser::decode_all(const std::vector<uint8_t>&);
+    void print(int = 0);
 };
