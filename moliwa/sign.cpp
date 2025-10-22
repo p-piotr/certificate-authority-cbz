@@ -39,8 +39,10 @@ static vector<uint8_t> I2OSP(const mpz_class &in, size_t xLen){
 // Note: assuming that r_i, d_i, t_i are not present
 //
 // Note: according to my best friend there are several security issues here:
-// 1. Bellcore/Lenstra Attacks
-// 2. Timing information leaking
+// 1. Bellcore/Lenstra Attacks - Validate the signature after computing it
+// 2. Timing information leaking - RSA blinding should be added
+// 3. Memory leaks of private key data can happen, memory should be cleared explicitly - this applies to PrivateKey struct as well
+// 4. Also additional checks could be added to test see if everything is as it should be with private key
 static mpz_class RSAPS1(const PrivateKey &K, mpz_class &m){
     if (m < 0 || m >= K.n) {
         throw std::domain_error("message representative out of range");

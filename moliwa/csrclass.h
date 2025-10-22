@@ -6,7 +6,6 @@
 #include "reusable.h"
 #include "encoding.h"
 #include "reusable.h"
-#include "openssl.h"
 
 #include <utility>
 

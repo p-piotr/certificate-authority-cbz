@@ -44,7 +44,7 @@ vector<uint8_t> sha256(const vector<uint8_t> &input){
 
 
     uint64_t bit_length = input.size() * 8;
-    for(int i = 7; i >= 0; i--){
+    for(ssize_t i = 7; i >= 0; i--){
         copy.push_back((bit_length >> (8 * i)) & 0xFF);
     }
 
@@ -54,7 +54,7 @@ vector<uint8_t> sha256(const vector<uint8_t> &input){
         // copy chunk into first 16 entries of w;
         for(size_t w_index = 0; w_index < 16;  w_index++){
             uint32_t curr = 0;
-            for(int i = 0; i < 4; i++){
+            for(size_t i = 0; i < 4; i++){
                 curr <<= 8;
                 curr |= copy[(chunk + i + 4 * w_index)];
             }

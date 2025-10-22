@@ -3,7 +3,6 @@
 #include "mappings.h"
 #include "decode-key.h"
 #include "encoding.h"
-#include "openssl.h"
 #include "csrclass.h"
 
 
