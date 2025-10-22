@@ -6,6 +6,13 @@
 #include <fstream>
 #include <iostream>
 #include "encoding.h"
+#include "myerror.h"
+
+using std::cerr;
+using std::cout;
+using std::ifstream;
+using std::endl;
+
 struct PrivateKey {
     int version;
     mpz_class n, e, d, p, q, dP, dQ, qInv;

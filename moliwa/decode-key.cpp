@@ -1,45 +1,45 @@
 #include "decode-key.h"
 
-using std::ifstream;
 
 // Note: this was made to parse key generated with openssl, I doubt keys generated in some other way will work
 PrivateKey parse_der_privateKey(const vector<uint8_t> &der, size_t &start){
-    if(der[start++] != 0x04)
-        throw std::runtime_error("PrivateKeyInfo::parse_der_privateKey: Der encoding not matching PrivateKeyInfo ASN1 structure (PrivateKey first byte does not indicate OCTET STRING)");
-    size_t oct_length = decode_der_length(der, start);
-    size_t begin_oct = start;
+    size_t PrivateKeyOctSize;
+    try {
+        PrivateKeyOctSize = decode_der_octet_string(der, start);
+    } catch (const MyError &e) {
+        cerr << "parse_der_privateKey: failed to decode octet string bytes " << e.what() << endl;
+    }
+    size_t PrivateKeyOctBegin = start;
 
-    if(der[start++] != 0x30)
-        throw std::runtime_error("PrivateKeyInfo::parse_der_privateKey: Der encoding not matching PrivateKeyInfo ASN1 structure (PrivateKey first member of OCTET STRING, lacks bytes indicating SEQUENCE)");
-
-    size_t seq_length = decode_der_length(der, start);
-    size_t begin_seq = start;
+    size_t PrivateKeySeqSize;
+    try {
+        PrivateKeySeqSize = decode_der_sequence(der, start);
+    } catch (const MyError &e) {
+        cerr << "parse_der_privateKey: failed to decode sequence bytes " << e.what() << endl;
+    }
+    size_t PrivateKeySeqBegin = start;
 
 
     //Version must always be set to 0
-    //So we are just handling this case
-    if(der[start++] != 0x02)
-        throw std::runtime_error("parse_der_privateKey: Der encoding not matching PrivateKeyInfo ASN1 structure (Version bytes are wrong)" );
-    if(der[start++] != 0x01)
-        throw std::runtime_error("parse_der_privateKey: Der encoding not matching PrivateKeyInfo ASN1 structure (Version bytes are wrong)" );
-    if(der[start++] != 0x00)
-        throw std::runtime_error("parse_der_privateKey: Der encoding not matching PrivateKeyInfo ASN1 structure (Version bytes are wrong)" );
+    int version = decode_der_integer(der, start).get_si();
+    if(version != 0)
+        throw MyError("parse_der_privateKey: version is not zero" );
 
     if(der_check_finish(der, start))
-        throw std::runtime_error("parse_der_privateKey: lacking some fields in private key sequence");
+        throw MyError("parse_der_privateKey: lacking some fields in private key sequence");
 
     vector<mpz_class> list(7);
     for(int i = 0; i < 7; i++){
         list[i] = decode_der_integer(der, start);
-        der_check_boundry(seq_length, begin_seq, start);
-        der_check_boundry(oct_length, begin_oct, start);
+        der_check_boundry(PrivateKeySeqSize, PrivateKeySeqBegin, start);
+        der_check_boundry(PrivateKeyOctSize, PrivateKeyOctBegin, start);
         if(der_check_finish(der, start))
-            throw std::runtime_error("parse_der_privateKey: lacking some fields in private key sequence");
+            throw MyError("parse_der_privateKey: lacking some fields in private key sequence");
     }
 
     mpz_class qInv = decode_der_integer(der, start);
-    der_check_boundry(seq_length, begin_seq, start);
-    der_check_boundry(oct_length, begin_oct, start);
+    der_check_boundry(PrivateKeySeqSize, PrivateKeySeqBegin, start);
+    der_check_boundry(PrivateKeyOctSize, PrivateKeyOctBegin, start);
     if(!der_check_finish(der, start))
         throw std::runtime_error("parse_der_privateKey: extra fields in private key sequence");
 
@@ -48,29 +48,31 @@ PrivateKey parse_der_privateKey(const vector<uint8_t> &der, size_t &start){
 
 PrivateKeyInfo parse_der(const vector<uint8_t> &der){
     size_t index = 0; 
+    size_t PrivateKeyInfoSize;
 
-    // First byte must be 0x30 to indicate SEQUENCE
-    if(der[index++] != 0x30){
-        throw std::runtime_error("parse_der: Der encoding not matching PrivateKeyInfo ASN1 structure (First byte does not indicate SEQUENCE)" );
+    try {
+        PrivateKeyInfoSize = decode_der_sequence(der, index);
+    } catch (const MyError &e) {
+        cerr << "parse_der: failed to decode sequence bytes " << e.what() << endl;
+    }
+    size_t PrivateKeyInfoBegin = index;
+
+    int version;
+    try {
+        version = decode_der_integer(der, index).get_si();
+    } catch (const MyError &e) {
+        cerr << "parse_der: failed to decode version " << e.what() << endl;
     }
 
-    size_t PrivateKeyInfoSize = decode_der_length(der, index);
-    size_t begin = index;
-
     //Version must always be set to 0
-    //So we are just handling this case
-    if(der[index++] != 0x02)
-        throw std::runtime_error("parse_der: Der encoding not matching PrivateKeyInfo ASN1 structure (Version bytes are wrong)" );
-    if(der[index++] != 0x01)
-        throw std::runtime_error("parse_der: Der encoding not matching PrivateKeyInfo ASN1 structure (Version bytes are wrong)" );
-    if(der[index++] != 0x00)
-        throw std::runtime_error("parse_der: Der encoding not matching PrivateKeyInfo ASN1 structure (Version bytes are wrong)" );
+    if(version != 0)
+        throw MyError("parse_der: version is not zero");
 
     AlgorithmIdentifier privateKeyAlgorithm = parse_der_algorithmIdentifier(der, index);
-    der_check_boundry(PrivateKeyInfoSize, begin, index);
+    der_check_boundry(PrivateKeyInfoSize, PrivateKeyInfoBegin, index);
 
     PrivateKey privateKey = parse_der_privateKey(der, index);
-    der_check_boundry(PrivateKeyInfoSize, begin, index);
+    der_check_boundry(PrivateKeyInfoSize, PrivateKeyInfoBegin, index);
     if(!der_check_finish(der, index))
         throw std::runtime_error("parse_der_privateKey: extra fields in private key sequence");
     return PrivateKeyInfo(privateKeyAlgorithm, privateKey, 0);
@@ -103,10 +105,10 @@ PrivateKeyInfo read_from_file(const string &path){
 
     for(int i = 0; i < header.size(); i++) {
         if (i >= infile_buffer.size()){
-            throw std::runtime_error("Unable to correctly interpret file: " + path);
+            throw std::runtime_error("Unable to correctly interpret file: " + path + "\nFile must be in PKCS#8 format");
         }
         if(infile_buffer[i] !=  header[i]){
-            throw std::runtime_error("Unable to correctly interpret file: " + path);
+            throw std::runtime_error("Unable to correctly interpret file: " + path + "\nFile must be in PKCS#8 format");
         }
     }
 
@@ -115,7 +117,7 @@ PrivateKeyInfo read_from_file(const string &path){
     int count = 0;
     while(i >= 0){
         if(*it != trailer[i]){
-            throw std::runtime_error("Unable to correctly interpret file: " + path);
+            throw std::runtime_error("Unable to correctly interpret file: " + path + "\nFile must be in PKCS#8 format");
         }
         count++;
         i--;

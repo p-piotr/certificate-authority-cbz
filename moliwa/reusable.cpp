@@ -8,19 +8,17 @@ void print_bytes(const vector<uint8_t> &bytes){
 }
 
 AlgorithmIdentifier parse_der_algorithmIdentifier(const vector<uint8_t> &der, size_t &start){
-    if(der[start++] != 0x30){
-        throw std::runtime_error("parse_der_algorithmIdentifier: Der encoding not matching AlgorithmIdentifier structure (First byte does not indicate SEQUENCE)" );
+    size_t AlgorithmIdentifierSize;
+    try {
+        AlgorithmIdentifierSize = decode_der_sequence(der, start);
+    } catch (const MyError &e) {
+        std::cerr << "parse_der_algorithmIdentifier: failed to decode sequence bytes " << e.what() << endl;
     }
-
-    size_t seq_length = decode_der_length(der, start);
-    if (start + seq_length > der.size()) {
-        throw std::runtime_error("parse_der_algorithmIdentifier: length exceeds data size");
-    }
-    size_t begin = start;
+    size_t AlgorithmIdentifierBegin = start;
 
     vector<uint32_t> oid = decode_der_oid(der, start);
     vector<uint8_t> parameters;
-    while(start < begin + seq_length){
+    while(start < AlgorithmIdentifierBegin + AlgorithmIdentifierSize){
         parameters.push_back(der[start++]);
     }
     return AlgorithmIdentifier(oid, parameters);

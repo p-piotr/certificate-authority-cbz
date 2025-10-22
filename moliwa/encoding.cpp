@@ -1,7 +1,4 @@
 #include "encoding.h"
-#include "reusable.h"
-#include <sstream>
-#include <iostream>
 
 
 
@@ -37,13 +34,13 @@ size_t decode_der_length(const vector<uint8_t> &der, size_t &start){
     if(der[start] < 0x80)
         return der[start++];
     if(der[start] == 0x80)
-        throw std::runtime_error("Decode_der_length: does not support indefinite length encoding" );
+        throw MyError("decode_der_length: does not support indefinite length encoding" );
     else{
         int length_bytes = (der[start] & 0x7F);
         size_t i = start + 1;
         for(; i < start + 1 + length_bytes; i++){
             if (i > der.size())
-                throw std::runtime_error("parse_der_length: length exceeds data size");
+                throw MyError("decode_der_length: length exceeds data size");
             length <<= 8;
             length |= der[i];
         }
@@ -99,12 +96,15 @@ vector<uint8_t> encode_der_integer(const mpz_class &value) {
 
 mpz_class decode_der_integer(const vector<uint8_t> &der, size_t &start){
     if(der[start++] != 0x02){
-        throw std::runtime_error("decode_der_integer: value " + std::to_string(der[start-1]) + " does not correspond to INTEGER tag");
+        throw MyError("decode_der_integer: value " + std::to_string(der[start-1]) + " does not correspond to INTEGER tag");
     }
 
-    size_t int_length = decode_der_length(der, start);
-    if (start + int_length > der.size()) {
-        throw std::runtime_error("decode_der_integer: length exceeds data size");
+
+    size_t int_length;
+    try {
+        int_length = decode_der_length(der, start);
+    } catch (const MyError &e) {
+        throw MyError("decode_der_integer: failed to decode length " + string(e.what()));
     }
 
     vector<uint8_t> bytes(der.begin() + start, der.begin() + start + int_length);
@@ -163,7 +163,7 @@ vector<uint8_t> encode_der_oid(const vector<uint32_t> &oid){
     return der;
 }
 
-static uint32_t decode_oid_component(const vector<uint8_t> &der, size_t &start){
+static uint32_t decode_oid_component(const vector<uint8_t> &der, size_t &start) {
     uint32_t component = 0;
     for(;;){
         component <<= 7;
@@ -179,11 +179,14 @@ static uint32_t decode_oid_component(const vector<uint8_t> &der, size_t &start){
 
 vector<uint32_t> decode_der_oid(const vector<uint8_t> &der, size_t &start){
     if(der[start++] != 0x06){
-        throw std::runtime_error("decode_der_oid: value " + std::to_string(der[start-1]) + " does not correspond to OID tag");
+        throw MyError("decode_der_oid: value " + std::to_string(der[start-1]) + " does not correspond to OID tag");
     }
-    size_t oid_length = decode_der_length(der, start);
-    if (start + oid_length > der.size()) {
-        throw std::runtime_error("parse_der_oid: length exceeds data size");
+
+    size_t oid_length;
+    try {
+        oid_length = decode_der_length(der, start);
+    } catch (const MyError &e) {
+        throw MyError("decode_der_oid: failed to decode length " + string(e.what()));
     }
 
     size_t begin = start;
@@ -254,6 +257,21 @@ vector<uint8_t> encode_der_sequence(const vector<vector<uint8_t>> &elements){
     return der;
 }
 
+size_t decode_der_sequence(const vector<uint8_t> &der, size_t &start){
+    if(der[start++] != 0x30){
+        throw MyError("decode_der_sequence: value " + std::to_string(der[start-1]) + " does not correspond to SEQUENCE tag");
+    }
+
+    size_t seq_length;
+    try {
+        seq_length = decode_der_length(der, start);
+    } catch (const MyError &e) {
+        throw MyError("decode_der_sequence: failed to decode length " + string(e.what()));
+    }
+
+    return seq_length;
+}
+
 vector<uint8_t> encode_der_set(const vector<vector<uint8_t>> &elements){
     vector<vector<uint8_t>> sorted = elements;
     std::sort(sorted.begin(), sorted.end());
@@ -287,6 +305,21 @@ vector<uint8_t> encode_der_octet_string(const vector<uint8_t> &bytes){
     der.insert(der.end(), length.begin(), length.end());
     der.insert(der.end(), bytes.begin(), bytes.end());
     return der;
+}
+
+size_t decode_der_octet_string(const vector<uint8_t> &der, size_t &start){
+    if(der[start++] != 0x04){
+        throw MyError("decode_der_octet_string: value " + std::to_string(der[start-1]) + " does not correspond to OCTET STRING tag");
+    }
+
+    size_t oct_length;
+    try {
+        oct_length = decode_der_length(der, start);
+    } catch (const MyError &e) {
+        throw MyError("decode_der_octet_string: failed to decode length " + string(e.what()));
+    }
+
+    return oct_length;
 }
 
 // https://gist.github.com/williamdes/308b95ac9ef1ee89ae0143529c361d37
