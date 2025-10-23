@@ -200,16 +200,49 @@ vector<uint32_t> decode_der_oid(const vector<uint8_t> &der, size_t &start){
     return result;
 }
 
+bool printable_string_validate(const string &s){
+    const std::unordered_set<char> legal = {
+        'A', 'a', 'B', 'b', 'C', 'c', 'D', 'd', 'E', 'e',
+        'F', 'f', 'G', 'g', 'H', 'h', 'I', 'i', 'J', 'j',
+        'K', 'k', 'L', 'l', 'M', 'm', 'N', 'n', 'O', 'o',
+        'P', 'p', 'Q', 'q', 'R', 'r', 'S', 's', 'T', 't',
+        'U', 'u', 'V', 'v', 'W', 'w', 'X', 'x', 'Y', 'y',
+        '0', '1', '2', '3', '4', '5', '6', '7', '8',
+        ' ', '\'', '(', ')', '+', ',', '-', '.', '/',
+        ':', '?', '='
+    };
+
+    for (char c : s) {
+        if (legal.find(c) == legal.end()) {
+            return false; 
+        }
+    }
+    return true;
+}
+
+
+bool ia5string_validate(const string &s){
+    for (unsigned char c : s) {
+        if (c > 0x7F) return false;  // Only first 128 ASCII chars allowed
+    }
+    return true;
+}
 
 vector<uint8_t> encode_der_string(const string &str, string_t str_type){
     vector<uint8_t> bytes(str.begin(), str.end());
     uint8_t tag;
     switch(str_type){
         case IA5STRING:
+            if(ia5string_validate(str) == false){
+                throw MyError("encode_der_string: Attempt to encode illegal chars in ia5string type");
+            }
             tag = 0x16;
             break;
         case PRINTABLE_STRING:
             tag = 0x13;
+            if(printable_string_validate(str) == false){
+                throw MyError("encode_der_string: Attempt to encode illegal chars in printable_string type");
+            }
             break;
         case UTF8_STRING:
             tag = 0x0C;

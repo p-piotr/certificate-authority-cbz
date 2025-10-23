@@ -34,6 +34,7 @@ struct AlgorithmIdentifier {
             attr = OIDsToAttributes.at(serial);
         } catch (const std::out_of_range& e){
             std::cerr << "Error: not handled algorithm of with OID \'" << serial << "\'" << endl;
+            exit(42);
         }
 
         if(serial == "1.2.840.113549.1.1.1" || serial == "1.2.840.113549.1.1.11" || serial == "2.16.840.1.101.3.4.2.1")
@@ -56,6 +57,16 @@ struct AlgorithmIdentifier {
             encode_der_oid(algorithm),
             parameters
         });
+    }
+};
+
+struct PublicKey{
+    mpz_class n;
+    mpz_class e;
+    PublicKey(const mpz_class &modulus_, const mpz_class &exponent_) : n(modulus_), e(exponent_) {}
+    vector<uint8_t> encode() const {
+        vector<uint8_t> sequence = encode_der_sequence({encode_der_integer(n), encode_der_integer(e)});
+        return encode_der_bitstring(sequence);
     }
 };
 

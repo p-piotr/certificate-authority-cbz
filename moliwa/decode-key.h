@@ -40,7 +40,7 @@ struct PrivateKey {
                 encode_der_integer(p),
                 encode_der_integer(q),
                 encode_der_integer(dP),
-                    encode_der_integer(dQ),
+                encode_der_integer(dQ),
                 encode_der_integer(qInv),
             });
     }

@@ -8,6 +8,7 @@ PrivateKey parse_der_privateKey(const vector<uint8_t> &der, size_t &start){
         PrivateKeyOctSize = decode_der_octet_string(der, start);
     } catch (const MyError &e) {
         cerr << "parse_der_privateKey: failed to decode octet string bytes " << e.what() << endl;
+        exit(42);
     }
     size_t PrivateKeyOctBegin = start;
 
@@ -16,6 +17,7 @@ PrivateKey parse_der_privateKey(const vector<uint8_t> &der, size_t &start){
         PrivateKeySeqSize = decode_der_sequence(der, start);
     } catch (const MyError &e) {
         cerr << "parse_der_privateKey: failed to decode sequence bytes " << e.what() << endl;
+        exit(42);
     }
     size_t PrivateKeySeqBegin = start;
 
@@ -41,7 +43,7 @@ PrivateKey parse_der_privateKey(const vector<uint8_t> &der, size_t &start){
     der_check_boundry(PrivateKeySeqSize, PrivateKeySeqBegin, start);
     der_check_boundry(PrivateKeyOctSize, PrivateKeyOctBegin, start);
     if(!der_check_finish(der, start))
-        throw std::runtime_error("parse_der_privateKey: extra fields in private key sequence");
+        throw MyError("parse_der_privateKey: extra fields in private key sequence");
 
     return PrivateKey(list[0], list[1], list[2], list[3], list[4], list[5], list[6], qInv, 0);
 }
@@ -54,6 +56,7 @@ PrivateKeyInfo parse_der(const vector<uint8_t> &der){
         PrivateKeyInfoSize = decode_der_sequence(der, index);
     } catch (const MyError &e) {
         cerr << "parse_der: failed to decode sequence bytes " << e.what() << endl;
+        exit(42);
     }
     size_t PrivateKeyInfoBegin = index;
 
@@ -62,6 +65,7 @@ PrivateKeyInfo parse_der(const vector<uint8_t> &der){
         version = decode_der_integer(der, index).get_si();
     } catch (const MyError &e) {
         cerr << "parse_der: failed to decode version " << e.what() << endl;
+        exit(42);
     }
 
     //Version must always be set to 0
@@ -80,7 +84,7 @@ PrivateKeyInfo parse_der(const vector<uint8_t> &der){
 
 // I orginially inteded this function, and all the other functions connected to parsing the file to be part of the PrivateKeyInfo class
 // However I realized that it would require that PrivateKeyInfo class to be first initialized as empty
-// It would thus need to copy the members of the class when parsing it, which I don't like as it diminishes perfomence a bit
+// It would thus need to copy the members of the class when parsing it, which I don't like as it diminishes performence a bit
 PrivateKeyInfo read_from_file(const string &path){
     string header = "-----BEGIN PRIVATE KEY-----";
     string trailer = "-----END PRIVATE KEY-----\n";

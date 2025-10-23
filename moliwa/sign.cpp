@@ -1,7 +1,7 @@
 #include "sign.h"
 
 // https://datatracker.ietf.org/doc/html/rfc8017#section-4.2
-static mpz_class OS2IP(vector<uint8_t> &in){
+static mpz_class OS2IP(const vector<uint8_t> &in){
     mpz_class out = 0;
     for(uint8_t byte : in){
         out <<= 8;
@@ -13,13 +13,13 @@ static mpz_class OS2IP(vector<uint8_t> &in){
 // https://datatracker.ietf.org/doc/html/rfc8017#section-4.1
 static vector<uint8_t> I2OSP(const mpz_class &in, size_t xLen){
     if (in < 0) {
-        throw std::invalid_argument("I2OSP: integer must be nonnegative");
+        throw MyError("I2OSP: integer must be nonnegative");
     }
 
     mpz_class max_val = 1;
     max_val <<= 8 * xLen;
     if (in >= max_val) {
-        throw std::overflow_error("I2OSP: integer too large");
+        throw MyError("I2OSP: integer too large");
     }
 
     
@@ -45,7 +45,7 @@ static vector<uint8_t> I2OSP(const mpz_class &in, size_t xLen){
 // 4. Also additional checks could be added to test see if everything is as it should be with private key
 static mpz_class RSAPS1(const PrivateKey &K, mpz_class &m){
     if (m < 0 || m >= K.n) {
-        throw std::domain_error("message representative out of range");
+        throw MyError("RSAPS1: message representative out of range");
     }
 
     // Check if q * qInv = 1 mod p
@@ -54,7 +54,7 @@ static mpz_class RSAPS1(const PrivateKey &K, mpz_class &m){
         mpz_mul(chk.get_mpz_t(), K.q.get_mpz_t(), K.qInv.get_mpz_t());
         mpz_mod(chk.get_mpz_t(), chk.get_mpz_t(), K.p.get_mpz_t());
         if (chk != 1) {
-            throw std::runtime_error("qInv is not the modular inverse of q mod p");
+            throw MyError("RSAPS1: qInv is not the modular inverse of q mod p");
         }
     }
 
@@ -88,6 +88,15 @@ static mpz_class RSAPS1(const PrivateKey &K, mpz_class &m){
     return s;
 }
 
+// https://datatracker.ietf.org/doc/html/rfc8017#section-5.2.2
+mpz_class RSAVP1 (const PublicKey &K, const mpz_class &s){
+    if(s < 0 || s >= K.n)
+        throw MyError("RSAVP1: Singnature representative is not between 0 and n-1");
+    mpz_class m;
+    mpz_powm(m.get_mpz_t(), s.get_mpz_t(), K.e.get_mpz_t(), K.n.get_mpz_t());
+    return m;
+}
+
 // https://datatracker.ietf.org/doc/html/rfc8017#section-9.2
 static vector<uint8_t> EMSA_PKCS1_V1_5_ENCODE_sha256(const vector<uint8_t> &M, size_t emLen=256){
     AlgorithmIdentifier digestAlgorithm("2.16.840.1.101.3.4.2.1");
@@ -99,7 +108,7 @@ static vector<uint8_t> EMSA_PKCS1_V1_5_ENCODE_sha256(const vector<uint8_t> &M, s
 
     size_t tLen = digestInfo.size();
     if(emLen < tLen + 11){
-        throw std::invalid_argument("intended encoded message length too short");
+        throw ("EMSA_PKCS1_V1_5_ENCODE_sha256: intended encoded message length too short");
     }
     size_t PSLen = emLen - tLen - 3;
     vector<uint8_t> PS(PSLen, 0xFF);
@@ -123,8 +132,9 @@ static size_t k_for_key(const mpz_class &n){
     return (bits + 7) / 8;
 }
 
+
 // https://datatracker.ietf.org/doc/html/rfc8017#section-8.2.1
-vector<uint8_t> RSASSA_PKCS1_V1_5_SIGN(const PrivateKey &K, vector<uint8_t> &M, size_t k){
+vector<uint8_t> RSASSA_PKCS1_V1_5_SIGN(const PrivateKey &K, const vector<uint8_t> &M, size_t k){
     if (k == 0)
         k = k_for_key(K.n);
     vector<uint8_t> EM = EMSA_PKCS1_V1_5_ENCODE_sha256(M, k);
@@ -133,4 +143,22 @@ vector<uint8_t> RSASSA_PKCS1_V1_5_SIGN(const PrivateKey &K, vector<uint8_t> &M, 
     return I2OSP(s, k);
 }
 
+// https://datatracker.ietf.org/doc/html/rfc8017#section-8.2.2
+bool RSASSA_PKCS1_V1_5_VERIFY(const PublicKey &K, vector<uint8_t> &M, const vector<uint8_t> &S){
+    size_t k = (mpz_sizeinbase(K.n.get_mpz_t(), 2) + 7) / 8;
+    if (k != S.size()){
+        throw MyError("RSASSA_PKCS1_V1_5_VERIFY: Signature length not matching key length");
+    }
+    mpz_class s = OS2IP(S);
+    mpz_class m = RSAVP1(K, s);
+    vector<uint8_t> EM = I2OSP(m, S.size());
+    vector<uint8_t> EM2 = EMSA_PKCS1_V1_5_ENCODE_sha256(M, S.size());
+
+    // constant time equal
+    uint8_t diff = 0;
+    for (size_t i = 0; i < EM.size(); ++i) {
+        diff |= EM[i] ^ EM2[i];
+    }
+    return diff == 0;
+}
 

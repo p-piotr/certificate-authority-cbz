@@ -180,6 +180,12 @@ int main(int argc, char* argv[]){
     string out = base64_encode(bytes);
     write_to_file(out, outputFile);
 
- 
+    // ---- TEST SIGNATURE VERIFICATION ----
+    PublicKey pub_key = CR.getPublicKeyReference();
+    vector<uint8_t> mess = CR.getCRIBytes();
+    vector<uint8_t> signature = CR.getSignatureReference();
+    cout << std::boolalpha << RSASSA_PKCS1_V1_5_VERIFY(pub_key, mess, signature) << endl;
+
+
     return 0;
 }

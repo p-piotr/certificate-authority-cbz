@@ -88,21 +88,11 @@ class CertificationRequest{
     };
 
 
-    class PublicKey{
-        mpz_class modulus;
-        mpz_class exponent;
-    public:
-        PublicKey(const mpz_class &modulus_, const mpz_class &exponent_) : modulus(modulus_), exponent(exponent_) {}
-        vector<uint8_t> encode() const {
-            vector<uint8_t> sequence = encode_der_sequence({encode_der_integer(modulus), encode_der_integer(exponent)});
-            return encode_der_bitstring(sequence);
-        }
-    };
 
-    class subjectPKInfo{
+    struct subjectPKInfo{
         AlgorithmIdentifier algorithm;
         PublicKey subjectPublicKey;
-    public:
+
         subjectPKInfo(AlgorithmIdentifier algorithm_, PublicKey subjectPublicKey_) : algorithm(algorithm_), subjectPublicKey(subjectPublicKey_) {}
         vector<uint8_t> encode() const {
             return encode_der_sequence({
@@ -131,13 +121,12 @@ class CertificationRequest{
         }
     };
 
-    class certificationRequestInfo {
+    struct certificationRequestInfo {
         int version; // only 0 is valid currently
         rdnSequence Name;
         subjectPKInfo SubjectPublicKeyInfo;
         vector<Attribute> Attributes;;
 
-    public:
         certificationRequestInfo(rdnSequence Name_, subjectPKInfo SubjectPublicKeyInfo_, vector<Attribute> Attributes_, int Version_ = 0) : 
         version(Version_), 
         Name(Name_), 
@@ -213,14 +202,19 @@ public:
     const mpz_class &modulus,
     const mpz_class &exponent,
     const vector<pair<string,string>> &attrs = {})
-    : CRI(subject, modulus, exponent, attrs), signatureAlgorithm("1.2.840.113549.1.1.11")     {}
+    : CRI(subject, modulus, exponent, attrs), signatureAlgorithm("1.2.840.113549.1.1.11")  {}
     // same case as with CRI, if you want other signing algorithms this constructor will require changes;
 
     vector<uint8_t> encode(const PrivateKey &PKey){
         vector<uint8_t> CRI_enc = CRI.encode();
-        vector<uint8_t> mytemp = encode_der_sequence({CRI_enc, signatureAlgorithm.encode(), encode_der_bitstring(RSASSA_PKCS1_V1_5_SIGN(PKey, CRI_enc, 256)) });
-        return mytemp;
+        signature = RSASSA_PKCS1_V1_5_SIGN(PKey, CRI_enc, 256);
+        vector<uint8_t> encoded = encode_der_sequence({CRI_enc, signatureAlgorithm.encode(), encode_der_bitstring(signature) });
+        return encoded;
     }
+
+    vector<uint8_t> getCRIBytes() const { return CRI.encode(); }
+    const PublicKey& getPublicKeyReference() const { return CRI.SubjectPublicKeyInfo.subjectPublicKey; };
+    const vector<uint8_t>& getSignatureReference() const { return signature; };
 };
 
 #endif

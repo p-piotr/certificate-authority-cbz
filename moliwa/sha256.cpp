@@ -23,6 +23,7 @@ static uint32_t rotl(uint32_t x, size_t n){
 
 
 
+// technically there should be check if the message isn't too long but that's pretty much not possible so IDGAF
 vector<uint8_t> sha256(const vector<uint8_t> &input){
      uint32_t h0 = 0x6a09e667;
      uint32_t h1 = 0xbb67ae85;

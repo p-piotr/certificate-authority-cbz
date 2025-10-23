@@ -2,6 +2,7 @@
 #define _encoding
 
 #include <vector>
+#include <unordered_set>
 #include <string>
 #include <gmpxx.h>
 #include <cstdint>

@@ -13,6 +13,7 @@ AlgorithmIdentifier parse_der_algorithmIdentifier(const vector<uint8_t> &der, si
         AlgorithmIdentifierSize = decode_der_sequence(der, start);
     } catch (const MyError &e) {
         std::cerr << "parse_der_algorithmIdentifier: failed to decode sequence bytes " << e.what() << endl;
+        std::exit(42);
     }
     size_t AlgorithmIdentifierBegin = start;
 
