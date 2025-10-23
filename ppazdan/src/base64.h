@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 
+// You guessed it - Base64 encoding/decoding
 class Base64 {
 public:
     static std::string encode(char* buffer, size_t size);

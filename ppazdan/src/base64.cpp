@@ -2,17 +2,20 @@
 #include <cstdint>
 #include "base64.h"
 
-// shamelessly stolen from https://stackoverflow.com/questions/180947/base64-decode-snippet-in-c
+// Maybe a little bit shamefully stolen from https://stackoverflow.com/questions/180947/base64-decode-snippet-in-c
 
+// Base64 allowed charset
 const std::string Base64::base64_chars = 
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
       "abcdefghijklmnopqrstuvwxyz"
       "0123456789+/";
 
+// Checks if given char is base64-allowed
 bool Base64::is_base64(uint8_t c) {
     return (isalnum(c) || (c == '+') || (c == '/'));
 }
 
+// Encodes a buffer into a Base64 string
 std::string Base64::encode(char* buffer, size_t size) {
     std::string ret;
     int i = 0;
@@ -54,6 +57,7 @@ std::string Base64::encode(char* buffer, size_t size) {
     return ret;
 }
 
+// Decodes a Base64 string into a buffer
 std::vector<uint8_t> Base64::decode(std::string const& encoded_string) {
     int in_len = encoded_string.size();
     int i = 0;
