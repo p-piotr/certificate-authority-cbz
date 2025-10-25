@@ -3,6 +3,7 @@
 #include <vector>
 #include <fstream>
 #include <gmpxx.h>
+#include "debug.h"
 #include "rsa.h"
 #include "asn1.h"
 #include "base64.h"
@@ -29,11 +30,11 @@ namespace RSA {
     using namespace ASN1;
 
     // Header and footer of a valid PKCS#8 private key
-    std::string private_key_header = "-----BEGIN PRIVATE KEY-----";
-    std::string private_key_footer = "-----END PRIVATE KEY-----";
+    std::string PRIVATE_KEY_HEADER = "-----BEGIN PRIVATE KEY-----";
+    std::string PRIVATE_KEY_FOOTER = "-----END PRIVATE KEY-----";
 
     // RSA Encryption OBJECT IDENTIFIER - look at the beginning of this file
-    std::string rsa_encryption_obj_id = "1.2.840.113549.1.1.1";
+    std::string RSA_ENCRYPTION_OBJECT_IDENTIFIER = "1.2.840.113549.1.1.1";
 
     bool _RSAPrivateKey_format_check(std::shared_ptr<ASN1Object> root_object) {
         if (root_object->tag() != ASN1Tag::SEQUENCE || root_object->children().size() != 3) {
@@ -52,13 +53,9 @@ namespace RSA {
 
         auto algorithm = private_key_algorithm->children()[0];
         auto parameters = private_key_algorithm->children()[1];
-        if (algorithm->tag() != ASN1Tag::OBJECT_IDENTIFIER || algorithm->children().size() != 0) {
+        if (algorithm->tag() != ASN1Tag::OBJECT_IDENTIFIER || algorithm->children().size() != 0 || parameters->tag() != ASN1Tag::NULL_TYPE) {
             return false;
         }
-        if (parameters->tag() != ASN1Tag::NULL_TYPE && parameters->tag() != ASN1Tag::SEQUENCE) {
-            return false;
-        }
-        // skip the parameters SEQUENCE check since we won't support them anyways
 
         auto private_key = root_object->children()[2];
         if (private_key->tag() != ASN1Tag::OCTET_STRING) {
@@ -85,11 +82,18 @@ namespace RSA {
         return true;
     }
 
-    bool _PrivateKey_is_supported(std::shared_ptr<ASN1Object> root_object) {
+    bool _RSAPrivateKey_is_supported(std::shared_ptr<ASN1Object> root_object) {
         auto version = std::static_pointer_cast<ASN1::ASN1Integer>(root_object->children()[0]);
         if (version->value() != 0) {
             return false;
         }
+
+        auto algorithm = std::static_pointer_cast<ASN1::ASN1ObjectIdentifier>(root_object->children()[1]->children()[0]);
+        if (algorithm->value() != RSA_ENCRYPTION_OBJECT_IDENTIFIER) {
+            return false;
+        }
+    
+        return true;
     }
 
     // Loads an RSA private key from file
@@ -99,7 +103,7 @@ namespace RSA {
         std::string line1, line2, key_asn1_b64 = "";
 
         std::getline(keyfile, line1);
-        if (line1 != private_key_header) {
+        if (line1 != PRIVATE_KEY_HEADER) {
             throw std::runtime_error("RSA private key header doesn't match the standard");
         }
 
@@ -111,6 +115,60 @@ namespace RSA {
 
         std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
         std::shared_ptr<ASN1Object> asn1_root = ASN1Parser::decode_all(key_asn1, 0);
+
+        if (!_RSAPrivateKey_format_check(asn1_root)) {
+            throw std::runtime_error("RSA private key format check failed");
+        }
+        if (!_RSAPrivateKey_is_supported(asn1_root)) {
+            throw std::runtime_error("RSA private key format not supported");
+        }
+
+        auto pk_sequence = asn1_root->children()[2]->children()[0];
+        std::vector<mpz_class> rsa_params(9);
+        for (size_t i = 0; i < 9; i++) {
+            auto integer_obj = std::static_pointer_cast<ASN1::ASN1Integer>(pk_sequence->children()[i]);
+            rsa_params[i] = integer_obj->value();
+        }
+
+        #ifdef RSA_DEBUG
+        std::cerr << "RSA Private Key parameters:" << std::endl;
+        std::cerr << "Version: " << rsa_params[0] << std::endl;
+        std::cerr << "Modulus (n): " << rsa_params[1] << std::endl;
+        std::cerr << "Public Exponent (e): " << rsa_params[2] << std::endl;
+        std::cerr << "Private Exponent (d): " << rsa_params[3] << std::endl;
+        std::cerr << "Prime 1 (p): " << rsa_params[4] << std::endl;
+        std::cerr << "Prime 2 (q): " << rsa_params[5] << std::endl;
+        std::cerr << "Exponent1 (d mod (p-1)): " << rsa_params[6] << std::endl;
+        std::cerr << "Exponent2 (d mod (q-1)): " << rsa_params[7] << std::endl;
+        std::cerr << "Coefficient (q^-1 mod p): " << rsa_params[8] << std::endl;
+        #endif // RSA_DEBUG
+
+        return RSAPrivateKey(
+            rsa_params[0].get_ui(),
+            rsa_params[1],
+            rsa_params[2],
+            rsa_params[3],
+            rsa_params[4],
+            rsa_params[5],
+            rsa_params[6],
+            rsa_params[7],
+            rsa_params[8]
+        );
     }
 
+    // CRITICAL, DO NOT REMOVE OR MODIFY
+    // See rsa.h for explanation
+    void secure_free(void *ptr, size_t size) {
+        if (ptr != nullptr) {
+            volatile uint8_t *vptr = static_cast<volatile uint8_t*>(ptr);
+            for (size_t i = 0; i < size; i++) {
+                vptr[i] = 0;
+            }
+            free(ptr);
+        }
+
+        #ifdef SECURE_FREE_DEBUG
+        std::cerr << "[secure_free] Cleared " << size << " bytes at " << ptr << std::endl;
+        #endif // SECURE_FREE_DEBUG
+    }
 }

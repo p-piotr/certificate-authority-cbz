@@ -13,16 +13,16 @@ namespace ASN1 {
 
     // Creates an ASN1Object, initializes its fields and optionally prints a debug message
     ASN1Object::ASN1Object(ASN1Tag tag, size_t tag_length_size, std::vector<uint8_t>const &&value) : _tag(tag), _tag_length_size(tag_length_size), _value(value) {
-        #ifdef ASN1DEBUG
-        std::cerr << "ASN1Object created: tag=" << std::hex << (int)tag << ", tag_length_size=" << std::dec << tag_length_size << ", value_length=" << value.size() << std::endl;
-        #endif
+        #ifdef ASN1_DEBUG
+        std::cerr << "[ASN1Object] ASN1Object created: tag=" << std::hex << (int)tag << ", tag_length_size=" << std::dec << tag_length_size << ", value_length=" << value.size() << std::endl;
+        #endif // ASN1_DEBUG
     }
 
     // Destroys an ASN1Object and optionally prints a debug message
     ASN1Object::~ASN1Object() {
-        #ifdef ASN1DEBUG
-        std::cerr << "ASN1Object destroyed: tag=" << std::hex << (int)_tag << ", tag_length_size=" << std::dec << _tag_length_size << ", value_length=" << _value.size() << std::endl;
-        #endif
+        #ifdef ASN1_DEBUG
+        std::cerr << "[ASN1Object] ASN1Object destroyed: tag=" << std::hex << (int)_tag << ", tag_length_size=" << std::dec << _tag_length_size << ", value_length=" << _value.size() << std::endl;
+        #endif // ASN1_DEBUG
     }
 
     const char* ASN1Parser::tag_to_string(ASN1Tag tag) {
