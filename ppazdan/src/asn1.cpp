@@ -25,6 +25,7 @@ namespace ASN1 {
         #endif // ASN1_DEBUG
     }
 
+    // Converts an ASN.1 tag (enum) to string
     const char* ASN1Parser::tag_to_string(ASN1Tag tag) {
         switch (tag) {
             case (INTEGER): return "INTEGER";
@@ -44,6 +45,10 @@ namespace ASN1 {
         }
     }
 
+    // This function parses ASN.1 binary data and returns a parsed element (does not parse recursively - see ASN1Parser::decode_all)
+    // Input:
+    // @data - byte vector containing ASN.1 binary data
+    // @offset - offset from the beginning of @data from which parsing should be started
     std::shared_ptr<ASN1Object> ASN1Parser::decode(std::vector<uint8_t> const &data, size_t offset) {
         if (offset >= data.size()) {
             throw std::runtime_error("Offset out of bounds");
@@ -78,6 +83,10 @@ namespace ASN1 {
         return obj;
     }
 
+    // Parses ASN.1 binary data recursively to create a module tree, returning the root element
+    // Input:
+    // @data - byte vector containing ASN.1 binary data
+    // @offset - offset in @data to start from
     std::shared_ptr<ASN1Object> ASN1Parser::decode_all(std::vector<uint8_t> const &data, size_t offset) {
         std::shared_ptr<ASN1Object> root = decode(data, offset);
         std::queue<std::shared_ptr<ASN1Object>> to_process;
@@ -98,6 +107,7 @@ namespace ASN1 {
         return root;
     }
 
+    // Converts an ASN.1 tag (enum) to string
     void ASN1Object::print(int indent) {
         std::string output = "";
         for (int i = 0; i < indent; i++) {
@@ -150,30 +160,36 @@ namespace ASN1 {
         return result;
     }
 
+    // The ASN.1 OBJECT IDENTIFIER encoder - returns a binary representation of OBJECT IDENTIFIER (as a buffer)
+    // Input:
+    // @obj_id_str - OBJECT IDENTIFIER as a string (eg. "1.23.4567.89.0")
     std::vector<uint8_t> ASN1ObjectIdentifier::encode(std::string const &obj_id_str) {
-        std::vector<mpz_class> integers;
+        std::vector<mpz_class> integers; // holds the parsed integers from obj_id_str, eg. "1.23.4567.89.0" -> [1, 23, 4567, 89, 0]
         std::vector<uint8_t> result;
-        std::string temp = "";
+        std::string temp = ""; // temporary string holding digits of the current integer being parsed
 
         for (char ch : obj_id_str) {
+            // parse the string into integers
             if (ch == '.') {
-                if (temp.size() == 0) {
+                if (temp.size() == 0) { // two dots in a row or dot at the beginning
                     throw std::runtime_error("Invalid format of ASN.1 Object Identifier");
                 }
+                // convert the parsed integer string to GMP integer and store it
                 integers.push_back(mpz_class(temp));
                 temp = "";
             }
             else if (std::isdigit(ch)) {
                 temp += ch;
             }
-            else {
+            else { // illegal character
                 throw std::runtime_error("Invalid character in ASN.1 Object Identifier");
             }
         }
-        if (temp.size() > 0) {
+        if (temp.size() > 0) { // append the last integer, since it won't be followed by a dot
             integers.push_back(mpz_class(temp));
         }
 
+        // encode the whole OBJECT IDENTIFIER acording to https://letsencrypt.org/docs/a-warm-welcome-to-asn1-and-der/#object-identifier-encoding
         auto it = integers.begin();
         mpz_class integer = *it++ * 40;
         integer += *it++;
@@ -189,15 +205,20 @@ namespace ASN1 {
         return result;
     }
 
+    // ASN.1 OBJECT IDENTIFIER decoder - outputs a string (eg. "1.23.4567.89.0")
+    // Input:
+    // @obj_id - vector containing binary representatoin of the OBJECT IDENTIFIER
     std::string ASN1ObjectIdentifier::decode(std::vector<uint8_t> const &obj_id) {
         std::string integer_str, result = "";
         auto rb = obj_id.rbegin(), re = rb + 1;
 
+        // parse (from the end to the beginning), till the first two integers
         while (re != obj_id.rend()) {
-            if (*re & 0x80) {
+            if (*re & 0x80) { // MSB set - continue
                 re++;
                 continue;
             }
+            // decode single integer and prepend it to the result string
             integer_str = _ASN1ObjectIdentifier_decode_single_integer(rb, re).get_str();
             result.insert(result.cbegin(), integer_str.begin(), integer_str.end());
             result.insert(result.cbegin(), '.');
@@ -205,20 +226,22 @@ namespace ASN1 {
             re = rb + 1;
         }
 
+        // decode the first two integers
         mpz_class double_integer = _ASN1ObjectIdentifier_decode_single_integer(rb, re);
         mpz_class x, y;
-        if (double_integer < 40) {
+        if (double_integer < 40) { // x = 0
             x = 0;
             y = double_integer;
         }
-        else if (double_integer < 80) {
+        else if (double_integer < 80) { // x = 1
             x = 1;
             y = double_integer - 40;
         }
-        else {
+        else { // x = 2
             x = 2;
             y = double_integer - 80;
         }
+        // prepend x and y to the result string
         std::string x_str = x.get_str(), y_str = y.get_str();
         result.insert(result.cbegin(), y_str.begin(), y_str.end());
         result.insert(result.cbegin(), '.');
@@ -227,6 +250,9 @@ namespace ASN1 {
         return result;
     }
 
+    // Encodes a GMP integer to the binary form, big-endian (ANS.1 compatibile), returning a buffer
+    // Input:
+    // @num - GMP integer to encode
     std::vector<uint8_t> ASN1Integer::encode(mpz_class const &num) {
         if (num == 0) {
             return { 0 };
@@ -250,6 +276,9 @@ namespace ASN1 {
         return buffer;
     }
 
+    // Decodes a buffer holding binary data into a GMP integer and returns it
+    // Input:
+    // @buffer - buffer holding the integer in binary form (big-endian)
     mpz_class ASN1Integer::decode(std::vector<uint8_t> const &buffer) {
         mpz_class num;
 

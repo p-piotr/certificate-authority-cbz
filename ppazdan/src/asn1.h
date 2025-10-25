@@ -6,10 +6,15 @@
 #include <memory>
 #include <gmpxx.h>
 
+// Question: why is ASN1 namespace declared 2 times + RSA namespace declaration in the middle of ASN1?
+// Answer: https://en.wikipedia.org/wiki/Circular_dependency
+
+// This namespace is defined in fully defined later on - forward declaration of ASN1Object for the function down below in the RSA namespace
 namespace ASN1 {
     class ASN1Object;
 }
 
+// This namespace is defined in "rsa.h" - forward declaration of a function used as a friend in ASN1Object
 namespace RSA {
     bool _RSAPrivateKey_format_check(std::shared_ptr<ASN1::ASN1Object> root_object);
 }
@@ -77,10 +82,12 @@ namespace ASN1 {
             return _tag_length_size + _value.size();
         }
 
+        // return's object's value buffer (read-only)
         inline const std::vector<uint8_t>& value() const {
             return _value;
         }
 
+        // returns object's children (read-only)
         inline const std::vector<std::shared_ptr<ASN1Object>>& children() const {
             return _children;
         }
@@ -98,6 +105,7 @@ namespace ASN1 {
     // Responsible for encoding/decoding ASN.1 OBJECT IDENTIFIER objects
     class ASN1ObjectIdentifier : public ASN1Object{
     public:
+        // Returns the ASN.1 OBJECT IDENTIFIER object value as a readable string (instead of default buffer)
         inline const std::string value() const {
             return decode(_value);
         }
@@ -116,6 +124,7 @@ namespace ASN1 {
     // Responsible for encoding/decoding ASN.1 INTEGER objects
     class ASN1Integer : public ASN1Object {
     public:
+        // Returns the ASN.1 INTEGER object value as GMP integer (instead of default buffer)
         inline const mpz_class value() const {
             return decode(_value);
         }

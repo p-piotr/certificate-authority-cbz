@@ -36,6 +36,11 @@ namespace RSA {
     // RSA Encryption OBJECT IDENTIFIER - look at the beginning of this file
     std::string RSA_ENCRYPTION_OBJECT_IDENTIFIER = "1.2.840.113549.1.1.1";
 
+
+    // Checks if the ASN.1 structure of the RSA private key is correct
+    // Additionally decodes the RSAPrivateKey structure inside the OCTET STRING, if hasn't been done yet
+    // Input:
+    // @root_object - root ASN1Object representing the whole key
     bool _RSAPrivateKey_format_check(std::shared_ptr<ASN1Object> root_object) {
         if (root_object->tag() != ASN1Tag::SEQUENCE || root_object->children().size() != 3) {
             return false;
@@ -63,7 +68,7 @@ namespace RSA {
         }
 
         if (private_key->children().size() == 0) {
-            // decode the private_key
+            // decode the private_key according to the PKCS#1 structure, since the ASN.1 parser didn't do it (it's a Primitive OCTET STRING after all)
             auto pk_sequence = ASN1Parser::decode_all(private_key->value(), 0);
             if (pk_sequence->tag() != ASN1Tag::SEQUENCE || pk_sequence->children().size() != 9) {
                 return false;
@@ -82,6 +87,10 @@ namespace RSA {
         return true;
     }
 
+    // Checks if the RSA private key is supported (version, algorithm OID)
+    // Currently only version 0 and rsaEncryption algorithm are supported
+    // Input:
+    // @root_object - root ASN1Object representing the whole key
     bool _RSAPrivateKey_is_supported(std::shared_ptr<ASN1Object> root_object) {
         auto version = std::static_pointer_cast<ASN1::ASN1Integer>(root_object->children()[0]);
         if (version->value() != 0) {
@@ -97,34 +106,45 @@ namespace RSA {
     }
 
     // Loads an RSA private key from file
-    // TODO: finish
+    // Input:
+    // @filepath - path to the file containing the RSA private key in PKCS#8
     RSAPrivateKey RSAPrivateKey::from_file(std::string const &filepath) {
         std::ifstream keyfile(filepath);
         std::string line1, line2, key_asn1_b64 = "";
 
+        // read the key file and complain if needed
         std::getline(keyfile, line1);
         if (line1 != PRIVATE_KEY_HEADER) {
             throw std::runtime_error("RSA private key header doesn't match the standard");
         }
 
+        // read all lines till the end and append to key_asn1_b64, except the footer
         std::getline(keyfile, line1);
-        while (std::getline(keyfile, line2)) {
+        while (std::getline(keyfile, line2)) { // read next line and append the previous one
             key_asn1_b64 += line1;
             line1 = line2;
+        }
+
+        if (line1 != PRIVATE_KEY_FOOTER) {
+            throw std::runtime_error("RSA private key footer doesn't match the standard");
         }
 
         std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
         std::shared_ptr<ASN1Object> asn1_root = ASN1Parser::decode_all(key_asn1, 0);
 
+        // validate the overall key ASN.1 structure
         if (!_RSAPrivateKey_format_check(asn1_root)) {
             throw std::runtime_error("RSA private key format check failed");
         }
+        // validate the key contents (supported algorithm, version), since we are very picky in what we actually support
         if (!_RSAPrivateKey_is_supported(asn1_root)) {
             throw std::runtime_error("RSA private key format not supported");
         }
 
+        // RSAPrivateKey sequence - https://www.rfc-editor.org/rfc/rfc8017.html#page-55
         auto pk_sequence = asn1_root->children()[2]->children()[0];
         std::vector<mpz_class> rsa_params(9);
+        // iterate through all 9 integers and save them
         for (size_t i = 0; i < 9; i++) {
             auto integer_obj = std::static_pointer_cast<ASN1::ASN1Integer>(pk_sequence->children()[i]);
             rsa_params[i] = integer_obj->value();
@@ -143,8 +163,9 @@ namespace RSA {
         std::cerr << "Coefficient (q^-1 mod p): " << rsa_params[8] << std::endl;
         #endif // RSA_DEBUG
 
+        // return the key object
         return RSAPrivateKey(
-            rsa_params[0].get_ui(),
+            rsa_params[0],
             rsa_params[1],
             rsa_params[2],
             rsa_params[3],
@@ -160,6 +181,7 @@ namespace RSA {
     // See rsa.h for explanation
     void secure_free(void *ptr, size_t size) {
         if (ptr != nullptr) {
+            // zero the memory before freeing
             volatile uint8_t *vptr = static_cast<volatile uint8_t*>(ptr);
             for (size_t i = 0; i < size; i++) {
                 vptr[i] = 0;
