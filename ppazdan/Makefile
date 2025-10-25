@@ -13,4 +13,4 @@ debug:
 	$(CXX) $(CXXFLAGS) $(SRCS) $(LIBS) -g -o $(DEBUG_TARGET)
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) $(DEBUG_TARGET)

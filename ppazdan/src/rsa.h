@@ -1,14 +1,24 @@
+#pragma once
+
 #include <memory>
 #include <cstdint>
 #include <gmpxx.h>
 
+namespace ASN1 {
+    class ASN1Object;
+}
+
 // Namespace containing RSA functionality
 namespace RSA {
-
 
     // Header and footer of a valid PKCS#8 private key
     extern std::string private_key_header;
     extern std::string private_key_footer;
+
+    // RSA Encryption OBJECT IDENTIFIER value
+    extern std::string rsa_encryption_obj_id;
+
+    bool _RSAPrivateKey_format_check(std::shared_ptr<ASN1::ASN1Object> root_object);
 
     // Object representing an RSA private key (PKCS#1 compatibile)
     class RSAPrivateKey {
@@ -45,4 +55,5 @@ namespace RSA {
             key.coefficient = key.coefficient;
         }
     };
+
 }

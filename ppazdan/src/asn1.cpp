@@ -12,7 +12,7 @@
 namespace ASN1 {
 
     // Creates an ASN1Object, initializes its fields and optionally prints a debug message
-    ASN1Object::ASN1Object(ASN1Tag tag, size_t tag_length_size, const std::vector<uint8_t>& value) : tag(tag), tag_length_size(tag_length_size), value(value) {
+    ASN1Object::ASN1Object(ASN1Tag tag, size_t tag_length_size, std::vector<uint8_t>const &&value) : _tag(tag), _tag_length_size(tag_length_size), _value(value) {
         #ifdef ASN1DEBUG
         std::cerr << "ASN1Object created: tag=" << std::hex << (int)tag << ", tag_length_size=" << std::dec << tag_length_size << ", value_length=" << value.size() << std::endl;
         #endif
@@ -21,11 +21,10 @@ namespace ASN1 {
     // Destroys an ASN1Object and optionally prints a debug message
     ASN1Object::~ASN1Object() {
         #ifdef ASN1DEBUG
-        std::cerr << "ASN1Object destroyed: tag=" << std::hex << (int)tag << ", tag_length_size=" << std::dec << tag_length_size << ", value_length=" << value.size() << std::endl;
+        std::cerr << "ASN1Object destroyed: tag=" << std::hex << (int)_tag << ", tag_length_size=" << std::dec << _tag_length_size << ", value_length=" << _value.size() << std::endl;
         #endif
     }
 
-    // Converts an ASN.1 tag (enum) to string
     const char* ASN1Parser::tag_to_string(ASN1Tag tag) {
         switch (tag) {
             case (INTEGER): return "INTEGER";
@@ -45,11 +44,7 @@ namespace ASN1 {
         }
     }
 
-    // This function parses ASN.1 binary data and returns a parsed element (does not parse recursively - see ASN1Parser::decode_all)
-    // Input:
-    // @data - byte vector containing ASN.1 binary data
-    // @offset - offset from the beginning of @data from which parsing should be started
-    std::shared_ptr<ASN1Object> ASN1Parser::decode(const std::vector<uint8_t>& data, size_t offset) {
+    std::shared_ptr<ASN1Object> ASN1Parser::decode(std::vector<uint8_t> const &data, size_t offset) {
         if (offset >= data.size()) {
             throw std::runtime_error("Offset out of bounds");
         }
@@ -79,26 +74,23 @@ namespace ASN1 {
         std::vector<uint8_t> value(data.begin() + offset, data.begin() + offset + length);
         offset += length;
 
-        std::shared_ptr<ASN1Object> obj = std::make_shared<ASN1Object>(tag, tag_length_size, value);
+        std::shared_ptr<ASN1Object> obj = std::make_shared<ASN1Object>(tag, tag_length_size, std::move(value));
         return obj;
     }
 
-    // Parses ASN.1 binary data recursively to create a module tree, returning the root element
-    // Input:
-    // @data - byte vector containing ASN.1 binary data
-    std::shared_ptr<ASN1Object> ASN1Parser::decode_all(const std::vector<uint8_t>& data) {
-        std::shared_ptr<ASN1Object> root = decode(data, 0);
+    std::shared_ptr<ASN1Object> ASN1Parser::decode_all(std::vector<uint8_t> const &data, size_t offset) {
+        std::shared_ptr<ASN1Object> root = decode(data, offset);
         std::queue<std::shared_ptr<ASN1Object>> to_process;
         to_process.push(root);
         while (!to_process.empty()) {
             std::shared_ptr<ASN1Object> object_to_process = to_process.front();
             to_process.pop();
-            size_t object_size = object_to_process->value.size(), offset = 0;
+            size_t object_size = object_to_process->_value.size(), offset = 0;
             while (offset < object_size) {
-                std::shared_ptr<ASN1Object> object = decode(object_to_process->value, offset);
-                object_to_process->children.push_back(object);
-                offset += object->total_length();
-                if (object->tag & 0x20) { // field is constructed - it contains "children" to process, too
+                std::shared_ptr<ASN1Object> object = decode(object_to_process->_value, offset);
+                object_to_process->_children.push_back(object);
+                offset += object->total_size();
+                if (object->_tag & 0x20) { // field is constructed - it contains "children" to process, too
                     to_process.push(object);
                 }
             }
@@ -106,17 +98,16 @@ namespace ASN1 {
         return root;
     }
 
-    // Prints the ASN.1 tree in readable format - function prototype, most probably won't be used so I don't really care about it
     void ASN1Object::print(int indent) {
         std::string output = "";
         for (int i = 0; i < indent; i++) {
             output += '\t';
         }
         output += "TYPE: ";
-        output += ASN1Parser::tag_to_string(tag);
+        output += ASN1Parser::tag_to_string(_tag);
         // output value in format depending on the tag
         std::cout << output << std::endl;
-        for (std::shared_ptr<ASN1Object> child : children) {
+        for (std::shared_ptr<ASN1Object> child : _children) {
             child->print(indent+1);        
         }
     }
@@ -153,16 +144,12 @@ namespace ASN1 {
     mpz_class _ASN1ObjectIdentifier_decode_single_integer(std::vector<uint8_t>::const_reverse_iterator rb, std::vector<uint8_t>::const_reverse_iterator re) {
         mpz_class result = 0, multiplier = 1;
         for (auto it = rb; it != re; it++) {
-            //std::cout << "result +=" << std::hex << static_cast<int>(*it & 0x7F) << " * " << multiplier << std::endl;
             result += (*it & 0x7F) * multiplier;
             multiplier *= 128;
         }
         return result;
     }
 
-    // The actual ASN.1 OBJECT IDENTIFIER encoder - returns a binary representation of OBJECT IDENTIFIER (as a vector)
-    // Input:
-    // @obj_id_str - OBJECT IDENTIFIER as a string (eg. "1.23.4567.89.0")
     std::vector<uint8_t> ASN1ObjectIdentifier::encode(std::string const &obj_id_str) {
         std::vector<mpz_class> integers;
         std::vector<uint8_t> result;
@@ -202,9 +189,6 @@ namespace ASN1 {
         return result;
     }
 
-    // ASN.1 OBJECT IDENTIFIER decoder - outputs a string (eg. "1.23.4567.89.0")
-    // Input:
-    // @obj_id - vector containing binary representatoin of the OBJECT IDENTIFIER
     std::string ASN1ObjectIdentifier::decode(std::vector<uint8_t> const &obj_id) {
         std::string integer_str, result = "";
         auto rb = obj_id.rbegin(), re = rb + 1;
@@ -241,6 +225,45 @@ namespace ASN1 {
         result.insert(result.cbegin(), x_str.begin(), x_str.end());
 
         return result;
+    }
+
+    std::vector<uint8_t> ASN1Integer::encode(mpz_class const &num) {
+        if (num == 0) {
+            return { 0 };
+        }
+
+        size_t buffer_size = mpz_sizeinbase(num.get_mpz_t(), 256);
+        std::vector<uint8_t> buffer(buffer_size);
+
+        size_t bytes_written = 0;
+        mpz_export(
+            buffer.data(),
+            &bytes_written,
+            1, // big-endian
+            sizeof(uint8_t),
+            1,
+            0,
+            num.get_mpz_t()
+        );
+
+        buffer.resize(bytes_written);
+        return buffer;
+    }
+
+    mpz_class ASN1Integer::decode(std::vector<uint8_t> const &buffer) {
+        mpz_class num;
+
+        mpz_import(
+            num.get_mpz_t(),
+            buffer.size(),
+            1, // big-endian
+            sizeof(uint8_t),
+            1,
+            0,
+            buffer.data()
+        );
+
+        return num;
     }
 
 }
