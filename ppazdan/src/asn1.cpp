@@ -8,11 +8,14 @@
 #include "asn1.h"
 #include "debug.h"
 
+// TODO: add memory zeroing to ASN1Object destructor (!!!)
+
 // This namespace contains all functionality related to ASN1
 namespace ASN1 {
 
     // Creates an ASN1Object, initializes its fields and optionally prints a debug message
-    ASN1Object::ASN1Object(ASN1Tag tag, size_t tag_length_size, std::vector<uint8_t>const &&value) : _tag(tag), _tag_length_size(tag_length_size), _value(value) {
+    // Note: as the value vector should be held only in this object, the constructor takes an rvalue (move instead of copy)
+    ASN1Object::ASN1Object(ASN1Tag tag, size_t tag_length_size, std::vector<uint8_t> &&value) : _tag(tag), _tag_length_size(tag_length_size), _value(std::move(value)) {
         #ifdef ASN1_DEBUG
         std::cerr << "[ASN1Object] ASN1Object created: tag=" << std::hex << (int)tag << ", tag_length_size=" << std::dec << tag_length_size << ", value_length=" << value.size() << std::endl;
         #endif // ASN1_DEBUG
@@ -20,6 +23,12 @@ namespace ASN1 {
 
     // Destroys an ASN1Object and optionally prints a debug message
     ASN1Object::~ASN1Object() {
+        // Zero the value buffer, as it may contain sensitive data
+        volatile uint8_t *vptr = static_cast<volatile uint8_t*>(_value.data());
+        for (size_t i = 0; i < _value.size(); i++) {
+            vptr[i] = 0;
+        }
+
         #ifdef ASN1_DEBUG
         std::cerr << "[ASN1Object] ASN1Object destroyed: tag=" << std::hex << (int)_tag << ", tag_length_size=" << std::dec << _tag_length_size << ", value_length=" << _value.size() << std::endl;
         #endif // ASN1_DEBUG
@@ -147,7 +156,6 @@ namespace ASN1 {
     }
 
     // Helper for ASN1ObjectIdentifier::decode - decodes a single OBJECT IDENTIFIER integer, returning a GMP integer
-    // into an GMP integer
     // Input:
     // @rb - constant reverse iterator pointing at the last element of the encoded integer's vector
     // @re - constant reverse iterator pointing at the element before the first one of the encoded integer's vector
@@ -157,6 +165,7 @@ namespace ASN1 {
             result += (*it & 0x7F) * multiplier;
             multiplier *= 128;
         }
+
         return result;
     }
 

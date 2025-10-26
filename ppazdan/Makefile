@@ -7,7 +7,7 @@ CXXFLAGS=-g
 LIBS=-lgmp -lgmpxx
 
 all:
-	$(CXX) $(CXXFLAGS) $(SRCS) $(LIBS) -o $(TARGET)
+	$(CXX) $(CXXFLAGS) $(SRCS) $(LIBS) -O3 -o $(TARGET)
 
 debug:
 	$(CXX) $(CXXFLAGS) $(SRCS) $(LIBS) -g -o $(DEBUG_TARGET)

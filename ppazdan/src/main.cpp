@@ -22,6 +22,7 @@ int main(int argc, char** argv) {
     try {
         RSA::RSAPrivateKey private_key = RSA::RSAPrivateKey(argv[1]);
         std::cout << "RSA Private Key loaded successfully." << std::endl;
+        private_key.print();
     } catch (const std::exception &e) {
         std::cerr << "Error loading RSA Private Key: " << e.what() << std::endl;
         return 1;

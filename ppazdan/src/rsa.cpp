@@ -67,18 +67,23 @@ namespace RSA {
             return false;
         }
 
+        std::shared_ptr<ASN1Object> pk_sequence;
         if (private_key->children().size() == 0) {
             // decode the private_key according to the PKCS#1 structure, since the ASN.1 parser didn't do it (it's a Primitive OCTET STRING after all)
-            auto pk_sequence = ASN1Parser::decode_all(private_key->value(), 0);
+            pk_sequence = ASN1Parser::decode_all(private_key->value(), 0);
             if (pk_sequence->tag() != ASN1Tag::SEQUENCE || pk_sequence->children().size() != 9) {
                 return false;
             }
             private_key->_children.push_back(pk_sequence);
         }
-        auto pk_sequence = private_key->children()[0];
-        if (pk_sequence->tag() != ASN1Tag::SEQUENCE || pk_sequence->children().size() != 9) {
-            return false;
+        else {
+            // maybe it's not the first time we're checking this object, so it's been already decoded - just check if everything is intact
+            pk_sequence = private_key->children()[0];
+            if (pk_sequence->tag() != ASN1Tag::SEQUENCE || pk_sequence->children().size() != 9) {
+                return false;
+            }
         }
+
         for (auto child : pk_sequence->children()) {
             if (child->tag() != ASN1Tag::INTEGER || child->children().size() != 0) {
                 return false;
@@ -165,15 +170,15 @@ namespace RSA {
 
         // return the key object
         return RSAPrivateKey(
-            rsa_params[0],
-            rsa_params[1],
-            rsa_params[2],
-            rsa_params[3],
-            rsa_params[4],
-            rsa_params[5],
-            rsa_params[6],
-            rsa_params[7],
-            rsa_params[8]
+            std::move(rsa_params[0]),
+            std::move(rsa_params[1]),
+            std::move(rsa_params[2]),
+            std::move(rsa_params[3]),
+            std::move(rsa_params[4]),
+            std::move(rsa_params[5]),
+            std::move(rsa_params[6]),
+            std::move(rsa_params[7]),
+            std::move(rsa_params[8])
         );
     }
 

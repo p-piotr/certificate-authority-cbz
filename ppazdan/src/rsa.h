@@ -62,8 +62,19 @@ namespace RSA {
             }
         }
 
-        // Constructor loading the key from file
         RSAPrivateKey(std::string const &filepath)
             : RSAPrivateKey(from_file(filepath)) {}
+
+        void print() {
+            std::cout << "Version: " << version << std::endl;
+            std::cout << "Modulus (n): " << n << std::endl;
+            std::cout << "Public Exponent (e): " << e << std::endl;
+            std::cout << "Private Exponent (d): " << d << std::endl;
+            std::cout << "Prime 1 (p): " << p << std::endl;
+            std::cout << "Prime 2 (q): " << q << std::endl;
+            std::cout << "Exponent1 (d mod (p-1)): " << exponent1 << std::endl;
+            std::cout << "Exponent2 (d mod (q-1)): " << exponent2 << std::endl;
+            std::cout << "Coefficient (q^-1 mod p): " << coefficient << std::endl;
+        }
     };
 }

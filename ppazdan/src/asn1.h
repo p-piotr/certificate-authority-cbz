@@ -69,7 +69,7 @@ namespace ASN1 {
         std::vector<std::shared_ptr<ASN1Object>> _children; // Set of child objects (1 level deep); empty if there're no children
 
     public:
-        ASN1Object(ASN1Tag tag, size_t total_length, std::vector<uint8_t> const &&value);
+        ASN1Object(ASN1Tag tag, size_t total_length, std::vector<uint8_t> &&value);
         ~ASN1Object();
 
         // returns object's tag
@@ -141,6 +141,6 @@ namespace ASN1 {
     };
 
     // // ASN1ObjectIdentifier helper functions
-    // std::vector<uint8_t> _ASN1ObjectIdentifier_encode_single_integer(mpz_class integer);
-    // mpz_class _ASN1ObjectIdentifier_decode_single_integer(std::vector<uint8_t>::reverse_iterator rb, std::vector<uint8_t>::reverse_iterator re);
+    std::vector<uint8_t> _ASN1ObjectIdentifier_encode_single_integer(mpz_class integer);
+    mpz_class _ASN1ObjectIdentifier_decode_single_integer(std::vector<uint8_t>::reverse_iterator rb, std::vector<uint8_t>::reverse_iterator re);
 }
