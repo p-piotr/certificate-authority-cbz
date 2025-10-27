@@ -267,7 +267,7 @@ namespace ASN1 {
             return { 0 };
         }
 
-        size_t buffer_size = mpz_sizeinbase(num.get_mpz_t(), 256);
+        size_t buffer_size = (mpz_sizeinbase(num.get_mpz_t(), 2) + 7) / 8;
         std::vector<uint8_t> buffer(buffer_size);
 
         size_t bytes_written = 0;

@@ -59,6 +59,60 @@ namespace ASN1 {
         static const char* tag_to_string(ASN1Tag tag);
     };
 
+    // This class wraps the overall binary structure of an ASN.1 object
+    // Before, all ASN1Object instances contained their own copied
+    // value buffer, which lead to multiple places when the same data
+    // was stored (if a child had its data, then its parent had it too +
+    // their own, etc.)
+    // Now, there's only a single instance of this buffer and each
+    // object holds its pointer, as well as its own data start offset
+    // and length
+    class ASN1BinaryWrapper {
+    private:
+        // This function will be used as a destructor for std::vector<uint8_t>, when last
+        // std::shared_ptr drops this vector
+        void _zero_buffer(std::vector<uint8_t> *buffer) {
+            for (int i = 0; i < buffer->size(); i++) {
+                (*buffer)[i] = 0;
+            }
+            delete buffer;
+        };
+
+    protected:
+        std::shared_ptr<std::vector<uint8_t>> _buffer; // buffer holding binary data of related ASN1Object module (tree)
+        size_t _data_offset; // offset from the start of _buffer to the start of this object's value
+        size_t _data_size; // size of this object's value
+
+    public:
+        // This constructor copies an already existing shared_ptr (already existing buffer vector)
+        ASN1BinaryWrapper(std::shared_ptr<std::vector<uint8_t>> _buffer,
+        size_t _data_offset,
+        size_t _data_size) : _buffer(_buffer),
+        _data_offset(_data_offset),
+        _data_size(_data_size) {}
+
+        // This constructor creates a buffer vector and makes sure it gets zero'ed when dropped
+        ASN1BinaryWrapper(std::vector<uint8_t> &&_buffer,
+        size_t _data_offset,
+        size_t _data_size) : 
+        _buffer(std::shared_ptr<std::vector<uint8_t>>
+            (new std::vector<uint8_t>(std::move(_buffer)), _zero_buffer)),
+        _data_offset(_data_offset),
+        _data_size(_data_size) {}
+
+        inline const std::shared_ptr<std::vector<uint8_t>> buffer() const {
+            return _buffer;
+        }
+
+        inline size_t data_offset() const {
+            return _data_offset;
+        }
+
+        inline size_t data_size() const {
+            return _data_size;
+        }
+    };
+
     // Class representing an ASN.1 object - contains a tag (see ASN1Tag above),
     // raw value and children, if parsed recursively
     class ASN1Object {
