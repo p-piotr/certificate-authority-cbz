@@ -19,19 +19,17 @@ namespace RSA {
     extern std::string RSA_ENCRYPTION_OBJECT_IDENTIFIER;
 
     // Checks if the ASN.1 structure of the RSA private key is correct
+    //
     // Input:
     // @root_object - root ASN1Object representing the whole key
     bool _RSAPrivateKey_format_check(std::shared_ptr<ASN1::ASN1Object> root_object);
 
     // Checks if the RSA private key is supported (version, algorithm OID)
     // Currently only version 0 and rsaEncryption algorithm are supported
+    //
     // Input:
     // @root_object - root ASN1Object representing the whole key
     bool _RSAPrivateKey_is_supported(std::shared_ptr<ASN1::ASN1Object> root_object);
-
-    // CRITICAL!!!
-    // This function is a modification of free() call providing additional data zeroing for mpz_class objects
-    void secure_free(void*, size_t);
 
     // Object representing an RSA private key (PKCS#1 compatibile)
     class RSAPrivateKey {
@@ -48,6 +46,7 @@ namespace RSA {
 
     public:
         // Loads an RSA private key from file
+        //
         // Input:
         // @filepath - path to the file containing the RSA private key in PKCS#8
         static RSAPrivateKey from_file(std::string const &filepath);
@@ -62,6 +61,7 @@ namespace RSA {
             }
         }
 
+        // Constructor loading key from file
         RSAPrivateKey(std::string const &filepath)
             : RSAPrivateKey(from_file(filepath)) {}
 
