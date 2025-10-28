@@ -70,7 +70,7 @@ namespace RSA {
         std::shared_ptr<ASN1Object> pk_sequence;
         if (private_key->children().size() == 0) {
             // decode the private_key according to the PKCS#1 structure, since the ASN.1 parser didn't do it (it's a Primitive OCTET STRING after all)
-            pk_sequence = ASN1Parser::decode_all(private_key->value(), 0);
+            pk_sequence = ASN1Parser::decode_all(private_key->object_data().buffer(), private_key->object_data().value_offset());
             if (pk_sequence->tag() != ASN1Tag::SEQUENCE || pk_sequence->children().size() != 9) {
                 return false;
             }
@@ -135,7 +135,7 @@ namespace RSA {
         }
 
         std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
-        std::shared_ptr<ASN1Object> asn1_root = ASN1Parser::decode_all(key_asn1, 0);
+        std::shared_ptr<ASN1Object> asn1_root = ASN1Parser::decode_all(std::move(key_asn1), 0);
 
         // validate the overall key ASN.1 structure
         if (!_RSAPrivateKey_format_check(asn1_root)) {
@@ -180,22 +180,5 @@ namespace RSA {
             std::move(rsa_params[7]),
             std::move(rsa_params[8])
         );
-    }
-
-    // CRITICAL, DO NOT REMOVE OR MODIFY
-    // See rsa.h for explanation
-    void secure_free(void *ptr, size_t size) {
-        if (ptr != nullptr) {
-            // zero the memory before freeing
-            volatile uint8_t *vptr = static_cast<volatile uint8_t*>(ptr);
-            for (size_t i = 0; i < size; i++) {
-                vptr[i] = 0;
-            }
-            free(ptr);
-        }
-
-        #ifdef SECURE_FREE_DEBUG
-        std::cerr << "[secure_free] Cleared " << size << " bytes at " << ptr << std::endl;
-        #endif // SECURE_FREE_DEBUG
     }
 }

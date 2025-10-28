@@ -5,11 +5,7 @@
 #include "base64.h"
 #include "asn1.h"
 #include "rsa.h"
-
-void mpz_initialize_secure() {
-    // Set custom memory deallocation function for GMP to ensure sensitive data is cleared from memory
-    mp_set_memory_functions(nullptr, nullptr, RSA::secure_free);
-}
+#include "security.h"
 
 int main(int argc, char** argv) {
     mpz_initialize_secure();
@@ -20,11 +16,16 @@ int main(int argc, char** argv) {
     }
 
     try {
-        RSA::RSAPrivateKey private_key = RSA::RSAPrivateKey(argv[1]);
-        std::cout << "RSA Private Key loaded successfully." << std::endl;
-        private_key.print();
+        std::string key_file_path = argv[1];
+        RSA::RSAPrivateKey rsa_private_key = RSA::RSAPrivateKey(key_file_path);
+        rsa_private_key.print();
+
+        std::vector<uint8_t> data = { 0x12, 0x34, 0x56 };
+        ASN1::ASN1Object object(ASN1::ASN1Tag::INTEGER, std::move(data));
+        object.print();
+        std::cout << ASN1::ASN1Integer::decode(object.object_data()) << std::endl;
     } catch (const std::exception &e) {
-        std::cerr << "Error loading RSA Private Key: " << e.what() << std::endl;
+        std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
 
