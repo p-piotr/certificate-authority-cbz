@@ -70,7 +70,7 @@ namespace RSA {
         std::shared_ptr<ASN1Object> pk_sequence;
         if (private_key->children().size() == 0) {
             // decode the private_key according to the PKCS#1 structure, since the ASN.1 parser didn't do it (it's a Primitive OCTET STRING after all)
-            pk_sequence = ASN1Parser::decode_all(private_key->object_data().buffer(), private_key->object_data().value_offset());
+            pk_sequence = ASN1Parser::decode_all(private_key->value().buffer(), private_key->value().value_offset());
             if (pk_sequence->tag() != ASN1Tag::SEQUENCE || pk_sequence->children().size() != 9) {
                 return false;
             }

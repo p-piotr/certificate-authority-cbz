@@ -33,6 +33,117 @@ namespace ASN1 {
         }
     }
 
+    void ASN1Parser::_ASN1Parser_update_children_values(
+        std::shared_ptr<ASN1Object> object, 
+        std::shared_ptr<std::vector<uint8_t>> buffer, 
+        size_t additional_offset
+    ) {
+        // loop through all children and update their _value and _length fields
+        for (auto &child : object->_children) {
+            ASN1ObjectData length(
+                object->_value.buffer(),
+                child->_length.value_offset() + additional_offset,
+                child->_length.value_size()
+            );
+            ASN1ObjectData value(
+                object->_value.buffer(),
+                child->_value.value_offset() + additional_offset,
+                child->_value.value_size()
+            );
+            child->_length = length;
+            child->_value = value;
+            // then, recursively update child's children
+            _ASN1Parser_update_children_values(child, buffer, additional_offset);
+        }
+    }
+
+    std::shared_ptr<std::vector<uint8_t>> ASN1Parser::encode(std::shared_ptr<ASN1Object> object) {
+        if (object->value().value_size() == 0) {
+            throw std::runtime_error("Cannot encode ASN.1 object without value");
+        }
+
+        std::vector<uint8_t> encoded_object;
+        // append tag
+        encoded_object.push_back(static_cast<uint8_t>(object->tag()));
+        // append length
+        encoded_object.insert(
+            encoded_object.end(),
+            object->length().buffer()->cbegin(),
+            object->length().buffer()->cend()
+        );
+        // append value
+        encoded_object.insert(
+            encoded_object.end(),
+            object->value().buffer()->cbegin(),
+            object->value().buffer()->cend()
+        );
+
+        // update object's internal state (_value and _length) to reflect the new buffer
+        size_t length_offset = 1, length_size = object->length().value_size();
+        size_t value_offset = length_offset + length_size, value_size = object->value().value_size();
+        ASN1ObjectData value(std::move(encoded_object), value_offset, value_size);
+        ASN1ObjectData length(value.buffer(), length_offset, length_size);
+        object->_value = value;
+        object->_length = length;
+
+        return value.buffer();
+    }
+
+    std::shared_ptr<std::vector<uint8_t>> ASN1Parser::encode_all(std::shared_ptr<ASN1Object> root_object) {
+        bool has_children = !root_object->children().empty();
+        bool has_value = root_object->value().value_size() > 0;
+        if (!(has_children ^ has_value)) {
+            // the object must have either children or value, not both or none
+            throw std::runtime_error("ASN.1 Object must have either children or value");
+        }
+        if (has_value) {
+            // if the object has a value, encode it directly
+            return encode(root_object);
+        }
+        // the object has children - encode them first
+        std::vector<std::shared_ptr<std::vector<uint8_t>>> encoded_children;
+        for (std::shared_ptr<ASN1Object> child : root_object->children()) {
+            encoded_children.push_back(encode_all(child));
+        }
+
+        // concatenate root object tag, length and encoded children
+        std::vector<uint8_t> encoded_root_object;
+        encoded_root_object.push_back(static_cast<uint8_t>(root_object->tag()));
+        // calculate total size of children
+        size_t total_children_size = 0;
+        for (auto child_data : encoded_children) {
+            total_children_size += child_data->size();
+        }
+        // since the object has children, we need to encode the length field accordingly
+        ASN1ObjectData length_field = ASN1ObjectData::calculate_length_field(total_children_size);
+        // append length field
+        encoded_root_object.insert(
+            encoded_root_object.end(),
+            length_field.buffer()->cbegin(),
+            length_field.buffer()->cend()
+        );
+        // append encoded children
+        for (auto child_data : encoded_children) {
+            size_t current_offset = encoded_root_object.size();
+            encoded_root_object.insert(
+                encoded_root_object.end(),
+                child_data->cbegin(),
+                child_data->cend()
+            );
+        }
+        // update root object's internal state (_value and _length) to reflect the new buffer
+        size_t length_offset = 1, length_size = length_field.value_size();
+        size_t value_offset = length_offset + length_size, value_size = total_children_size;
+        ASN1ObjectData value(std::move(encoded_root_object), value_offset, value_size);
+        ASN1ObjectData length(value.buffer(), length_offset, length_size);
+        root_object->_value = value;
+        root_object->_length = length;
+
+        // update children in the same way
+        _ASN1Parser_update_children_values(root_object, root_object->value().buffer(), value_offset);
+        return root_object->value().buffer();
+    }
+
     // This function parses ASN.1 binary data and returns a parsed element (does not parse recursively - see ASN1Parser::decode_all)
     // Input:
     // @data - byte vector containing ASN.1 binary data
@@ -69,7 +180,7 @@ namespace ASN1 {
         offset += length;
         ASN1ObjectData object_data(data, offset_t, length);
 
-        std::shared_ptr<ASN1Object> obj = std::make_shared<ASN1Object>(tag, tag_length_size, object_data);
+        std::shared_ptr<ASN1Object> obj = std::make_shared<ASN1Object>(tag, object_data);
         return obj;
     }
 
@@ -95,10 +206,10 @@ namespace ASN1 {
         while (!to_process.empty()) {
             std::shared_ptr<ASN1Object> object_to_process = to_process.front();
             to_process.pop();
-            size_t object_size = object_to_process->object_data().value_size(), offset = 0;
+            size_t object_size = object_to_process->value().value_size(), offset = 0;
             while (offset < object_size) {
-                size_t cur_offset = offset + object_to_process->object_data().value_offset();
-                std::shared_ptr<ASN1Object> object = decode(object_to_process->object_data().buffer(), offset + object_to_process->object_data().value_offset());
+                size_t cur_offset = offset + object_to_process->value().value_offset();
+                std::shared_ptr<ASN1Object> object = decode(object_to_process->value().buffer(), cur_offset);
                 object_to_process->_children.push_back(object);
                 offset += object->total_size();
                 if (object->_tag & 0x20) { // field is constructed - it contains "children" to process, too
@@ -122,6 +233,26 @@ namespace ASN1 {
         for (std::shared_ptr<ASN1Object> child : _children) {
             child->print(indent+1);        
         }
+    }
+
+    ASN1ObjectData ASN1ObjectData::calculate_length_field(size_t length) {
+        if (length < 128) {
+            // short form
+            std::vector<uint8_t> length_field = { static_cast<uint8_t>(length) };
+            return ASN1ObjectData(std::move(length_field), 0, 1);
+        }
+        // long form
+        std::vector<uint8_t> length_field;
+        size_t length_t = length, num_bytes = 0;
+        while (length_t > 0) {
+            num_bytes++;
+            length_t >>= 8;
+        }
+        length_field.push_back(static_cast<uint8_t>(0x80 | num_bytes));
+        for (size_t i = num_bytes; i > 0; i--) {
+            length_field.push_back(static_cast<uint8_t>((length >> ((i - 1) * 8)) & 0xFF));
+        }
+        return ASN1ObjectData(std::move(length_field), 0, length_field.size());
     }
 
     // Helper for ASN1ObjectIdentifier::encode - encodes a single GMP integer
@@ -276,8 +407,13 @@ namespace ASN1 {
             0,
             num.get_mpz_t()
         );
-
         buffer.resize(bytes_written);
+
+        if (buffer[0] & 0x80) {
+            // MSB set - we have to prepend a null byte in order to comply with two's complement
+            buffer.insert(buffer.begin(), 0);
+        }
+
         return buffer;
     }
 

@@ -45,6 +45,21 @@ namespace ASN1 {
     // Responsible for parsing ASN.1
     class ASN1Parser {
     public:
+        // This function encodes a singular ASN.1 object into binary form
+        // Note: this function can only encode an object with value set, otherwise
+        // it throws an exception
+        //
+        // Input:
+        // @object - ASN1Object to encode
+        static std::shared_ptr<std::vector<uint8_t>> encode(std::shared_ptr<ASN1Object> object);
+
+        // This function encodes an ASN.1 object (and its children recursively) into binary form
+        // returning a byte vector
+        //
+        // Input:
+        // @root_object - root ASN1Object to encode
+        static std::shared_ptr<std::vector<uint8_t>> encode_all(std::shared_ptr<ASN1Object> root_object);
+
         // This function parses ASN.1 binary data and returns a parsed element 
         // (does not parse recursively - see ASN1Parser::decode_all)
         //
@@ -72,6 +87,22 @@ namespace ASN1 {
 
         // Converts an ASN.1 tag (enum) to string
         static const char* tag_to_string(ASN1Tag tag);
+        
+        // Helper function to update children's _value and _length buffers, offsets and sizes after encoding
+        // As the overall encoding process works layer by layer (from the bottom to the top),
+        // each time a parent is being encoded, its children's buffers get concatenated to the parent's buffer.
+        // Therefore, each child's buffers, values and lengths need to be updated to reflect the new buffer and offsets.
+        //
+        // Input:
+        // @object - ASN1Object whose children should be updated
+        // @buffer - pointer to the new buffer that should be used
+        // @additional_offset - offset (in bytes) to add to each child's _value_offset and _length_offset
+        static void _ASN1Parser_update_children_values(
+            std::shared_ptr<ASN1Object> object, 
+            std::shared_ptr<std::vector<uint8_t>> buffer,
+            size_t additional_offset
+        );
+
     };
 
     // This class wraps the overall binary structure of an ASN.1 object tree
@@ -89,26 +120,40 @@ namespace ASN1 {
         size_t _value_size; // size of this object's value
 
     public:
+        // Empty constructor - useful when creating ASN1Object without value (with children)
+        ASN1ObjectData() : _buffer(nullptr), _value_offset(0), _value_size(0) {}
+
         // This constructor copies an already existing ASN1ObjectData (already existing buffer vector)
         ASN1ObjectData(std::shared_ptr<std::vector<uint8_t>> buffer,
-        size_t _value_offset,
-        size_t _value_size) : 
+        size_t value_offset,
+        size_t value_size) : 
         _buffer(buffer),
-        _value_offset(_value_offset),
-        _value_size(_value_size) {}
+        _value_offset(value_offset),
+        _value_size(value_size) {
+            if (buffer == nullptr) {
+                throw std::runtime_error("ASN1ObjectData constructor: buffer cannot be null");
+            }
+            if (value_offset + value_size > _buffer->size()) {
+                throw std::runtime_error("ASN1ObjectData constructor: value_offset + value_size exceeds buffer size");
+            }
+        }
 
         // This constructor creates a buffer vector and makes sure it gets zero'ed when dropped
         // Note: as the buffer vector should be held only in this object, the constructor takes
         // an rvalue (move instead of copy)
         ASN1ObjectData(std::vector<uint8_t> &&buffer,
-        size_t _value_offset,
-        size_t _value_size) : 
+        size_t value_offset,
+        size_t value_size) : 
         _buffer(std::shared_ptr<std::vector<uint8_t>>(
             new std::vector<uint8_t>(std::move(buffer)), 
             secure_delete_vector
         )),
-        _value_offset(_value_offset),
-        _value_size(_value_size) {}
+        _value_offset(value_offset),
+        _value_size(value_size) {
+            if (value_offset + value_size > _buffer->size()) {
+                throw std::runtime_error("ASN1ObjectData constructor: value_offset + value_size exceeds buffer size");
+            }
+        }
 
         inline const std::shared_ptr<std::vector<uint8_t>> buffer() const {
             return _buffer;
@@ -121,6 +166,14 @@ namespace ASN1 {
         inline size_t value_size() const {
             return _value_size;
         }
+
+        // Helper function to calculate length field for ASN.1 encoding, returning ASN1ObjectData
+        // representing the length field
+        // Note: the returned object always has _value_offset = 0 and _value_size = length field size
+        //
+        // Input:
+        // @length - length of the value to encode
+        static ASN1ObjectData calculate_length_field(size_t length);
     };
 
     // Class representing an ASN.1 object - contains a tag (see ASN1Tag above),
@@ -128,25 +181,29 @@ namespace ASN1 {
     class ASN1Object {
     protected:
         ASN1Tag _tag; // ASN.1 tag
-        size_t _tag_length_size; // Size of tag+length fields (in bytes)
-        //std::vector<uint8_t> _value; // Value bytes
-        ASN1ObjectData _object_data; // Value data wrapper
+        //size_t _tag_length_size; // Size of tag+length fields (in bytes)
+        ASN1ObjectData _length; // Length field wrapper
+        ASN1ObjectData _value; // Value data wrapper
         std::vector<std::shared_ptr<ASN1Object>> _children; // Set of child objects (1 level deep); empty if there're no children
 
     public:
         // Creates an ASN1Object, initializes its fields and optionally prints a debug message
-        ASN1Object(ASN1Tag tag, size_t tag_length_size, ASN1ObjectData object_data) :
-        _tag(tag), _tag_length_size(tag_length_size), _object_data(object_data) {
+        ASN1Object(ASN1Tag tag, ASN1ObjectData value) :
+        _tag(tag), 
+        _length(ASN1ObjectData::calculate_length_field(value.value_size())), 
+        _value(value) {
             #ifdef ASN1_DEBUG
             std::cerr << "[ASN1Object] ASN1Object created: tag=" << std::hex << static_cast<int>(_tag) 
-                << std::dec << ", value_size=" << _object_data.value_size() << std::endl;
+                << std::dec << ", value_size=" << _value.value_size() << std::endl;
             #endif // ASN1_DEBUG
         }
 
         // Creates an ASN1Object for encoding purposes, taking only tag and value vector
         // (as an rvalue, for secure memory managing)
         ASN1Object(ASN1Tag tag, std::vector<uint8_t> &&value) :
-        _tag(tag), _object_data(ASN1ObjectData(
+        _tag(tag), 
+        _length(ASN1ObjectData::calculate_length_field(value.size())), 
+        _value(ASN1ObjectData(
             std::shared_ptr<std::vector<uint8_t>>(
                 new std::vector<uint8_t>(std::move(value)), 
                 secure_delete_vector
@@ -154,7 +211,17 @@ namespace ASN1 {
         )) {
             #ifdef ASN1_DEBUG
             std::cerr << "[ASN1Object] ASN1Object created: tag=" << std::hex << static_cast<int>(_tag) 
-                << std::dec << ", value_size=" << _object_data.value_size() << std::endl;
+                << std::dec << ", value_size=" << _value.value_size() << std::endl;
+            #endif // ASN1_DEBUG
+        }
+
+        // Creates an ASN1Object with children (for SEQUENCE, SET, etc.) - also
+        // takes children as an rvalue for efficient moving
+        ASN1Object(ASN1Tag tag, std::vector<std::shared_ptr<ASN1Object>> &&children) :
+        _tag(tag), _children(std::move(children)) {
+            #ifdef ASN1_DEBUG
+            std::cerr << "[ASN1Object] ASN1Object created: tag=" << std::hex << static_cast<int>(_tag) 
+                << std::dec << ", value_size=" << _value.value_size() << std::endl;
             #endif // ASN1_DEBUG
         }
 
@@ -162,7 +229,7 @@ namespace ASN1 {
         ~ASN1Object() {
             #ifdef ASN1_DEBUG
             std::cerr << "[ASN1Object] ASN1Object destroyed: tag=" << std::hex << static_cast<int>(_tag)
-                << ", value_size=" << _object_data.value_size() << std::endl;
+                << ", value_size=" << _value.value_size() << std::endl;
             #endif // ASN1_DEBUG
         }
 
@@ -173,13 +240,20 @@ namespace ASN1 {
 
         // returns object's total size (in bytes) - that sums up the tag field size, 
         // length field size and the size of a value buffer
+        // may return 0 if object value was not specified
+        // (when the constructor with children for encoding was used, and encoding not yet performed)
         inline size_t total_size() const {
-            return _tag_length_size + _object_data.value_size();
+            return 1 + _length.value_size() + _value.value_size();
+        }
+
+        // return's object's length field (read-only)
+        inline const ASN1ObjectData length() const {
+            return _length;
         }
 
         // return's object's value buffer (read-only)
-        inline const ASN1ObjectData object_data() const {
-            return _object_data;
+        inline const ASN1ObjectData value() const {
+            return _value;
         }
 
         // returns object's children (read-only)
@@ -192,10 +266,30 @@ namespace ASN1 {
         void print(int = 0);
 
         // friends may take what's protected stuff instead of asking for it
-        // those friends need to be able to push elements inside the _children vector
-        friend std::shared_ptr<ASN1Object> ASN1Parser::decode_all(std::vector<uint8_t> &&data, size_t offset);
-        friend std::shared_ptr<ASN1Object> ASN1Parser::decode_all(std::shared_ptr<std::vector<uint8_t>> data, size_t offset);
-        friend bool RSA::_RSAPrivateKey_format_check(std::shared_ptr<ASN1Object> root_object);
+        // those friends need to be able to change the internal state of ASN1Object
+
+        friend void ASN1Parser::_ASN1Parser_update_children_values(
+            std::shared_ptr<ASN1Object> object, 
+            std::shared_ptr<std::vector<uint8_t>> buffer,
+            size_t additional_offset
+        );
+        friend std::shared_ptr<std::vector<uint8_t>> ASN1Parser::encode(
+            std::shared_ptr<ASN1Object> object
+        );
+        friend std::shared_ptr<std::vector<uint8_t>> ASN1Parser::encode_all(
+            std::shared_ptr<ASN1Object> root_object
+        );
+        friend std::shared_ptr<ASN1Object> ASN1Parser::decode_all(
+            std::vector<uint8_t> &&data, 
+            size_t offset
+        );
+        friend std::shared_ptr<ASN1Object> ASN1Parser::decode_all(
+            std::shared_ptr<std::vector<uint8_t>> data, 
+            size_t offset
+        );
+        friend bool RSA::_RSAPrivateKey_format_check(
+            std::shared_ptr<ASN1Object> root_object
+        );
     };
 
 
@@ -204,7 +298,7 @@ namespace ASN1 {
     public:
         // Returns the ASN.1 OBJECT IDENTIFIER object value as a readable string (instead of default buffer)
         inline const std::string value() const {
-            return decode(_object_data);
+            return decode(_value);
         }
 
         // The ASN.1 OBJECT IDENTIFIER encoder - returns a binary representation
@@ -226,7 +320,7 @@ namespace ASN1 {
     public:
         // Returns the ASN.1 INTEGER object value as GMP integer (instead of default buffer)
         inline const mpz_class value() const {
-            return decode(_object_data);
+            return decode(_value);
         }
 
         // Encodes a GMP integer to the binary form, big-endian (ANS.1 compatibile), returning a buffer
