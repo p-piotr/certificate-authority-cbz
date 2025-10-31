@@ -1,12 +1,10 @@
 #include <fstream>
-
 #include "mappings.h"
 #include "decode-key.h"
 #include "encoding.h"
 #include "csrclass.h"
 
 
-using std::cout;
 using std::ifstream;
 using std::getline;
 using std::ofstream;

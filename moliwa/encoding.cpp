@@ -1,206 +1,213 @@
 #include "encoding.h"
 
-
-
-//Note: These two functions represent length as size_t which is not always safe
-//Technically ASN.1/DER allow for of 2^1008-1 bytes that can be used just to incidate length
+//Note: This function represents length as size_t which is not always safe
+//Technically ASN.1/DER allow for of 2^1008-1 bytes that can be used just to indicatelength
 //However I don't think we will encounter anything that wouldn't fit in regular int
-//It can be changed later tho
-vector<uint8_t> encode_der_length(size_t length){
-    vector<uint8_t> out;
-    if (length < 0x80) {
-        out.push_back(static_cast<uint8_t>(length));
-        return out;
-    }
+//It can be changed to use mpz_class if needed
+
+// returns vector that contains all bytes encoding length
+static vector<uint8_t> encode_der_length(size_t length){
+    // if first length byts i below 0x80 we can just return it
+    if (length < 0x80) 
+        return { static_cast<uint8_t>(length) } ;
+
     else {
+        // will hold all bytes needed to encode length
         vector<uint8_t> len_bytes;
+       
+        // we copy length because we will modify it
         size_t temp = length;
+
+        // 0xFF = 11111111
+        // we just extract last byte from size and add in into the array
         while (temp > 0){
-            len_bytes.insert(len_bytes.begin(), static_cast<uint8_t>((temp & 0xFF)));
+            len_bytes.push_back(static_cast<uint8_t>((temp & 0xFF)));
             temp >>= 8;
         }
 
-        uint8_t prefix = (0x80 | static_cast<uint8_t>(len_bytes.size()));
-        out.push_back(prefix);
-        out.insert(out.end(), len_bytes.begin(), len_bytes.end());
+
+        // we add the to the vector byte that will indicate how many length bytes follow
+        // 0x80 + number of bytes
+        len_bytes.push_back( (0x80 + static_cast<uint8_t>(len_bytes.size())) );
+
+        // we have to reverse the vector as we inserted last byte first 
+        std::reverse(len_bytes.begin(), len_bytes.end());
+        return len_bytes;
     }
-    return out;
 }
 
-// Note that this modifies start. 
-// After the call it will point to the next byte after all length bytes
-size_t decode_der_length(const vector<uint8_t> &der, size_t &start){
-    size_t length = 0;
-    if(der[start] < 0x80)
-        return der[start++];
-    if(der[start] == 0x80)
-        throw MyError("decode_der_length: does not support indefinite length encoding" );
-    else{
-        int length_bytes = (der[start] & 0x7F);
-        size_t i = start + 1;
-        for(; i < start + 1 + length_bytes; i++){
-            if (i > der.size())
-                throw MyError("decode_der_length: length exceeds data size");
-            length <<= 8;
-            length |= der[i];
-        }
-        start = i;
-    }
-    return length;
-}
 
+// returns vector that contains all bytes encoding given integer value
 vector<uint8_t> encode_der_integer(const mpz_class &value) {
-    vector<uint8_t> bytes;
-
+    // 0 is just handled as special case
+    // we will always have to encode version = 0
+    // so i just decided to handle it separately
     if(value == 0){
         return {0x02, 0x01, 0x00};
     }
 
-    bool negative = (value < 0);
-    mpz_class abs_value = negative ? -value : value;
+    // 0x02 = Integer tag
+    vector<uint8_t> integer_bytes = {0x02};
 
-    while(abs_value > 0) {
-        mpz_class mpzbyte = (abs_value & 0xFF);
-        uint8_t byte = mpzbyte.get_ui();
-        bytes.insert(bytes.begin(), byte);
-        abs_value >>= 8;
+    // Note: before I was doing this manually byte by byte
+    // but turns out that Piotrek found better way using mpz_export
+    // so I decided to change it
+
+    // How many value bytes we are to encode
+    // note that mpz_sizeinbase(mpz_t,2) returns number of bits and it doesn't have to be multiple of 8
+    // so I do the trick with adding 7 and then dividing by 8 not to cut any bytes
+    size_t bytes_count = (mpz_sizeinbase(value.get_mpz_t(), 2) + 7)/8;
+
+    // vector to hold the integer from mpz_class
+    vector<uint8_t> value_bytes(bytes_count);
+
+    // get pointer to first byte in value_bytes
+    uint8_t *start = value_bytes.data();
+    size_t written;
+
+    // Note: it exports absolute value; so negative numbers will need additional handling
+    mpz_export(
+        start,              // pointer to array into which we will export
+        &written,           // will hold number of words exported by the function
+        1,                  // 1=MSB first, -1=LSB first
+        sizeof(uint8_t),    // size of each word in bytes
+        1,                  // endianness within each word, 1 = big
+        0,                  // how many MSB bits of each word should be set zero; not needed here
+        value.get_mpz_t()   // mpz_t to copy words from
+    );
+
+    // if we have written different number of bytes something must have gone wrong
+    if(written != bytes_count)
+        throw MyError("encode_der_integer: Wrong Number of bytes written");
+
+    // check if sign is correct
+    // our encoding must match 2's complement behaviour
+    // i.e. first bit encodes sign 1=- 0=+
+     
+    // if value is positive but first bit is set it means that
+    // the sign must have flipped so we need to append a 0x00 at the start of the value bytes
+    if(value > 0 && (value_bytes[0] & 0x80) > 0){
+        value_bytes.insert(value_bytes.begin(), 0x00);
     }
 
-    if(negative){
-        // two's complement
-        for(auto &b : bytes)
-            b = ~b;
-        for(int i = bytes.size() - 1; i >= 0; i--){
-            if(++bytes[i] != 0) break;
+    // if number we want to export was negative
+    // we need to convert it into 2's complement
+    if(value < 0){
+        // step 1: invert all bytes
+        for(int i = 0; i < value_bytes.size(); i++){
+            value_bytes[i] = ~value_bytes[i];
         }
 
-        if((bytes[0] & 0x80) == 0)
-            bytes.insert(bytes.begin(), 0xFF);
-    }
-    else{
-        while(bytes.size() > 1 && bytes[0] == 0x00 && (bytes[1] & 0x80) == 0)
-            bytes.erase(bytes.begin());
-        if(bytes[0] & 0x80)
-            bytes.insert(bytes.begin(), 0x00);
+        // step 2: add 1; and don't forget the carry
+        // we have to start from the last byte; that's how addition works
+        for(int i = value_bytes.size()-1; i >= 0; i--){
+            // concise way to add 1 and stop if there's no carry
+            if(++value_bytes[i] != 0) break;
+        }
+
+        // step 3: check if the sign didn't flip
+        if((value_bytes[0] & 0x80) == 0){
+            // note that here we have to prepend 0xFF = 11111111 instead of 0x00 here
+            value_bytes.insert(value_bytes.begin(), 0xFF);
+        }
     }
 
-    
-    vector<uint8_t> der = {0x02};
-    vector<uint8_t> length = encode_der_length(bytes.size());
-    der.insert(der.end(), length.begin(), length.end());
-    der.insert(der.end(), bytes.begin(), bytes.end());
+    // append length bytes 
+    vector<uint8_t> integer_length = encode_der_length(value_bytes.size());
+    integer_bytes.insert(integer_bytes.end(), integer_length.begin(), integer_length.end());
 
-    return der;
+    // append value bytes 
+    integer_bytes.insert(integer_bytes.end(), value_bytes.begin(), value_bytes.end());
+
+    return integer_bytes;
 }
 
 
-mpz_class decode_der_integer(const vector<uint8_t> &der, size_t &start){
-    if(der[start++] != 0x02){
-        throw MyError("decode_der_integer: value " + std::to_string(der[start-1]) + " does not correspond to INTEGER tag");
-    }
-
-
-    size_t int_length;
-    try {
-        int_length = decode_der_length(der, start);
-    } catch (const MyError &e) {
-        throw MyError("decode_der_integer: failed to decode length " + string(e.what()));
-    }
-
-    vector<uint8_t> bytes(der.begin() + start, der.begin() + start + int_length);
-    start += int_length;
-
-    bool negative = (bytes[0] & 0x80) != 0;
-    mpz_class value = 0;
-
-    // not sure why but for 2's complement we have:
-    // v_signed = v_unsigned - 2^N
-    for(uint8_t byte : bytes){
-        value <<= 8;
-        value += byte;
-    }
-
-    if(negative){
-        mpz_class temp = mpz_class(1) << (bytes.size() * 8);
-        value -= temp;
-    }
-
-    return value;
-}
-
+// encodes single OID integer (component) e.g. if we have 1.22.33.44 it will be used to just enocde 33 or 44 etc.
 static vector<uint8_t> encode_oid_component(uint32_t value) {
-    vector<uint8_t> encoding;
+    vector<uint8_t> component_bytes;
+
+    // we use do-while so we don't have to handle zero as a special case
     do{
-        encoding.insert(encoding.begin(), static_cast<uint8_t>((value & 0x7F)));
+        // 0x7F = 01111111
+        // We encode in base 128
+        component_bytes.push_back(static_cast<uint8_t>((value & 0x7F)));
         value >>= 7;
     } while (value > 0);
 
-    for (size_t i = 0; i < encoding.size() - 1; i++)
-        encoding[i] |= 0x80;
+    //we have to invert as we pushed the last 7 bits first
+    std::reverse(component_bytes.begin(), component_bytes.end());
 
-    return encoding;
+    // for all bytes apart from the last one we have to set the MSB
+    for (size_t i = 0; i < component_bytes.size() - 1; i++)
+        component_bytes[i] |= 0x80;
+
+    return component_bytes;
 }
 
-vector<uint8_t> encode_der_oid(const vector<uint32_t> &oid){
+
+// converts OID string "1.2.3.4.5" into intermediate representation {1, 2, 3, 4, 5}
+// stolen from here
+// https://stackoverflow.com/questions/14265581/parse-split-a-string-in-c-using-string-delimiter-standard-c
+//
+// it turns out that getline takes delim as third parameter 
+// which can make parsing significantly easier
+// https://en.cppreference.com/w/cpp/string/basic_string/getline.html
+static vector<uint32_t> string_to_oid(const string &s) {
+    char delim = '.';
+    vector<uint32_t> result;
+
+    std::stringstream ss (s);
+    string item;
+    while (getline (ss, item, delim)) {
+        result.push_back(static_cast<uint32_t>(stoi(item)));
+    }
+
+    return result;
+}
+
+
+// returns OID encoded as bytes
+vector<uint8_t> encode_der_oid(const string &oid){
+    // get intermediate representation
+    vector<uint32_t> inter = string_to_oid(oid);
+
+    // OIDs must have at least 2 components
     if (oid.size() < 2){
         throw std::invalid_argument("OID must have at least two components");
     }
 
-    vector<uint8_t> oid_enc;
-    // first 2 components
-    oid_enc.push_back(static_cast<uint8_t>(oid[0] * 40 + oid[1]));
-    for (size_t i = 2; i < oid.size(); i++){
-        vector<uint8_t> enc = encode_oid_component(oid[i]);
-        oid_enc.insert(oid_enc.end(), enc.begin(), enc.end());
+    // 0x06 == OID tag
+    vector<uint8_t> oid_bytes = {0x06};   // will store tag + size + value
+    vector<uint8_t> value_bytes;          // will store only value
+
+
+    // encode first 2 components as 40 * X + Y
+    vector<uint8_t> firsttwo = encode_oid_component(inter[0] * 40 + inter[1]);
+    value_bytes.insert(value_bytes.end(), firsttwo.begin(), firsttwo.end());
+
+
+    // we encode  number by number and append bytes to value_bytes
+    for (size_t i = 2; i < inter.size(); i++){
+        vector<uint8_t> component_bytes = encode_oid_component(inter[i]);
+        value_bytes.insert(value_bytes.end(), component_bytes.begin(), component_bytes.end());
     }
 
-    vector<uint8_t> der = {0x06};
-    vector<uint8_t> length = encode_der_length(oid_enc.size());
+    // encode length of the value bytes and append to result
+    vector<uint8_t> length_bytes = encode_der_length(value_bytes.size());
+    oid_bytes.insert(oid_bytes.end(), length_bytes.begin(), length_bytes.end());
 
-    der.insert(der.end(), length.begin(), length.end());
-    der.insert(der.end(), oid_enc.begin(), oid_enc.end());
+    // append value bytes to result
+    oid_bytes.insert(oid_bytes.end(), value_bytes.begin(), value_bytes.end());
 
-    return der;
+    return oid_bytes;
 }
 
-static uint32_t decode_oid_component(const vector<uint8_t> &der, size_t &start) {
-    uint32_t component = 0;
-    for(;;){
-        component <<= 7;
-        component |= (der[start] & 0x7F);
-        if((der[start] & 0x80) == 0){
-            start++;
-            break;
-        }
-        start++;
-    }
-    return component;
-}
 
-vector<uint32_t> decode_der_oid(const vector<uint8_t> &der, size_t &start){
-    if(der[start++] != 0x06){
-        throw MyError("decode_der_oid: value " + std::to_string(der[start-1]) + " does not correspond to OID tag");
-    }
 
-    size_t oid_length;
-    try {
-        oid_length = decode_der_length(der, start);
-    } catch (const MyError &e) {
-        throw MyError("decode_der_oid: failed to decode length " + string(e.what()));
-    }
-
-    size_t begin = start;
-    vector<uint32_t> result;
-    // first 2 components
-    result.push_back(der[start] / 40);
-    result.push_back(der[start++] % 40);
-    while(start < begin + oid_length){
-        result.push_back(decode_oid_component(der, start));
-    }
-    return result;
-}
-
-bool printable_string_validate(const string &s){
+// test if string doesn't contain illegal characters; printable_string version
+static bool printable_string_validate(const string &s){
+    // set of all legal chars in PRINTABLE_STRING
     const std::unordered_set<char> legal = {
         'A', 'a', 'B', 'b', 'C', 'c', 'D', 'd', 'E', 'e',
         'F', 'f', 'G', 'g', 'H', 'h', 'I', 'i', 'J', 'j',
@@ -212,6 +219,7 @@ bool printable_string_validate(const string &s){
         ':', '?', '='
     };
 
+    // returns false if string contains char not found in set of legal chars
     for (char c : s) {
         if (legal.find(c) == legal.end()) {
             return false; 
@@ -221,7 +229,9 @@ bool printable_string_validate(const string &s){
 }
 
 
-bool ia5string_validate(const string &s){
+// test if string doesn't contain illegal characters ia5string version
+static bool ia5string_validate(const string &s){
+    // returns false if string contains a char not found in set of legal chars
     for (unsigned char c : s) {
         if (c > 0x7F) return false;  // Only first 128 ASCII chars allowed
     }
@@ -229,133 +239,153 @@ bool ia5string_validate(const string &s){
 }
 
 vector<uint8_t> encode_der_string(const string &str, string_t str_type){
-    vector<uint8_t> bytes(str.begin(), str.end());
-    uint8_t tag;
+    vector<uint8_t> string_bytes;       // will store tag + size + value
+    
     switch(str_type){
         case IA5STRING:
             if(ia5string_validate(str) == false){
                 throw MyError("encode_der_string: Attempt to encode illegal chars in ia5string type");
             }
-            tag = 0x16;
+            // 0x16 = ia5string tag
+            string_bytes.push_back(0x16);
             break;
+
         case PRINTABLE_STRING:
-            tag = 0x13;
             if(printable_string_validate(str) == false){
                 throw MyError("encode_der_string: Attempt to encode illegal chars in printable_string type");
             }
+            // 0x13 = printable_string tag
+            string_bytes.push_back(0x13);
             break;
+
         case UTF8_STRING:
-            tag = 0x0C;
+            // 0x0C = utf8_string tag
+            // Note: I assume that UTF8 can handle every character
+            string_bytes.push_back(0x0C);
             break;
     }
-    vector<uint8_t> der = {tag};
-    vector<uint8_t> length = encode_der_length(bytes.size());
-    der.insert(der.end(), length.begin(), length.end());
-    der.insert(der.end(), bytes.begin(), bytes.end());
-    return der;
-}
 
-//https://gist.github.com/mattearly/d8afe122912eb8872bc0fddb62a32376
-vector<uint32_t> split_oid(const string &oid){
-    vector<uint32_t> elements;
-    std::stringstream ss;
-    ss.str(oid);
-    string item;
-    uint32_t element;
-    while(std::getline(ss, item, '.')){
-        element = static_cast<uint32_t>(std::stoi(item));
-        elements.push_back(element);
-    }
-    return elements;
-}
+    // initialize the value_bytes vector with string bytes already
+    vector<uint8_t> value_bytes(str.begin(), str.end());     // will store only value
 
-string serialize_oid(const vector<uint32_t> &oid){
-    string serial = "";
-    for(auto val : oid)
-        serial += std::to_string(val) + '.';
-    serial.pop_back();
-    return serial;
+    // append length bytes
+    vector<uint8_t> length_bytes = encode_der_length(value_bytes.size());
+    string_bytes.insert(string_bytes.end(), length_bytes.begin(), length_bytes.end());
+
+    // append value bytes
+    string_bytes.insert(string_bytes.end(), value_bytes.begin(), value_bytes.end());
+
+    return string_bytes;
 }
 
 
+// This is far for perfect but I haven't come up with more straightforward solution
+// it simply takes vector of vectors  each containing value bytes and concatenates them
+// it of course also adds length and tag bytes
 vector<uint8_t> encode_der_sequence(const vector<vector<uint8_t>> &elements){
-    vector<uint8_t> content;
-    for (auto& el : elements){
-        content.insert(content.end(), el.begin(), el.end());
-    }
-    vector<uint8_t> der = {0x30};
-    vector<uint8_t> length = encode_der_length(content.size());
-    der.insert(der.end(), length.begin(), length.end());
-    der.insert(der.end(), content.begin(), content.end());
-    return der;
-}
-
-size_t decode_der_sequence(const vector<uint8_t> &der, size_t &start){
-    if(der[start++] != 0x30){
-        throw MyError("decode_der_sequence: value " + std::to_string(der[start-1]) + " does not correspond to SEQUENCE tag");
+    // append elements bytes one by one
+    vector<uint8_t> value_bytes;
+    for (auto &element : elements){
+        value_bytes.insert(value_bytes.end(), element.begin(), element.end());
     }
 
-    size_t seq_length;
-    try {
-        seq_length = decode_der_length(der, start);
-    } catch (const MyError &e) {
-        throw MyError("decode_der_sequence: failed to decode length " + string(e.what()));
+    // 0x30 = sequence tag
+    vector<uint8_t> sequence_bytes = {0x30};
+
+    //append length bytes
+    vector<uint8_t> length_bytes = encode_der_length(value_bytes.size());
+    sequence_bytes.insert(sequence_bytes.end(), length_bytes.begin(), length_bytes.end());
+
+    // append value bytes
+    sequence_bytes.insert(sequence_bytes.end(), value_bytes.begin(), value_bytes.end());
+    return sequence_bytes;
+}
+
+
+// similar to encode_der_sequence but it sorts the elements first as required by DER
+// also adds a different tag 
+vector<uint8_t> encode_der_set(vector<vector<uint8_t>> &elements){
+    // I decided to sort the orignal not the copy
+    // most of the time you will have to copy elements
+    // into a new vector before calling the function anyway
+    std::sort(elements.begin(), elements.end());
+
+    // append elements bytes one by one
+    vector<uint8_t> value_bytes;
+    for (auto &element : elements){
+        value_bytes.insert(value_bytes.end(), element.begin(), element.end());
     }
 
-    return seq_length;
+    // 0x31 = set tag
+    vector<uint8_t> set_bytes = {0x31};
+
+    // append length bytes
+    vector<uint8_t> length_bytes = encode_der_length(value_bytes.size());
+    set_bytes.insert(set_bytes.end(), length_bytes.begin(), length_bytes.end());
+
+    // append value bytes
+    set_bytes.insert(set_bytes.end(), value_bytes.begin(), value_bytes.end());
+    return set_bytes;
 }
 
-vector<uint8_t> encode_der_set(const vector<vector<uint8_t>> &elements){
-    vector<vector<uint8_t>> sorted = elements;
-    std::sort(sorted.begin(), sorted.end());
+// this function is also quite similar to the two above it but it appends the number of unused bytes
+vector<uint8_t> encode_der_bitstring(const vector<uint8_t>& bits, uint8_t unused) {
+    // in bitstring first value byte encodes how many bits are not used 
+    // (e.g. if you want to encode 18 bits you have to round it up to 3 bytes so 6 bits will be unused)
 
-    vector<uint8_t> content;
-    for(const auto &el : sorted)
-        content.insert(content.end(), el.begin(), el.end());
+    // if you have more than 7 unused bits you don't even encode the unused bytes
+    if(unused > 7)
+        throw MyError("encode_der_bitstring: bit string can't have more than 7 unused bits");
 
-    vector<uint8_t> der = {0x31};
-    vector<uint8_t> length = encode_der_length(content.size());
-    der.insert(der.end(), length.begin(), length.end());
-    der.insert(der.end(), content.begin(), content.end());
-    return der;
+
+    // 0x03 = bitstring tag
+    vector<uint8_t> bitstring_bytes = {0x03};
+
+    // append length bytes
+    // note the +1; it corresponds to unused_bits byte
+    vector<uint8_t> length_bytes = encode_der_length(bits.size() + 1);
+    bitstring_bytes.insert(bitstring_bytes.end(), length_bytes.begin(), length_bytes.end());
+
+    // append value bytes
+    // note that unused_bits bytes is added first
+    bitstring_bytes.push_back(unused);
+    bitstring_bytes.insert(bitstring_bytes.end(), bits.begin(), bits.end());
+    return bitstring_bytes;
+
 }
 
-vector<uint8_t> encode_der_bitstring(const vector<uint8_t>& bytes) {
-    vector<uint8_t> out = {0x03};
-
-    vector<uint8_t> content = {0x00}; // 0 unused bits
-    content.insert(content.end(), bytes.begin(), bytes.end());
-
-    vector<uint8_t> len = encode_der_length(content.size());
-    out.insert(out.end(), len.begin(), len.end());
-    out.insert(out.end(), content.begin(), content.end());
-    return out;
-}
-
+// another quite similar function
 vector<uint8_t> encode_der_octet_string(const vector<uint8_t> &bytes){
-    vector<uint8_t> der = {0x04};
-    vector<uint8_t> length = encode_der_length(bytes.size());
-    der.insert(der.end(), length.begin(), length.end());
-    der.insert(der.end(), bytes.begin(), bytes.end());
-    return der;
+    // 0x04 = octet string tag
+    vector<uint8_t> octet_string_bytes = {0x04};
+
+    // append length bytes
+    vector<uint8_t> length_bytes = encode_der_length(bytes.size());
+    octet_string_bytes.insert(octet_string_bytes.end(), length_bytes.begin(), length_bytes.end());
+
+    // append input bytes
+    octet_string_bytes.insert(octet_string_bytes.end(), bytes.begin(), bytes.end());
+
+    return octet_string_bytes;
 }
 
-size_t decode_der_octet_string(const vector<uint8_t> &der, size_t &start){
-    if(der[start++] != 0x04){
-        throw MyError("decode_der_octet_string: value " + std::to_string(der[start-1]) + " does not correspond to OCTET STRING tag");
-    }
+// I don't like the existance of this function but PKCS force my hand
+vector<uint8_t> encode_der_non_universal(const vector<uint8_t> &bytes, uint8_t tag){
+    vector<uint8_t> non_universal_bytes = {tag};
 
-    size_t oct_length;
-    try {
-        oct_length = decode_der_length(der, start);
-    } catch (const MyError &e) {
-        throw MyError("decode_der_octet_string: failed to decode length " + string(e.what()));
-    }
+    // append length bytes
+    vector<uint8_t> length_bytes = encode_der_length(bytes.size());
+    non_universal_bytes.insert(non_universal_bytes.end(), length_bytes.begin(), length_bytes.end());
 
-    return oct_length;
+    // append input bytes
+    non_universal_bytes.insert(non_universal_bytes.end(), bytes.begin(), bytes.end());
+
+    return non_universal_bytes;
 }
+
 
 // https://gist.github.com/williamdes/308b95ac9ef1ee89ae0143529c361d37
+// note that this function is whitespace-sensitive
 string base64_encode(const vector<uint8_t> &in) {
     static const string b64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     string out;
@@ -380,24 +410,3 @@ string base64_encode(const vector<uint8_t> &in) {
 
     return out;
 }
-
-vector<uint8_t> base64_decode(const string &in){
-    static const string b64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    vector <uint8_t> out;
-
-    vector<int> T(256,-1);
-    for (int i=0; i<64; i++) T[b64_chars[i]] = i;
-
-    int val=0, valb=-8;
-    for (uint8_t c : in) {
-        if (T[c] == -1) break;
-        val = (val<<6) + T[c];
-        valb += 6;
-        if (valb>=0) {
-            out.push_back(((val>>valb)&0xFF));
-            valb-=8;
-        }
-    }
-    return out;
-}
-

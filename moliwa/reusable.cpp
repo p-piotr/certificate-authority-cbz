@@ -3,6 +3,12 @@
 
 void print_bytes(const vector<uint8_t> &bytes){
     for(uint8_t byte : bytes)
+        printf("0x%.2X, ", byte);
+    printf("\n");
+}
+
+void print_bytes_commas(const vector<uint8_t> &bytes){
+    for(uint8_t byte : bytes)
         printf("%.2X ", byte);
     printf("\n");
 }
@@ -13,11 +19,11 @@ AlgorithmIdentifier parse_der_algorithmIdentifier(const vector<uint8_t> &der, si
         AlgorithmIdentifierSize = decode_der_sequence(der, start);
     } catch (const MyError &e) {
         std::cerr << "parse_der_algorithmIdentifier: failed to decode sequence bytes " << e.what() << endl;
-        std::exit(42);
+        std::exit(1);
     }
     size_t AlgorithmIdentifierBegin = start;
 
-    vector<uint32_t> oid = decode_der_oid(der, start);
+    string oid = decode_der_oid(der, start);
     vector<uint8_t> parameters;
     while(start < AlgorithmIdentifierBegin + AlgorithmIdentifierSize){
         parameters.push_back(der[start++]);

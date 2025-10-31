@@ -39,12 +39,11 @@ using std::endl;
 class CertificationRequest{
 
     class AttribiuteTypeAndValue{
-        vector<uint32_t> type;   // OID;
+        string type;   // OID;
         string value;             // Note: Specification doesn't require it to be a string; 
         string_t value_type;
     public:
-        AttribiuteTypeAndValue(string type_, string value_, string_t value_type_=UTF8_STRING) : type(split_oid(type_)), value(value_), value_type(value_type_) {}
-        AttribiuteTypeAndValue(vector<uint32_t> type_, string value_, string_t value_type_=UTF8_STRING) : type(type_), value(value_), value_type(value_type_) {}
+        AttribiuteTypeAndValue(string type_, string value_, string_t value_type_=UTF8_STRING) : type(type_), value(value_), value_type(value_type_) {}
 
         vector<uint8_t> encode() const {
             return encode_der_sequence({
@@ -103,11 +102,10 @@ class CertificationRequest{
     };
 
     class Attribute{
-        vector<uint32_t> type;   // OID;
+        string type;   // OID;
         vector<pair<string,string_t>> values;             
     public:
-        Attribute(string type_, vector<pair<string,string_t>> values_) : type(split_oid(type_)), values(values_) {}
-        Attribute(vector<uint32_t> type_, vector<pair<string,string_t>> values_) : type(type_), values(values_) {}
+        Attribute(string type_, vector<pair<string,string_t>> values_) : type(type_), values(values_) {}
 
         vector<uint8_t> encode() const {
             vector<vector<uint8_t>> encoded;
@@ -174,17 +172,16 @@ class CertificationRequest{
         }
 
         vector<uint8_t> encode() const {
+            encode_der_integer(version);
+            Name.encode();
+            SubjectPublicKeyInfo.encode();
             vector<vector<uint8_t>> encoded = {encode_der_integer(version), Name.encode(), SubjectPublicKeyInfo.encode()};
             vector<uint8_t> content;
             for(Attribute attr : Attributes){
                 vector<uint8_t> temp = attr.encode();
                 content.insert(content.end(), temp.begin(), temp.end());
             }
-            vector<uint8_t> der = {0xA0};
-            vector<uint8_t> length = encode_der_length(content.size());
-            der.insert(der.end(), length.begin(), length.end());
-            der.insert(der.end(), content.begin(), content.end());
-            encoded.push_back(der);
+            encoded.push_back(encode_der_non_universal(content, 0xA0));
 
             return encode_der_sequence(encoded);
         }

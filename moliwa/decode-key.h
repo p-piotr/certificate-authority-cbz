@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include "encoding.h"
+#include "decoding.h"
 #include "myerror.h"
 
 using std::cerr;
@@ -51,7 +52,6 @@ class PrivateKeyInfo {
     AlgorithmIdentifier privateKeyAlgorithm;
     PrivateKey privateKey;
 public:
-    PrivateKeyInfo() {}
     PrivateKeyInfo(const AlgorithmIdentifier &privateKeyAlgorithm_, const PrivateKey &privateKey_, int version_ = 0) : version(version_), privateKeyAlgorithm(privateKeyAlgorithm_), privateKey(privateKey_) {}
 
     PrivateKeyInfo (
