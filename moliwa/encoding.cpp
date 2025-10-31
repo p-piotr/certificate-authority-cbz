@@ -410,3 +410,4 @@ string base64_encode(const vector<uint8_t> &in) {
 
     return out;
 }
+

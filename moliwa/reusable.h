@@ -65,4 +65,34 @@ void print_bytes_commas(const vector<uint8_t> &bytes);
 void der_check_boundry(size_t length, size_t start, size_t curr);
 AlgorithmIdentifier parse_der_algorithmIdentifier(const vector<uint8_t> &der, size_t &start);
 bool der_check_finish(const vector<uint8_t> &der, const size_t &curr);
+
+template <typename T>
+inline void zeroize(vector<T> &vec){
+    std::fill(vec.begin(), vec.end(), 0);
+}
+inline void zeroize(string &str){
+    std::fill(str.begin(), str.end(), 0);
+}
+
+enum string_t{
+    IA5STRING,
+    PRINTABLE_STRING,
+    UTF8_STRING
+};
+
+inline const vector<uint8_t> der_null = {0x05, 0x00};
+static const map<string, string_t> AttributeStringTypes = {
+
+    {"2.5.4.6",                PRINTABLE_STRING},   // countryName
+    {"2.5.4.8",                UTF8_STRING},        // stateOrProvinceName
+    {"2.5.4.7",                UTF8_STRING},        // localityName
+    {"2.5.4.10",               UTF8_STRING},        // organizationName
+    {"2.5.4.11",               UTF8_STRING},        // organizationalUnitName
+    {"2.5.4.3",                UTF8_STRING},        // commonName
+    {"1.2.840.113549.1.9.1",   IA5STRING},          // emailAddress
+    {"1.2.840.113549.1.9.2",   UTF8_STRING},        // unstructuredName
+    {"1.2.840.113549.1.9.7",   UTF8_STRING}         // challengePassword
+};
+
+
 #endif

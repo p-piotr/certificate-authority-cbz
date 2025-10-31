@@ -3,15 +3,10 @@
 
 void print_bytes(const vector<uint8_t> &bytes){
     for(uint8_t byte : bytes)
-        printf("0x%.2X, ", byte);
-    printf("\n");
-}
-
-void print_bytes_commas(const vector<uint8_t> &bytes){
-    for(uint8_t byte : bytes)
         printf("%.2X ", byte);
     printf("\n");
 }
+
 
 AlgorithmIdentifier parse_der_algorithmIdentifier(const vector<uint8_t> &der, size_t &start){
     size_t AlgorithmIdentifierSize;
@@ -39,3 +34,5 @@ void der_check_boundry(size_t length, size_t start, size_t curr) {
 bool der_check_finish(const vector<uint8_t> &der, const size_t &curr) {
     return (der.size() == curr);
 }
+
+
