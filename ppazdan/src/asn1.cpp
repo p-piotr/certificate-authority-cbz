@@ -1,6 +1,5 @@
 #include <vector>
 #include <stdexcept>
-#include <queue>
 #include <memory>
 #include <iostream>
 #include <gmpxx.h>
@@ -29,75 +28,47 @@ namespace ASN1 {
             case (UTC_TIME): return "UTC_TIME";
             case (GENERALIZED_TIME): return "GENERALIZED_TIME";
             default:
-            throw std::runtime_error("Unsupported ASN.1 Tag");
-        }
-    }
-
-    void ASN1Parser::_ASN1Parser_update_children_values(
-        std::shared_ptr<ASN1Object> object, 
-        std::shared_ptr<std::vector<uint8_t>> buffer, 
-        size_t additional_offset
-    ) {
-        // loop through all children and update their _value and _length fields
-        for (auto &child : object->_children) {
-            ASN1ObjectData length(
-                object->_value.buffer(),
-                child->_length.value_offset() + additional_offset,
-                child->_length.value_size()
-            );
-            ASN1ObjectData value(
-                object->_value.buffer(),
-                child->_value.value_offset() + additional_offset,
-                child->_value.value_size()
-            );
-            child->_length = length;
-            child->_value = value;
-            // then, recursively update child's children
-            _ASN1Parser_update_children_values(child, buffer, additional_offset);
+            throw std::runtime_error("[ASN1Parser::tag_to_string] Unsupported ASN.1 Tag");
         }
     }
 
     std::shared_ptr<std::vector<uint8_t>> ASN1Parser::encode(std::shared_ptr<ASN1Object> object) {
-        if (object->value().value_size() == 0) {
-            throw std::runtime_error("Cannot encode ASN.1 object without value");
+        // first, check whether it's NULL if it doesn't have neither value nor children
+        if (object->value().size() == 0 && object->children().size() != 0 && object->tag() != ASN1Tag::NULL_TYPE) {
+            throw std::runtime_error("[ASN1Parser::encode] Can't encode a non-NULL object that has NULL properties");
         }
-
-        std::vector<uint8_t> encoded_object;
+        std::vector<uint8_t> encoded_object, encoded_length;
         // append tag
         encoded_object.push_back(static_cast<uint8_t>(object->tag()));
         // append length
+        encoded_length = object->encode_length();
         encoded_object.insert(
             encoded_object.end(),
-            object->length().buffer()->cbegin(),
-            object->length().buffer()->cend()
+            encoded_length.cbegin(),
+            encoded_length.cend()
         );
         // append value
         encoded_object.insert(
             encoded_object.end(),
-            object->value().buffer()->cbegin(),
-            object->value().buffer()->cend()
+            object->value().begin(),
+            object->value().end()
         );
 
-        // update object's internal state (_value and _length) to reflect the new buffer
-        size_t length_offset = 1, length_size = object->length().value_size();
-        size_t value_offset = length_offset + length_size, value_size = object->value().value_size();
-        ASN1ObjectData value(std::move(encoded_object), value_offset, value_size);
-        ASN1ObjectData length(value.buffer(), length_offset, length_size);
-        object->_value = value;
-        object->_length = length;
-
-        return value.buffer();
+        return std::shared_ptr<std::vector<uint8_t>>(
+            new std::vector<uint8_t>(std::move(encoded_object)), 
+            secure_delete_vector
+        );
     }
 
     std::shared_ptr<std::vector<uint8_t>> ASN1Parser::encode_all(std::shared_ptr<ASN1Object> root_object) {
         bool has_children = !root_object->children().empty();
-        bool has_value = root_object->value().value_size() > 0;
-        if (!(has_children ^ has_value)) {
-            // the object must have either children or value, not both or none
-            throw std::runtime_error("ASN.1 Object must have either children or value");
+        bool has_value = root_object->value().size() > 0;
+        if (has_children && has_value) {
+            // the object cannot have value and children at the same time
+            throw std::runtime_error("[ASN1Parser::encode_all] ASN.1 Object must have either children or value, or none"); // (NULL can have none)
         }
-        if (has_value) {
-            // if the object has a value, encode it directly
+        if (has_value || (!has_value && !has_children)) {
+            // if the object has a value, or doesn't have value nor children, encode it directly
             return encode(root_object);
         }
         // the object has children - encode them first
@@ -115,12 +86,12 @@ namespace ASN1 {
             total_children_size += child_data->size();
         }
         // since the object has children, we need to encode the length field accordingly
-        ASN1ObjectData length_field = ASN1ObjectData::calculate_length_field(total_children_size);
+        std::vector<uint8_t> length_field = _ASN1Parser_encode_length_field(total_children_size);
         // append length field
         encoded_root_object.insert(
             encoded_root_object.end(),
-            length_field.buffer()->cbegin(),
-            length_field.buffer()->cend()
+            length_field.cbegin(),
+            length_field.cend()
         );
         // append encoded children
         for (auto child_data : encoded_children) {
@@ -131,56 +102,70 @@ namespace ASN1 {
                 child_data->cend()
             );
         }
-        // update root object's internal state (_value and _length) to reflect the new buffer
-        size_t length_offset = 1, length_size = length_field.value_size();
-        size_t value_offset = length_offset + length_size, value_size = total_children_size;
-        ASN1ObjectData value(std::move(encoded_root_object), value_offset, value_size);
-        ASN1ObjectData length(value.buffer(), length_offset, length_size);
-        root_object->_value = value;
-        root_object->_length = length;
 
-        // update children in the same way
-        _ASN1Parser_update_children_values(root_object, root_object->value().buffer(), value_offset);
-        return root_object->value().buffer();
+        return std::shared_ptr<std::vector<uint8_t>>(
+            new std::vector<uint8_t>(std::move(encoded_root_object)),
+            secure_delete_vector
+        );
     }
 
-    // This function parses ASN.1 binary data and returns a parsed element (does not parse recursively - see ASN1Parser::decode_all)
+    // This function parses ASN.1 binary data and returns a parsed element 
+    // (does not parse recursively - see ASN1Parser::decode_all)
+    // If copy_value is set, _tag + _length + _value are returned
+    // If it is not set, only _tag + _length are returned
+    //
     // Input:
     // @data - byte vector containing ASN.1 binary data
     // @offset - offset from the beginning of @data from which parsing should be started
-    std::shared_ptr<ASN1Object> ASN1Parser::decode(std::shared_ptr<std::vector<uint8_t>> data, size_t offset) {
-        size_t offset_t = offset;
-
-        if (offset_t >= data->size()) {
-            throw std::runtime_error("Offset out of bounds");
+    // @copy_value - boolean specifying if data is to be copied to the returned 
+    //               object - set to "true" only if you know the object has 
+    //               no children for performance
+    std::shared_ptr<ASN1Object> ASN1Parser::decode(
+        std::shared_ptr<std::vector<uint8_t>> data, 
+        size_t offset,
+        bool copy_value
+    ) {
+        // Check if offset doesn't go out of bounds
+        if (offset >= data->size()) {
+            throw std::runtime_error("[ASN1Parser::decode] Offset out of bounds");
         }
 
-        ASN1Tag tag = static_cast<ASN1Tag>((*data)[offset_t++]);
-        if (offset_t >= data->size()) {
-            throw std::runtime_error("Incomplete ASN.1 data");
+        ASN1Tag tag = static_cast<ASN1Tag>((*data)[offset++]);
+        // Again, check if the new offset doesn't go out of bounds
+        if (offset >= data->size()) {
+            throw std::runtime_error("[ASN1Parser::decode] Incomplete ASN.1 data");
         }
 
-        size_t length = (*data)[offset_t++], tag_length_size = 2;
-        if (length & 0x80) { // Long form
+        // Calculate length - if MSB is set, length is specified in the long form
+        size_t length = (*data)[offset++];
+        if (length & 0x80) { // Long form, decode it
             size_t num_bytes = length & 0x7F;
-            if (num_bytes == 0 || num_bytes > sizeof(size_t) || offset_t + num_bytes > data->size()) {
-                throw std::runtime_error("Invalid length encoding");
+            if (num_bytes == 0 || num_bytes > sizeof(size_t) || offset + num_bytes > data->size()) {
+                throw std::runtime_error("[ASN1Parser::decode] Invalid length encoding");
             }
-            tag_length_size += num_bytes;
             length = 0;
             for (size_t i = 0; i < num_bytes; ++i) {
-                length = (length << 8) | (*data)[offset_t++];
+                length = (length << 8) | (*data)[offset++];
             }
         }
 
-        if (offset_t + length > data->size()) {
-            throw std::runtime_error("Incomplete ASN.1 data");
+        // Check if the calculated value doesn't go out of bounds
+        if (offset + length > data->size()) {
+            throw std::runtime_error("[ASN1Parser::decode] Incomplete ASN.1 data (out of bounds)");
         }
 
-        offset += length;
-        ASN1ObjectData object_data(data, offset_t, length);
+        std::shared_ptr<ASN1Object> obj;
 
-        std::shared_ptr<ASN1Object> obj = std::make_shared<ASN1Object>(tag, object_data);
+        if (copy_value) {
+            // Copy the value vector from data,
+            std::vector<uint8_t> value(data->begin() + offset, data->begin() + offset + length);
+            // and return it in the new object
+            obj = std::make_shared<ASN1Object>(tag, std::move(value));
+        }
+        else {
+            // Only set the tag and length
+            obj = std::make_shared<ASN1Object>(tag, length);
+        }
         return obj;
     }
 
@@ -189,35 +174,40 @@ namespace ASN1 {
     // Input:
     // @data - byte vector containing ASN.1 binary data
     // @offset - offset in @data to start from
-    std::shared_ptr<ASN1Object> ASN1Parser::decode_all(std::vector<uint8_t> &&data, size_t offset) {
-        ASN1ObjectData root_data(std::move(data), 0, data.size());
-        return decode_all(root_data.buffer(), offset);
+    std::shared_ptr<ASN1Object> ASN1Parser::decode_all(
+        std::vector<uint8_t> &&data, 
+        size_t offset
+    ) {
+        std::shared_ptr<std::vector<uint8_t>> data_t(
+            new std::vector<uint8_t>(std::move(data)),
+            secure_delete_vector
+        );
+        return decode_all(data_t, offset);
     }
 
-    // Parses ASN.1 binary data recursively to create a module tree, returning the root element
-    // See asn1.h for details
-    // Input:
-    // @data - shared pointer to byte vector containing ASN.1 binary data
-    // @offset - offset in @data to start from
-    std::shared_ptr<ASN1Object> ASN1Parser::decode_all(std::shared_ptr<std::vector<uint8_t>> data, size_t offset) {
-        std::shared_ptr<ASN1Object> root = decode(data, offset);
-        std::queue<std::shared_ptr<ASN1Object>> to_process;
-        to_process.push(root);
-        while (!to_process.empty()) {
-            std::shared_ptr<ASN1Object> object_to_process = to_process.front();
-            to_process.pop();
-            size_t object_size = object_to_process->value().value_size(), offset = 0;
-            while (offset < object_size) {
-                size_t cur_offset = offset + object_to_process->value().value_offset();
-                std::shared_ptr<ASN1Object> object = decode(object_to_process->value().buffer(), cur_offset);
-                object_to_process->_children.push_back(object);
-                offset += object->total_size();
-                if (object->_tag & 0x20) { // field is constructed - it contains "children" to process, too
-                    to_process.push(object);
-                }
-            }
+    std::shared_ptr<ASN1Object> ASN1Parser::decode_all(
+        std::shared_ptr<std::vector<uint8_t>> data, 
+        size_t offset
+    ) {
+        uint8_t tag = (*data)[offset];
+        if (!(tag & 0x20)) { // 6th bit is not set - object is "primitive" => doesn't contain children
+            return decode(data, offset, true);
         }
-        return root;
+        // else, the object contains children - we must decode them
+        auto root_object = decode(data, offset, false);
+        offset += (1 + root_object->length_size());
+        size_t offset_t = offset;
+        while (offset_t < offset + root_object->length()) {
+            auto child_object = decode_all(data, offset_t);
+            root_object->_children.push_back(child_object);
+            offset_t += child_object->total_size();
+        }
+        // check if final offset matches root object's length - if not,
+        // something's wrong - buffer is probably corrupted
+        if (offset_t != offset + root_object->length()) {
+            throw std::runtime_error("[ASN1Parser::decode_all] final offset doesn't match calculated length - possible buffer corruption");
+        }
+        return root_object;
     }
 
     // Converts an ASN.1 tag (enum) to string
@@ -230,29 +220,39 @@ namespace ASN1 {
         output += ASN1Parser::tag_to_string(_tag);
         // output value in format depending on the tag
         std::cout << output << std::endl;
-        for (std::shared_ptr<ASN1Object> child : _children) {
+        for (auto child : _children) {
             child->print(indent+1);        
         }
     }
 
-    ASN1ObjectData ASN1ObjectData::calculate_length_field(size_t length) {
+    size_t ASN1Parser::_ASN1Parser_calculate_length_field_size(size_t length) {
         if (length < 128) {
             // short form
-            std::vector<uint8_t> length_field = { static_cast<uint8_t>(length) };
-            return ASN1ObjectData(std::move(length_field), 0, 1);
+            return 1;
         }
         // long form
-        std::vector<uint8_t> length_field;
-        size_t length_t = length, num_bytes = 0;
-        while (length_t > 0) {
+        size_t num_bytes = 0;
+        while (length > 0) {
             num_bytes++;
-            length_t >>= 8;
+            length >>= 8;
         }
+        return 1 + num_bytes;
+    }
+
+    std::vector<uint8_t> ASN1Parser::_ASN1Parser_encode_length_field(size_t length) {
+        std::vector<uint8_t> length_field;
+        if (length < 128) {
+            // short form
+            length_field = { static_cast<uint8_t>(length) };
+            return length_field;
+        }
+        // long form
+        size_t num_bytes = _ASN1Parser_calculate_length_field_size(length) - 1;
         length_field.push_back(static_cast<uint8_t>(0x80 | num_bytes));
         for (size_t i = num_bytes; i > 0; i--) {
             length_field.push_back(static_cast<uint8_t>((length >> ((i - 1) * 8)) & 0xFF));
         }
-        return ASN1ObjectData(std::move(length_field), 0, length_field.size());
+        return length_field;
     }
 
     // Helper for ASN1ObjectIdentifier::encode - encodes a single GMP integer
@@ -283,7 +283,10 @@ namespace ASN1 {
     // Input:
     // @rb - constant reverse iterator pointing at the last element of the encoded integer's vector
     // @re - constant reverse iterator pointing at the element before the first one of the encoded integer's vector
-    mpz_class _ASN1ObjectIdentifier_decode_single_integer(std::vector<uint8_t>::const_reverse_iterator rb, std::vector<uint8_t>::const_reverse_iterator re) {
+    mpz_class _ASN1ObjectIdentifier_decode_single_integer(
+        std::vector<uint8_t>::const_reverse_iterator rb, 
+        std::vector<uint8_t>::const_reverse_iterator re
+    ) {
         mpz_class result = 0, multiplier = 1;
         for (auto it = rb; it != re; it++) {
             result += (*it & 0x7F) * multiplier;
@@ -305,7 +308,7 @@ namespace ASN1 {
             // parse the string into integers
             if (ch == '.') {
                 if (temp.size() == 0) { // two dots in a row or dot at the beginning
-                    throw std::runtime_error("Invalid format of ASN.1 Object Identifier");
+                    throw std::runtime_error("[ASN1ObjectIdentifier::encode] Invalid format of ASN.1 Object Identifier");
                 }
                 // convert the parsed integer string to GMP integer and store it
                 integers.push_back(mpz_class(temp));
@@ -315,7 +318,7 @@ namespace ASN1 {
                 temp += ch;
             }
             else { // illegal character
-                throw std::runtime_error("Invalid character in ASN.1 Object Identifier");
+                throw std::runtime_error("[ASN1ObjectIdentifier::encode] Invalid character in ASN.1 Object Identifier");
             }
         }
         if (temp.size() > 0) { // append the last integer, since it won't be followed by a dot
@@ -341,15 +344,12 @@ namespace ASN1 {
     // ASN.1 OBJECT IDENTIFIER decoder - outputs a string (eg. "1.23.4567.89.0")
     // Input:
     // @obj_id - vector containing binary representatoin of the OBJECT IDENTIFIER
-    std::string ASN1ObjectIdentifier::decode(ASN1ObjectData data) {
+    std::string ASN1ObjectIdentifier::decode(std::vector<uint8_t> const &data) {
         std::string integer_str, result = "";
-        auto value_reverse_start = data.buffer()->crbegin() + (data.buffer()->size() - 
-            data.value_offset() - data.value_size());
-        auto value_reverse_end = value_reverse_start + data.value_size();
-        auto rb = value_reverse_start, re = rb + 1;
+        auto rb = data.crbegin(), re = rb + 1;
 
         // parse (from the end to the beginning), till the first two integers
-        while (re != value_reverse_end) {
+        while (re != data.crend()) {
             if (*re & 0x80) { // MSB set - continue
                 re++;
                 continue;
@@ -420,17 +420,17 @@ namespace ASN1 {
     // Decodes a buffer holding binary data into a GMP integer and returns it
     // Input:
     // @buffer - buffer holding the integer in binary form (big-endian)
-    mpz_class ASN1Integer::decode(ASN1ObjectData data) {
+    mpz_class ASN1Integer::decode(std::vector<uint8_t> const &data) {
         mpz_class num;
 
         mpz_import(
             num.get_mpz_t(),
-            data.value_size(),
+            data.size(),
             1, // big-endian
             sizeof(uint8_t),
             1,
             0,
-            data.buffer()->data() + data.value_offset()
+            data.data()
         );
 
         return num;

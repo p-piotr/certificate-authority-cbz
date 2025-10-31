@@ -62,11 +62,20 @@ namespace ASN1 {
 
         // This function parses ASN.1 binary data and returns a parsed element 
         // (does not parse recursively - see ASN1Parser::decode_all)
+        // If copy_value is set, _tag + _length + _value are returned
+        // If it is not set, only _tag + _length are returned
         //
         // Input:
         // @data - byte vector containing ASN.1 binary data
         // @offset - offset from the beginning of @data from which parsing should be started
-        static std::shared_ptr<ASN1Object> decode(std::shared_ptr<std::vector<uint8_t>> data, size_t offset);
+        // @copy_value - boolean specifying if data is to be copied to the returned 
+        //               object - set to "true" only if you know the object has 
+        //               no children for performance
+        static std::shared_ptr<ASN1Object> decode(
+            std::shared_ptr<std::vector<uint8_t>> data, 
+            size_t offset, 
+            bool copy_value
+        );
 
         // Parses ASN.1 binary data recursively to create a module tree, returning the root element
         //
@@ -75,7 +84,7 @@ namespace ASN1 {
         // as an rvalue - this buffer will be managed by ASN1ObjectData instances 
         // and safely destroyed when no longer needed (memory zeroed before deallocation)
         // @offset - offset in @data to start from
-        static std::shared_ptr<ASN1Object> decode_all(std::vector<uint8_t> &&data, size_t offset);
+        static std::shared_ptr<ASN1Object> decode_all(std::vector<uint8_t> &&data, size_t offset=0);
 
         // Parses ASN.1 binary data recursively to create a module tree, returning the root element
         // This function operates on an already created shared pointer to a byte vector
@@ -83,97 +92,22 @@ namespace ASN1 {
         // Input:
         // @data - shared pointer to byte vector containing ASN.1 binary data
         // @offset - offset in @data to start from
-        static std::shared_ptr<ASN1Object> decode_all(std::shared_ptr<std::vector<uint8_t>> data, size_t offset);
+        static std::shared_ptr<ASN1Object> decode_all(std::shared_ptr<std::vector<uint8_t>> data, size_t offset=0);
 
         // Converts an ASN.1 tag (enum) to string
         static const char* tag_to_string(ASN1Tag tag);
-        
-        // Helper function to update children's _value and _length buffers, offsets and sizes after encoding
-        // As the overall encoding process works layer by layer (from the bottom to the top),
-        // each time a parent is being encoded, its children's buffers get concatenated to the parent's buffer.
-        // Therefore, each child's buffers, values and lengths need to be updated to reflect the new buffer and offsets.
+
+        // Calculates the size of 'length' field based on provided size
         //
         // Input:
-        // @object - ASN1Object whose children should be updated
-        // @buffer - pointer to the new buffer that should be used
-        // @additional_offset - offset (in bytes) to add to each child's _value_offset and _length_offset
-        static void _ASN1Parser_update_children_values(
-            std::shared_ptr<ASN1Object> object, 
-            std::shared_ptr<std::vector<uint8_t>> buffer,
-            size_t additional_offset
-        );
+        // @size - size of object's data, in bytes
+        static size_t _ASN1Parser_calculate_length_field_size(size_t size);
 
-    };
-
-    // This class wraps the overall binary structure of an ASN.1 object tree
-    // Before, all ASN1Object instances contained their own copied
-    // value buffer, which lead to multiple places when the same data
-    // was stored (if a child had its data, then its parent had it too +
-    // their own, etc.)
-    // Now, there's only a single instance of this buffer and each
-    // object holds its pointer, as well as its own data start offset
-    // and length
-    class ASN1ObjectData {
-    protected:
-        std::shared_ptr<std::vector<uint8_t>> _buffer; // buffer holding binary data of related ASN1Object module (tree)
-        size_t _value_offset; // offset from the start of _buffer to the start of this object's value
-        size_t _value_size; // size of this object's value
-
-    public:
-        // Empty constructor - useful when creating ASN1Object without value (with children)
-        ASN1ObjectData() : _buffer(nullptr), _value_offset(0), _value_size(0) {}
-
-        // This constructor copies an already existing ASN1ObjectData (already existing buffer vector)
-        ASN1ObjectData(std::shared_ptr<std::vector<uint8_t>> buffer,
-        size_t value_offset,
-        size_t value_size) : 
-        _buffer(buffer),
-        _value_offset(value_offset),
-        _value_size(value_size) {
-            if (buffer == nullptr) {
-                throw std::runtime_error("ASN1ObjectData constructor: buffer cannot be null");
-            }
-            if (value_offset + value_size > _buffer->size()) {
-                throw std::runtime_error("ASN1ObjectData constructor: value_offset + value_size exceeds buffer size");
-            }
-        }
-
-        // This constructor creates a buffer vector and makes sure it gets zero'ed when dropped
-        // Note: as the buffer vector should be held only in this object, the constructor takes
-        // an rvalue (move instead of copy)
-        ASN1ObjectData(std::vector<uint8_t> &&buffer,
-        size_t value_offset,
-        size_t value_size) : 
-        _buffer(std::shared_ptr<std::vector<uint8_t>>(
-            new std::vector<uint8_t>(std::move(buffer)), 
-            secure_delete_vector
-        )),
-        _value_offset(value_offset),
-        _value_size(value_size) {
-            if (value_offset + value_size > _buffer->size()) {
-                throw std::runtime_error("ASN1ObjectData constructor: value_offset + value_size exceeds buffer size");
-            }
-        }
-
-        inline const std::shared_ptr<std::vector<uint8_t>> buffer() const {
-            return _buffer;
-        }
-
-        inline size_t value_offset() const {
-            return _value_offset;
-        }
-
-        inline size_t value_size() const {
-            return _value_size;
-        }
-
-        // Helper function to calculate length field for ASN.1 encoding, returning ASN1ObjectData
-        // representing the length field
-        // Note: the returned object always has _value_offset = 0 and _value_size = length field size
+        // This function takes size of object's data and returns an encoded length field
         //
         // Input:
-        // @length - length of the value to encode
-        static ASN1ObjectData calculate_length_field(size_t length);
+        // @size - size of object's data, in bytes
+        static std::vector<uint8_t> _ASN1Parser_encode_length_field(size_t size);
     };
 
     // Class representing an ASN.1 object - contains a tag (see ASN1Tag above),
@@ -181,78 +115,96 @@ namespace ASN1 {
     class ASN1Object {
     protected:
         ASN1Tag _tag; // ASN.1 tag
-        //size_t _tag_length_size; // Size of tag+length fields (in bytes)
-        ASN1ObjectData _length; // Length field wrapper
-        ASN1ObjectData _value; // Value data wrapper
+        size_t _length; // ASN.1 length
+        std::vector<uint8_t> _value; // ASN.1 value
         std::vector<std::shared_ptr<ASN1Object>> _children; // Set of child objects (1 level deep); empty if there're no children
 
     public:
-        // Creates an ASN1Object, initializes its fields and optionally prints a debug message
-        ASN1Object(ASN1Tag tag, ASN1ObjectData value) :
-        _tag(tag), 
-        _length(ASN1ObjectData::calculate_length_field(value.value_size())), 
+        ASN1Object(ASN1Tag tag) :
+        _tag(tag),
+        _length(0) {
+            #ifdef ASN1_DEBUG
+            std::cerr << "[ASN1Object] ASN1Object created: tag=" << std::hex << static_cast<int>(_tag) 
+                << std::dec << ", value_size=" << _value.size() << std::endl;
+            #endif // ASN1_DEBUG
+        }
+
+        ASN1Object(ASN1Tag tag, size_t length) :
+        _tag(tag),
+        _length(length) {
+            #ifdef ASN1_DEBUG
+            std::cerr << "[ASN1Object] ASN1Object created: tag=" << std::hex << static_cast<int>(_tag) 
+                << std::dec << ", value_size=" << _value.size() << std::endl;
+            #endif // ASN1_DEBUG
+        }
+
+        // take value by const-reference to avoid overload ambiguity with the rvalue overload
+        ASN1Object(ASN1Tag tag, const std::vector<uint8_t>& value) :
+        _tag(tag),
+        _length(value.size()),
         _value(value) {
             #ifdef ASN1_DEBUG
             std::cerr << "[ASN1Object] ASN1Object created: tag=" << std::hex << static_cast<int>(_tag) 
-                << std::dec << ", value_size=" << _value.value_size() << std::endl;
+                << std::dec << ", value_size=" << _value.size() << std::endl;
             #endif // ASN1_DEBUG
         }
 
-        // Creates an ASN1Object for encoding purposes, taking only tag and value vector
-        // (as an rvalue, for secure memory managing)
         ASN1Object(ASN1Tag tag, std::vector<uint8_t> &&value) :
         _tag(tag), 
-        _length(ASN1ObjectData::calculate_length_field(value.size())), 
-        _value(ASN1ObjectData(
-            std::shared_ptr<std::vector<uint8_t>>(
-                new std::vector<uint8_t>(std::move(value)), 
-                secure_delete_vector
-            ), 0, value.size()
-        )) {
+        _length(value.size()),
+        _value(std::move(value)
+        ) {
             #ifdef ASN1_DEBUG
             std::cerr << "[ASN1Object] ASN1Object created: tag=" << std::hex << static_cast<int>(_tag) 
-                << std::dec << ", value_size=" << _value.value_size() << std::endl;
+                << std::dec << ", value_size=" << _value.size() << std::endl;
             #endif // ASN1_DEBUG
         }
 
-        // Creates an ASN1Object with children (for SEQUENCE, SET, etc.) - also
-        // takes children as an rvalue for efficient moving
         ASN1Object(ASN1Tag tag, std::vector<std::shared_ptr<ASN1Object>> &&children) :
-        _tag(tag), _children(std::move(children)) {
+        _tag(tag), 
+        _children(std::move(children)) {
             #ifdef ASN1_DEBUG
             std::cerr << "[ASN1Object] ASN1Object created: tag=" << std::hex << static_cast<int>(_tag) 
-                << std::dec << ", value_size=" << _value.value_size() << std::endl;
+                << std::dec << ", value_size=" << _value.size() << std::endl;
             #endif // ASN1_DEBUG
         }
 
-        // Destroys an ASN1Object and optionally prints a debug message
         ~ASN1Object() {
+            secure_zero_memory(_value.data(), _value.size()); // don't forget to zero data as it may be critical
             #ifdef ASN1_DEBUG
             std::cerr << "[ASN1Object] ASN1Object destroyed: tag=" << std::hex << static_cast<int>(_tag)
-                << ", value_size=" << _value.value_size() << std::endl;
+                << ", value_size=" << _value.size() << std::endl;
             #endif // ASN1_DEBUG
         }
 
-        // returns object's tag
+        // Returns object's tag
         inline ASN1Tag tag() const {
             return _tag;
         }
 
-        // returns object's total size (in bytes) - that sums up the tag field size, 
-        // length field size and the size of a value buffer
-        // may return 0 if object value was not specified
-        // (when the constructor with children for encoding was used, and encoding not yet performed)
-        inline size_t total_size() const {
-            return 1 + _length.value_size() + _value.value_size();
-        }
-
-        // return's object's length field (read-only)
-        inline const ASN1ObjectData length() const {
+        // Returns object's length (value in 'length' field)
+        inline size_t length() const {
             return _length;
         }
 
-        // return's object's value buffer (read-only)
-        inline const ASN1ObjectData value() const {
+        // Returns object's encoded 'length' field
+        inline std::vector<uint8_t> encode_length() const {
+            return ASN1Parser::_ASN1Parser_encode_length_field(_length);
+        }
+
+        // Returns object's encoded 'length' field size, in bytes (without encoding it)
+        inline size_t length_size() const {
+            return ASN1Parser::_ASN1Parser_calculate_length_field_size(_length);
+        }
+
+        // Returns object's total size (in bytes) - that sums up the 'tag' field size, 
+        // 'length' field size and the size of a value buffer
+        inline size_t total_size() const {
+            return 1 + length_size() + _length;
+        }
+
+        // Returns object's value vector (modifiable reference)
+        inline std::vector<uint8_t>& value() {
             return _value;
         }
 
@@ -265,14 +217,9 @@ namespace ASN1 {
         // won't be used so I don't really care about it
         void print(int = 0);
 
+
         // friends may take what's protected stuff instead of asking for it
         // those friends need to be able to change the internal state of ASN1Object
-
-        friend void ASN1Parser::_ASN1Parser_update_children_values(
-            std::shared_ptr<ASN1Object> object, 
-            std::shared_ptr<std::vector<uint8_t>> buffer,
-            size_t additional_offset
-        );
         friend std::shared_ptr<std::vector<uint8_t>> ASN1Parser::encode(
             std::shared_ptr<ASN1Object> object
         );
@@ -312,7 +259,7 @@ namespace ASN1 {
         //
         // Input:
         // @obj_id_data - ASN1ObjectData containing the OBJECT IDENTIFIER
-        static std::string decode(ASN1ObjectData data);
+        static std::string decode(std::vector<uint8_t> const &data);
     };
 
     // Responsible for encoding/decoding ASN.1 INTEGER objects
@@ -333,7 +280,7 @@ namespace ASN1 {
         //
         // Input:
         // @data - ASN1ObjectData containing the integer
-        static mpz_class decode(ASN1ObjectData data);
+        static mpz_class decode(std::vector<uint8_t> const &data);
     };
 
     // // ASN1ObjectIdentifier helper functions

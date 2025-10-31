@@ -70,7 +70,7 @@ namespace RSA {
         std::shared_ptr<ASN1Object> pk_sequence;
         if (private_key->children().size() == 0) {
             // decode the private_key according to the PKCS#1 structure, since the ASN.1 parser didn't do it (it's a Primitive OCTET STRING after all)
-            pk_sequence = ASN1Parser::decode_all(private_key->value().buffer(), private_key->value().value_offset());
+            pk_sequence = ASN1Parser::decode_all(std::move(private_key->value()), 0);
             if (pk_sequence->tag() != ASN1Tag::SEQUENCE || pk_sequence->children().size() != 9) {
                 return false;
             }
@@ -120,7 +120,7 @@ namespace RSA {
         // read the key file and complain if needed
         std::getline(keyfile, line1);
         if (line1 != PRIVATE_KEY_HEADER) {
-            throw std::runtime_error("RSA private key header doesn't match the standard");
+            throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key header doesn't match the standard");
         }
 
         // read all lines till the end and append to key_asn1_b64, except the footer
@@ -131,7 +131,7 @@ namespace RSA {
         }
 
         if (line1 != PRIVATE_KEY_FOOTER) {
-            throw std::runtime_error("RSA private key footer doesn't match the standard");
+            throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key footer doesn't match the standard");
         }
 
         std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
@@ -139,11 +139,11 @@ namespace RSA {
 
         // validate the overall key ASN.1 structure
         if (!_RSAPrivateKey_format_check(asn1_root)) {
-            throw std::runtime_error("RSA private key format check failed");
+            throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key format check failed");
         }
         // validate the key contents (supported algorithm, version), since we are very picky in what we actually support
         if (!_RSAPrivateKey_is_supported(asn1_root)) {
-            throw std::runtime_error("RSA private key format not supported");
+            throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key format not supported");
         }
 
         // RSAPrivateKey sequence - https://www.rfc-editor.org/rfc/rfc8017.html#page-55
