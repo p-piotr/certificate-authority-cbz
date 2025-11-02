@@ -1,9 +1,6 @@
-#include "mappings.h"
-#include "decode-key.h"
 #include "encoding.h"
-#include "csrclass.h"
 #include "input_and_output.h"
-
+#include "PKCSObjects.h"
 
 
 int main(int argc, char* argv[]){
@@ -42,8 +39,8 @@ int main(int argc, char* argv[]){
 
     // For debugging not to enter the the input manually each time
     #ifdef SKIP_INPUT
-    vector<pair<string,string>> subject = { {"2.5.4.6", "PL"}, {"2.5.4.8", "Lesser Poland"}, {"2.5.4.10", "AGH"} };
-    vector<pair<string,string>> attrs = {};
+    vector<pair<string,string>> subject_info = { {"2.5.4.6", "PL"}, {"2.5.4.8", "Lesser Poland"}, {"2.5.4.10", "AGH"} };
+    vector<pair<string,string>> attributes = {{"1.2.840.113549.1.9.2", "example@agh.edu.pl"}};
     #endif
 
     // If not skipping input just call the functions responsible for getting input from the user
@@ -58,20 +55,33 @@ int main(int argc, char* argv[]){
     // it will be readin from the file and used to create PrivateKeyInfo object
     // and then it will be zeroized immiediately after
     vector<uint8_t> file_buffer; 
+    size_t offset = 0;
+    PKCS::PrivateKeyInfo private_key;
     read_privatekey_from_file(inputFile, file_buffer); 
-    print_bytes(file_buffer);
-    //PrivateKey PKey = privateKeyInfo.getPrivateKeyReference();
+    try{
+        private_key = std::move(PKCS::PrivateKeyInfo::decode(file_buffer,offset));
+    } catch (const MyError &e) {
+        print_nested(e, 0);
+        exit(1);
+    }
+    zeroize(file_buffer);
 
-    //CertificationRequest CR(
-    //    subject,
-    //    PKey.n,
-    //    PKey.e,
-    //    attrs
-    //);
-    //
-    //vector<uint8_t> bytes = CR.encode(PKey);
-    //string out = base64_encode(bytes);
-    //write_csr_to_file(out, outputFile);
+    mpz_class e = private_key.getPrivateKeyReference().getEReference();
+    mpz_class n = private_key.getPrivateKeyReference().getNReference();
+    PKCS::CertificationRequest certification_request(std::move(subject_info),
+                                   rsaEncryption, 
+                                   std::move(n), 
+                                   std::move(e),
+                                   std::move(attributes),
+                                   sha256WithRSAEncryption
+                                   );
+    certification_request.sign(private_key);
+
+    vector<uint8_t> DER_encoding = certification_request.encode();
+    string base64_output = base64_encode(DER_encoding);
+    write_csr_to_file(base64_output, outputFile);
+    zeroize(DER_encoding);
+    zeroize(base64_output);
 
     //// ---- TEST SIGNATURE VERIFICATION ----
     //PublicKey pub_key = CR.getPublicKeyReference();

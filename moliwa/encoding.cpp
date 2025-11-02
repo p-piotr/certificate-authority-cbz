@@ -205,63 +205,33 @@ vector<uint8_t> encode_der_oid(const string &oid){
 
 
 
-// test if string doesn't contain illegal characters; printable_string version
-static bool printable_string_validate(const string &s){
-    // set of all legal chars in PRINTABLE_STRING
-    const std::unordered_set<char> legal = {
-        'A', 'a', 'B', 'b', 'C', 'c', 'D', 'd', 'E', 'e',
-        'F', 'f', 'G', 'g', 'H', 'h', 'I', 'i', 'J', 'j',
-        'K', 'k', 'L', 'l', 'M', 'm', 'N', 'n', 'O', 'o',
-        'P', 'p', 'Q', 'q', 'R', 'r', 'S', 's', 'T', 't',
-        'U', 'u', 'V', 'v', 'W', 'w', 'X', 'x', 'Y', 'y',
-        '0', '1', '2', '3', '4', '5', '6', '7', '8',
-        ' ', '\'', '(', ')', '+', ',', '-', '.', '/',
-        ':', '?', '='
-    };
 
-    // returns false if string contains char not found in set of legal chars
-    for (char c : s) {
-        if (legal.find(c) == legal.end()) {
-            return false; 
-        }
-    }
-    return true;
-}
-
-
-// test if string doesn't contain illegal characters ia5string version
-static bool ia5string_validate(const string &s){
-    // returns false if string contains a char not found in set of legal chars
-    for (unsigned char c : s) {
-        if (c > 0x7F) return false;  // Only first 128 ASCII chars allowed
-    }
-    return true;
-}
-
-vector<uint8_t> encode_der_string(const string &str, string_t str_type){
+vector<uint8_t> encode_der_string(const string &str, ASN1_tag str_type){
     vector<uint8_t> string_bytes;       // will store tag + size + value
     
+    if(validate_string_type(str, str_type) == false){
+        throw MyError("encode_der_string: String contains Illegal characters");
+    }
+
     switch(str_type){
-        case IA5STRING:
-            if(ia5string_validate(str) == false){
-                throw MyError("encode_der_string: Attempt to encode illegal chars in ia5string type");
-            }
+        case IA5_STRING:
             // 0x16 = ia5string tag
-            string_bytes.push_back(0x16);
+            string_bytes.push_back(IA5_STRING);
             break;
 
         case PRINTABLE_STRING:
-            if(printable_string_validate(str) == false){
-                throw MyError("encode_der_string: Attempt to encode illegal chars in printable_string type");
-            }
             // 0x13 = printable_string tag
-            string_bytes.push_back(0x13);
+            string_bytes.push_back(PRINTABLE_STRING);
             break;
 
         case UTF8_STRING:
             // 0x0C = utf8_string tag
             // Note: I assume that UTF8 can handle every character
-            string_bytes.push_back(0x0C);
+            string_bytes.push_back(UTF8_STRING);
+            break;
+
+        default:
+            throw MyError("encode_der_string: incompatible string types");
             break;
     }
 
@@ -370,8 +340,8 @@ vector<uint8_t> encode_der_octet_string(const vector<uint8_t> &bytes){
 }
 
 // I don't like the existance of this function but PKCS force my hand
-vector<uint8_t> encode_der_non_universal(const vector<uint8_t> &bytes, uint8_t tag){
-    vector<uint8_t> non_universal_bytes = {tag};
+vector<uint8_t> encode_der_non_universal(const vector<uint8_t> &bytes, ASN1_tag tag){
+    vector<uint8_t> non_universal_bytes = {static_cast<uint8_t>(tag)};
 
     // append length bytes
     vector<uint8_t> length_bytes = encode_der_length(bytes.size());

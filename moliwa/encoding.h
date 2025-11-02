@@ -1,15 +1,11 @@
 #ifndef ENCODE_H
 #define ENCODE_H
 
-#include <vector>
-#include <unordered_set>
-#include <string>
 #include <gmpxx.h>
-#include <cstdint>
-#include "mappings.h"
+#include <unordered_set>
 #include <sstream>
 #include "myerror.h"
-#include <iostream>
+#include "utils.h"
 
 
 using std::string;
@@ -38,7 +34,7 @@ vector<uint8_t> encode_der_oid(const string &oid);
 // @str_type - which type of strings should be used (e.g. utf8-string, printable-string)
 // return value: vector of encoded bytes
 // it also includes checks to test if strings doesn't contain bytes not encodeable by given string type
-vector<uint8_t> encode_der_string(const string &str, string_t str_type);
+vector<uint8_t> encode_der_string(const string &str, ASN1_tag str_type);
 
 // @elements - vector of vectors; each inner vector contains already DER-encoded element of the sequence
 // return value: vector of encoded bytes
@@ -73,6 +69,6 @@ string base64_encode(const vector<uint8_t> &in);
 // For reasons that elude me Attributes field in certificationRequestInfo uses context-specific tag 0xA0
 // Therefore I decided to create function that encodes those non-universal types 
 // Function is almost identical to encode_der_octet_string but encodes tag of choice
-vector<uint8_t> encode_der_non_universal(const vector<uint8_t> &bytes, uint8_t tag);
+vector<uint8_t> encode_der_non_universal(const vector<uint8_t> &bytes, ASN1_tag tag);
 
 #endif
