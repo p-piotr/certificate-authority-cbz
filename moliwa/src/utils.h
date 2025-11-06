@@ -76,8 +76,7 @@ inline bool const_equal(string &arg1, string &arg2){
 // @bytes - reference to bytes to print
 inline void print_bytes(const vector<uint8_t> &bytes){
     for(uint8_t byte : bytes)
-        printf("%.2X ", byte);
-    printf("\n");
+       printf("%.2X ", byte);
 }
 
 // function used to zeroize an object
@@ -97,10 +96,11 @@ inline void zeroize(string &arg){
 
 // used to print a arg if debug is defiend
 // it could be overloaded more to print more objects
+// could also be improved to accept more arguments and be more flexible
 // @arg - object to be printed
 inline void debug_print(const string &arg) {
 #ifdef DEBUG
-    cout << arg << endl;
+    cout << arg ;
 #endif
 }
 inline void debug_print(const vector<uint8_t> &arg) {
@@ -111,7 +111,7 @@ inline void debug_print(const vector<uint8_t> &arg) {
 template <typename T>
 inline void debug_print(const T &arg) {
 #ifdef DEBUG
-    cout << arg << endl;
+    cout << arg ;
 #endif
 }
 

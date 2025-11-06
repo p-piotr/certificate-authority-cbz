@@ -80,12 +80,6 @@ mpz_class decode_der_integer(const vector<uint8_t> &der_buffer, size_t &offset){
     if(negative){
         // int_length * 8 is equal to the number of bits
         mpz_class subtrahend = mpz_class(1) << (int_length * 8);
-
-        #ifdef DEBUG
-        std::cout << "decode_der_integer: int_length=" << int_length << std::endl;
-        std::cout << "decode_der_integer: subtrahend=" << subtrahend << std::endl;
-        #endif
-
         value -= subtrahend;
     }
 

@@ -52,16 +52,6 @@ int main(int argc, char* argv[]){
     #endif
 
 
-    #ifdef DEBUG
-    for(const auto &[fir, sec] : subject_info){
-        cout << fir << " " << sec;
-    }
-
-    for(const auto &[fir, sec] : attributes){
-        cout << fir << " " << sec;
-    }
-    #endif
-
     // this buffer will hold the raw DER-encoded bytes of PrivateKey
     // it will be readin from the file and used to create PrivateKeyInfo object
     // and then it will be zeroized immiediately after
@@ -96,6 +86,7 @@ int main(int argc, char* argv[]){
     zeroize(base64_output);
 
     // test signature verification
+    cout  << endl << "testing signature verification" << endl;
     PKCS::RSAPublicKey pub_key = certification_request.getPublicKeyReference();
     vector<uint8_t> mess = certification_request.getCertificationRequestInfoReference().encode();
     vector<uint8_t> signature = certification_request.getSignatureReference();

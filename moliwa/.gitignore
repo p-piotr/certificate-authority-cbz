@@ -17,3 +17,5 @@ mycsr.pem
 a.out
 *.pem
 .gdb_history
+/pems
+/obj

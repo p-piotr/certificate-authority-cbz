@@ -94,7 +94,7 @@ vector<uint8_t> encode_der_integer(const mpz_class &value) {
     // we need to convert it into 2's complement
     if(value < 0){
         // step 1: invert all bytes
-        for(int i = 0; i < value_bytes.size(); i++){
+        for(size_t i = 0; i < value_bytes.size(); i++){
             value_bytes[i] = ~value_bytes[i];
         }
 

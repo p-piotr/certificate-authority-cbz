@@ -104,7 +104,7 @@ vector<pair<string,string>> ask_for_subject_info(){
     // will store the data
     vector<pair<string,string>> result;
 
-    for(int i = 0; i < OIDs.size(); i++){
+    for(size_t i = 0; i < OIDs.size(); i++){
         string curr;
 
         // display i-th message
@@ -156,7 +156,7 @@ vector<pair<string,string>> ask_for_attrs_info(){
 
 
     vector<pair<string,string>> result;
-    for(int i = 0; i < OIDs.size(); i++){
+    for(size_t i = 0; i < OIDs.size(); i++){
         string curr;
 
         // display i-th message

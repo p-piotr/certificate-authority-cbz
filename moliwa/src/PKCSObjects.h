@@ -139,7 +139,7 @@ public:
 
     // Exmaple: PKCS::RelativeDistinguishedName RDN3{"2.5.4.6", "PL"};
     // Used to create PKCS with a single element
-    RelativeDistinguishedName(string oid, string value) : RelativeDistinguishedName(std::move(PKCS::AttributeTypeAndValue(std::move(oid),std::move(value)))) {}
+    RelativeDistinguishedName(string oid, string value) : RelativeDistinguishedName((PKCS::AttributeTypeAndValue(std::move(oid),std::move(value)))) {}
 
     // Example: PKCS::RelativeDistinguishedName RDN4{{"2.5.4.6", "PL"}, {"2.5.4.10", "AGH"}};
     RelativeDistinguishedName(std::initializer_list<PKCS::AttributeTypeAndValue> list) : attributes(list) {}
@@ -648,12 +648,11 @@ public:
 //
 // Attribute are OPTIONAL so I decided to skip them as I noticed that most tools I tried do skip them
 class PrivateKeyInfo {
-    int version;
     AlgorithmIdentifier privateKeyAlgorithm;
     RSAPrivateKey privateKey;
 public:
-    PrivateKeyInfo(const AlgorithmIdentifier &privateKeyAlgorithm_, const RSAPrivateKey &privateKey_, int version_ = 0) : version(version_), privateKeyAlgorithm(std::move(privateKeyAlgorithm_)), privateKey(std::move(privateKey_)) {}
-
+    int version = 0;
+    PrivateKeyInfo(const AlgorithmIdentifier &privateKeyAlgorithm_, const RSAPrivateKey &privateKey_, int version_ = 0) :   privateKeyAlgorithm(std::move(privateKeyAlgorithm_)), privateKey(std::move(privateKey_)), version(version_) {}
     // Constructors
     // I made 4 version as I assumed that you can used string or algorithm_t to indicate which algorithm was used
     // and that you can initialize mpz_class both as mpz_class and a string
