@@ -31,11 +31,16 @@ void write_csr_to_file(const string &base64, const string &path){
         ofile << ch;
         i++;
         // after writing 64 chars add \n
-        if(i==64){
-            i=0;
+        if(i == 64){
+            i = 0;
             ofile << '\n';
         }
     }
+    // add newline to last line if needed
+    if(i != 0){
+        ofile << '\n';
+    }
+
 
     // Write the trailer and close the file
     ofile << trailer;
@@ -70,7 +75,7 @@ vector<pair<string,string>> ask_for_subject_info(){
         "Organization Name (eg, company) [" + defaults[3] + "]: ",
         "Organizational Unit Name (eg, section) [" + defaults[4] + "]: ",
         "Common Name (e.g. server FQDN or YOUR name) [" + defaults[5] + "]: ",
-        "Email Address [" + defaults[0] + "]: "
+        "Email Address [" + defaults[6] + "]: "
     });
 
     // OIDs indicating each field

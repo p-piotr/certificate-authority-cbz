@@ -1,13 +1,5 @@
 #include "utils.h"
 
-void print_bytes(const vector<uint8_t> &bytes){
-    for(uint8_t byte : bytes)
-        printf("%.2X ", byte);
-    printf("\n");
-}
-
-
-
 
 // test if string doesn't contain illegal characters; printable_string version
 static bool printable_string_validate(const string &s){
@@ -43,6 +35,7 @@ static bool ia5string_validate(const string &s){
 }
 
 
+// dispatcher function that calls appropriate validating function based on tag (only 2 functions as of now)
 bool validate_string_type(const string &s, ASN1_tag type){
     switch(type){
         case IA5_STRING:
@@ -61,6 +54,7 @@ bool validate_string_type(const string &s, ASN1_tag type){
 }
 
 
+// used to pretty print nested exceptions
 // pretty much stolen from here
 // https://en.cppreference.com/w/cpp/error/rethrow_if_nested.html
 void print_nested(const std::exception& e, int level) {

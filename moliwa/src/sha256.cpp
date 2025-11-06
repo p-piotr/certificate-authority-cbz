@@ -36,7 +36,7 @@ static inline bool is_big_endian(){
 
 
 // technically there should be check if the message isn't too long but that's pretty much not possible so IDGAF
-vector<uint8_t> sha256(const vector<uint8_t> &input){
+vector<uint8_t> sha256_digest(const vector<uint8_t> &input){
     std::array<uint32_t, 8> H = {
         0x6a09e667,
         0xbb67ae85,

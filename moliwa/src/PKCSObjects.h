@@ -750,8 +750,11 @@ public:
     // returns content of this object as DER encoded bytes
     vector<uint8_t> encode() const;
 
-    // seperate function for generating signature move to PKCSObjects.cpp
-    // returns signature but also stores it in the signature property
+    // function that generates a signature for Certification Request
+    // signature is both stored into signature parameter of the object
+    // add returned by the function
+    // @private_key - key with which CSR will be signed
+    // return value : signature bytes
     vector<uint8_t> sign(const PrivateKeyInfo &private_key);
 };
 

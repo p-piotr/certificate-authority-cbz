@@ -462,10 +462,17 @@ PrivateKeyInfo PrivateKeyInfo::decode(const vector<uint8_t> &der_buffer, size_t 
 
 
 
-// sign function for CertificationRequest
-vector<uint8_t> sign(const PrivateKeyInfo &private_key){
-    return s
+// generate signature for CSR
+vector<uint8_t> CertificationRequest::sign(const PrivateKeyInfo &private_key){
+    try {
+        signature = RSASSA_PKCS1_V1_5_SIGN(private_key.getPrivateKeyReference(), certificationRequestInfo.encode());
+        return signature;
+    } catch ( const MyError &e) {
+        print_nested(e);
+        exit(1);
+    }
 }
+
 
 
 
