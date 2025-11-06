@@ -1,15 +1,18 @@
 SRC_DIR=src
 SRCS=$(wildcard $(SRC_DIR)/*.cpp)
-TARGET=out/poc
-DEBUG_TARGET=out/poc-debug
+TARGET_DIR=out
+TARGET=$(TARGET_DIR)/poc
+DEBUG_TARGET=$(TARGET_DIR)/poc-debug
 CXX=g++
 CXXFLAGS=-g
 LIBS=-lgmp -lgmpxx
 
 all:
-	$(CXX) $(CXXFLAGS) $(SRCS) $(LIBS) -o $(TARGET)
+	mkdir -p $(TARGET_DIR)
+	$(CXX) $(CXXFLAGS) $(SRCS) $(LIBS) -O3 -o $(TARGET)
 
 debug:
+	mkdir -p $(TARGET_DIR)
 	$(CXX) $(CXXFLAGS) $(SRCS) $(LIBS) -g -o $(DEBUG_TARGET)
 
 clean:
