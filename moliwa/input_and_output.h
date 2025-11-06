@@ -1,23 +1,8 @@
 #ifndef INOUT_H
 #define INOUT_H
 
-#include <fstream>
-#include <iostream>
-#include <vector>
-#include <filesystem>
-#include <assert.h>
-#include "myerror.h"
 #include "decoding.h"
 
-using std::ifstream;
-using std::ofstream;
-using std::string;
-using std::cout;
-using std::cin;
-using std::endl;
-using std::getline;
-using std::pair;
-using std::vector;
 
 // this file contains functions related to input and output
 // that include mostly interaction with the user and the external files

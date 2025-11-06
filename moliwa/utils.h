@@ -1,7 +1,13 @@
-#ifndef reusable
-#define reusable
+#ifndef UTILS_H
+#define UTILS_H
 
+// this file contains miscellaneous functions and values used throughout the program
+// it allso is the place where includes reside and using statements for common types
+
+#include <fstream>
 #include <string>
+#include <filesystem>
+#include <array>
 #include <exception>
 #include <iostream>
 #include <cstdint>
@@ -17,6 +23,8 @@
 
 using std::vector;
 using std::string;
+using std::ifstream;
+using std::ofstream;
 using std::pair;
 using std::variant;
 using std::endl;
@@ -24,15 +32,18 @@ using std::cout;
 using std::cin;
 using std::getline;
 
+// prints a byte array in hex
+// @bytes - refernce to bytes to print
 void print_bytes(const vector<uint8_t> &bytes);
-bool der_check_finish(const vector<uint8_t> &der, const size_t &curr);
 
 template <typename T>
 inline void zeroize(vector<T> &vec){
     std::fill(vec.begin(), vec.end(), 0);
+    vec.clear();
 }
 inline void zeroize(string &str){
     std::fill(str.begin(), str.end(), 0);
+    str.clear();
 }
 
 inline void debug_print(const string &str) {

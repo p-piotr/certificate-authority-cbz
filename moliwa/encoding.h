@@ -1,15 +1,7 @@
 #ifndef ENCODE_H
 #define ENCODE_H
 
-#include <gmpxx.h>
-#include <unordered_set>
-#include <sstream>
-#include "myerror.h"
 #include "utils.h"
-
-
-using std::string;
-using std::vector;
 
 // this contains function releted to encoding primitive ASN.1 types into DER
 // Those functions are then used in to simplify encoding entire ASN.1 / PKCS objects

@@ -5,80 +5,104 @@
 #include "encoding.h"
 #include "decoding.h"
 
-using std::vector;
-using std::string;
 
-// Performance Notes:
-// Almost all constructors here take arguments by value what can sometimes cause uncessary copies
-// It could be optimized more, however that would require a lot of boilerplate code
-// Also it could cause some constructors to become ambigious which is not nice to debug
-// For me makin
+// This file contains the bulk of the program;
+// This is where classes that represent PKCS structures reside
+// Apart from the data it stores each class also contains the following:
+//
+// - An overloaded constructor; I tried to make it possible to construct the objects in multiple ways;
+//   but it frankly turned out to be a bit cumbersome as when trying to follow this principle I ended up adding some boilerplate code;
+//   also note that arguments are passed to every constructor by value; this is by design but can cause unnecessary copies;
+//   to avoid the copies every object should be created with std::move e.g. AttributeTypeAndValue example(std::move(str1), std::move(str2));
+//   also not sure If I haven't forgotten to use std::move or emplace_back which again can cause unnecessary copies
+//   almost every constructor was prepended with a comment that gives an example of initialization to which could be sued to call it
+//
+// - an overload for ostream << operator that prints out the content of the object in a style that's reminiscent of JSON; It can sometimes be useful in debugging;
+//
+// - function encode() that returns vector<uint8_t> that contains bytes that hold the representation of this object in ASN.1/DER 
+//
+// - static function decode() it can be used to instantiate the object directly from DER encoded bytes
+//   it takes two arguments: 
+//   @der_buffer - const reference to a buffer that contains DER bytes
+//   @offset - size_t that tells the function where should it start decoding
+//   these functions usually just call decode_der_x in some order and they will throw an error if the bytes don't match the expected encoding
+//   it was made static so it could be used instead of a constructor e.g. private_key = PKCS::PrivateKeyInfo::decode(file_buffer,offset);
+//   Note: I haven't yet implemented decode() function for most classes as they weren't needed yet
+//
+// - getters to references to all attributes of the class;
+//  
+// all classes are part of the PKCS namespace
+// every class was prepended with a comment that indicates which PCKS structure it represents
+// to make this file a bit shorter some functions were moved to PKCSObjects.cpp
 
-// This namespace will contain all PKCS objects used in the program
-// Most of them are classes that contain a constructor (often overloaded)
-// and encode() function that will return DER encoded bytes of this object
 namespace PKCS{
 
-
-//----------------------------------------------------------------------------------------------------
-
-
-// https://datatracker.ietf.org/doc/html/rfc5280#section-4.1.2.4
-//    AttributeTypeAndValue ::= SEQUENCE {
+// https://datatracker.ietf.org/doc/html/rfc5280#section-4.1.indicates what kind of value is stored in this SEQUENCE
 //     type     AttributeType,
 //     value    AttributeValue }
 //   AttributeType ::= OBJECT IDENTIFIER
 //   AttributeValue ::= ANY -- DEFINED BY AttributeType
 class AttributeTypeAndValue{
 private:
-    // OID that encodes what kind of Attribute this is
+    // OID that indicates what kind of value is stored in this SEQUENCE
     string type; 
 
-    // This could also be something else than string; 
-    // however most likely we won't need anything else; 
-    // It would make this class way overcomplicated if we had to account for other values
-    // However I may change that later to Variant to include all possibilities
-    // But that would I think Mimic Attribute too closely with no benefit of making our lives simpler in any way
+    // the actuall value that this class stores
+    // IMPORTANT: technically value has type of ANY
+    // so It could be anything else other than a string
+    // I'm 99% sure that we won't need this class to store anything else;
+    // Making this class capable of storing different values is absolutely possible (look PKCS::Attribute class)
+    // However it would make this class more complicated than it should be so I am going to leave it as it is;
     string value;
 
-    // when encoding strings we have to specify the type so his is also needed
+    // Needed so we know which tag should be used when encoding the object
     ASN1_tag value_type;
 
 public:
     // Constructors: 
+    
     // Example: PKCS::AttributeTypeAndValue ATAV1;
-    AttributeTypeAndValue() {
-        debug_print("AttributeTypeAndValue()");
-    }
+    AttributeTypeAndValue() {}
+
     // Example: PKCS::AttributeTypeAndValue ATAV2{"2.5.4.6", "PL"};
-    // for Rvalues
-    AttributeTypeAndValue(string type_, string value_) : type(std::move(type_)), value(std::move(value_)) {
+    AttributeTypeAndValue(string type_, string value_) {
+        // if we have to construct the class using the OID and value
+        // if we don't give it explicit ASN1_tag it will check the in AttributeStringType map which ASN1_tag should be used for this type
+        // if OID is not found, it will assume UTF8_STRING
+        // it also calls validate_string_type to check if it doesn't contain any illegal chars
+        // I think this code fragment appears some time later but I haven't made an inline for it yet
         try {
-            value_type = AttributeStringType.at(type);
-            if(validate_string_type(value,value_type) == false){
-                throw MyError("AttributeTypeAndValue(): value_ contains illegal chars");
-            }
+            value_type = AttributeStringType.at(type_);
         } catch (const std::out_of_range &e) { 
             value_type = UTF8_STRING;
         }
-        debug_print("AttributeTypeAndValue(string, string)");
+
+        if(validate_string_type(value_, value_type) == false){
+            throw MyError("AttributeTypeAndValue(string, string): attempt to create object with value that contains illegal characters");
+        }
+        type = std::move(type_);
+        value = std::move(value_);
     }
+
     // Example: PKCS::AttributeTypeAndValue ATAV3{"2.5.4.6", "PL", PRINTABLE_STRING};
-    AttributeTypeAndValue(string type_, string value_, ASN1_tag value_type_) : type(std::move(type_)), value(std::move(value_))  {
-        if(value_type_ != UTF8_STRING && value_type_ != IA5_STRING && value_type_ != PRINTABLE_STRING){
-            throw MyError("AttributeTypeAndValue(): values different than strings that are currently not handled");
+    // Here ASN1_tag is defined explicitly so we need check if it's a string type and then if it doesn't contain illega chars
+    AttributeTypeAndValue(string type_, string value_, ASN1_tag value_type_) {
+        if(value_type_ != UTF8_STRING && 
+            value_type_ != IA5_STRING && 
+            value_type_ != PRINTABLE_STRING){
+            throw MyError("AttributeTypeAndValue(string, string, ASN1_tag): values different than strings that are currently not handled");
+        }
+
+        if(validate_string_type(value,value_type) == false){
+            throw MyError("AttributeTypeAndValue(string, string, ASN1_tag): attempt to create object with value that contains illegal characters");
         }
         value_type = value_type_;
-        debug_print("AttributeTypeAndValue(string, string, ASN1_tag)");
+        type = std::move(type_);
+        value = std::move(value_);
     }
 
     // returns AttributeTypeAndValue as DER encoded Bytes
-    vector<uint8_t> encode() const {
-        return encode_der_sequence({
-            encode_der_oid(type),
-            encode_der_string(value, value_type)
-        });
-    }
+    vector<uint8_t> encode() const;
 
     // getters to reference to private components
     const string& getTypeReference() const { return type; }
@@ -98,49 +122,35 @@ public:
 // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1.2.4
 // RelativeDistinguishedName ::=
 //     SET SIZE (1..MAX) OF AttributeTypeAndValue
-// Note that set is just like SEQUENCE but must be sorted when encoded
+//
+// Note that SET is just like SEQUENCE but must be sorted when encoded it's already handled by encode_der_set
 class RelativeDistinguishedName {
 private:
     vector<PKCS::AttributeTypeAndValue> attributes;
 public:
     // Constructors: 
+    
     // Example: PKCS::RelativeDistinguishedName RDN1;
-    RelativeDistinguishedName() {
-        debug_print("RelativeDistinguishedName()");
-    };
+    RelativeDistinguishedName() {};
+
     // Example: PKCS::RelativeDistinguishedName RDN2{PKCS::AttributeTypeAndValue{"2.5.4.6", "PL"}};
-    // Used to create PKCS with a single element
-    // added because it's quite common
-    RelativeDistinguishedName(PKCS::AttributeTypeAndValue ATAV) : attributes{std::move(ATAV)} {
-        debug_print("RelativeDistinguishedName(AttributeTypeAndValue)");
-    }
+    // Used to create PKCS with a single element;
+    RelativeDistinguishedName(PKCS::AttributeTypeAndValue ATAV) : attributes({std::move(ATAV)}) {}
+
     // Exmaple: PKCS::RelativeDistinguishedName RDN3{"2.5.4.6", "PL"};
     // Used to create PKCS with a single element
-    // added because it's quite common
-    RelativeDistinguishedName(string oid, string value) : RelativeDistinguishedName(PKCS::AttributeTypeAndValue(oid,value)) {
-        debug_print("RelativeDistinguishedName(string, string)");
-    }
+    RelativeDistinguishedName(string oid, string value) : RelativeDistinguishedName(std::move(PKCS::AttributeTypeAndValue(std::move(oid),std::move(value)))) {}
+
     // Example: PKCS::RelativeDistinguishedName RDN4{{"2.5.4.6", "PL"}, {"2.5.4.10", "AGH"}};
-    RelativeDistinguishedName(std::initializer_list<PKCS::AttributeTypeAndValue> list) : attributes(list) {
-        debug_print("RelativeDistinguishedName(std::initializer_list<string>)");
-    }
+    RelativeDistinguishedName(std::initializer_list<PKCS::AttributeTypeAndValue> list) : attributes(list) {}
 
     // returns RelativeDistinguishedName as DER encoded bytes
-    vector<uint8_t> encode() const {
-        // RDN is a set so we have to first create
-        // this vector of vectors that holds encoded components to
-        // then pass it to encode_der_set
-        vector<vector<uint8_t>> encoded_components;
-        for (const auto &attr : attributes){
-            encoded_components.push_back(attr.encode());
-        }
-        return encode_der_set(encoded_components);
-    }
+    vector<uint8_t> encode() const;
 
     // getter
     const vector<PKCS::AttributeTypeAndValue>& getAttributesReference() const { return attributes; }
 
-    // overload << operator to allow to seamlessly view contents of the class
+    // overload << operator
     friend std::ostream& operator<<(std::ostream& os, const PKCS::RelativeDistinguishedName &RDN);
 };
 
@@ -151,52 +161,44 @@ public:
 
 
 // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1.2.4
-//Technically rdnSequence is defined as ASN.1 CHOICE (can only hold of it's member) which would more accurately
-//correspond to Union (or Variant) but as it currently only holds only one value I will model it as a regular class
 //   Name ::= CHOICE { -- only one possibility for now --
 //   rdnSequence  RDNSequence }
 //
 //  RDNSequence ::= SEQUENCE OF RelativeDistinguishedName
 
+// A bit of a similar situation that rdnSequence could technically store something else
+// but for now there's only on possibility so I'm not going to overcomplicate this
 class rdnSequence {
     vector<PKCS::RelativeDistinguishedName> RDNSequence;
 public:
 
     // Constructors: 
+    
     // Example: PKCS::rdnSequence rdnS1;
-    rdnSequence(){
-        debug_print("rdnSequence()");
-    }
-    // Note that the 2 initializations below are not equal;
-    // In the first one rdnSequence contains 2 AttributeTypeAndValue each with 1 element
-    // In the second one rdnSequence contains 1 AttributeTypeAndValue with 2 elements
+    rdnSequence() {}
+
     // Example: PKCS::rdnSequence rdnS2 { {"2.5.4.6", "PL"}, {"2.5.4.10", "AGH"} };
     // Example: PKCS::rdnSequence rdnS3 { {{"2.5.4.6", "PL"}, {"2.5.4.10", "AGH"}} };
-    rdnSequence(std::initializer_list<PKCS::RelativeDistinguishedName> list) : RDNSequence(list) {
-        debug_print("RelativeDistinguishedName(std::initializer_list<PKCS::RelativeDistinguishedName>)");
-    }
+    // Note that the 2 initializations above are not equal;
+    // In the first one rdnSequence contains 2 AttributeTypeAndValue each with 1 element
+    // In the second one rdnSequence contains 1 AttributeTypeAndValue with 2 elements
+    rdnSequence(std::initializer_list<PKCS::RelativeDistinguishedName> list) : RDNSequence(std::move(list)) {}
+
     // Example: vector<pair<string,string>> vec1{{"2.5.4.6","PL"}, {"2.5.4.10","AGH"}}; rdnSequence rdsn1(vec1);
     rdnSequence(vector<pair<string,string>> list) {
         for(auto& [OID, val] : list){
-            RDNSequence.emplace_back(std::move(OID),std::move(val));
+            RDNSequence.emplace_back(std::move(OID), std::move(val));
         }
     }
 
     // reference getter
     const vector<PKCS::RelativeDistinguishedName>& getRDNSequenceReference() const { return RDNSequence; }
+
     // overloaded << operator
     friend std::ostream& operator<<(std::ostream& os, const PKCS::rdnSequence &rdnS);
 
-
-    vector<uint8_t> encode() const {
-        // RDN is a sequence so we have to first create
-        // this vector of vectors that holds encoded components to
-        // then pass it to encode_der_set
-        vector<vector<uint8_t>> encoded_components;
-        for (auto &RDN : RDNSequence)
-        encoded_components.push_back(RDN.encode());
-        return encode_der_sequence(encoded_components);
-    }
+    // returns rdnSequence as DER encoded bytes
+    vector<uint8_t> encode() const;
 };
 
 
@@ -224,49 +226,33 @@ private:
     string algorithm; 
 
     // This defines parameters used in the algorithm
-    // Here they are just stored as bytes because they are not used in any algorithm we handle
+    // they aren't even needed as the algorithm we doesn't require parameters
     vector<uint8_t> parameters;
 
 public:
+    // I believe that using different algorithm might require total refactor of this class as I don't know how other algorithms handle parameters
+
     //Example: AlgorithmIdentifier();
     AlgorithmIdentifier() {}
-    // I believe that this might need to be completely refactored if we were to handle a different constructor
+
     // Example: AlgorithmIdentifier("1.2.840.113549.1.1.1")
     AlgorithmIdentifier(string algorithm_, vector<uint8_t> parameters_ = der_null) : algorithm(std::move(algorithm_)), parameters(std::move(parameters_)) {
     }
 
-    // Doesn't make much sense to use move here as it AlgorithmsToOIDs is const so it has to be copied
     // Example: AlgorithmIdentifier(rsaEncryption)
     AlgorithmIdentifier(algorithm_t algorithm_, vector<uint8_t> parameters_ = der_null) : algorithm((AlgorithmsToOIDs.at(algorithm_))), parameters(std::move(parameters_)) {
     }
 
-    static AlgorithmIdentifier decode(const vector<uint8_t> &der_buffer, size_t &offset){
-        try {
-            size_t length = decode_der_sequence(der_buffer, offset);
-            size_t start = offset;
-            string OID = decode_der_oid(der_buffer, offset);
-            vector<uint8_t> params;
-            params.reserve(offset - length + 1);
-            while(offset < start + length){
-                params.push_back(der_buffer[offset++]);
-            }
-            return AlgorithmIdentifier(std::move(OID), std::move(params));
-        } catch (const MyError &e) {
-            std::throw_with_nested(MyError("AlgorithmIdentifier::decode: "));
-        }
-    }
+    // creates AlgorithmIdentifier object from DER bytes
+    static AlgorithmIdentifier decode(const vector<uint8_t> &der_buffer, size_t &offset);
 
     // returns AlgorithmIdentifier as DER encoded Bytes
-    vector<uint8_t> encode() const {
-        return encode_der_sequence({
-            encode_der_oid(algorithm),
-            parameters
-        });
-    }
+    vector<uint8_t> encode() const;
 
-    // getters to reference of private components
+    // getters 
     const string& getAlgorithmReference() const { return algorithm; }
     const vector<uint8_t>& getParametersReference() const { return parameters; }
+
     // << operator
     friend std::ostream& operator<<(std::ostream& os, const PKCS::AlgorithmIdentifier &AI);
 
@@ -278,7 +264,6 @@ public:
 // ----------------------------------------------------------------------------------------------------
 
  
-
 
 // https://www.rfc-editor.org/rfc/rfc2313.html#section-7.1
 // 
@@ -292,18 +277,19 @@ private:
 public:
     // Example: mpz_class num1("1234"); mpz_class num2("4321"); RSAPublicKey(num1, num2);
     RSAPublicKey() {}
+
     // Example: mpz_class num1("1234"); mpz_class num2("4321"); RSAPublicKey(num1, num2);
     RSAPublicKey(mpz_class modulus_, mpz_class exponent_) : n(std::move(modulus_)), e(std::move(exponent_)) {}
+
     // Example: RSAPublicKey("1234", "4321")
     RSAPublicKey(string modulus_, string exponent_) : n(std::move(modulus_)), e(std::move(exponent_)) {}
 
     // returns RSAPublicKey as DER encoded bytes
-    vector<uint8_t> encode() const {
-        return encode_der_bitstring(encode_der_sequence({encode_der_integer(n), encode_der_integer(e)}));
-    }
+    vector<uint8_t> encode() const;
 
     // << operator
     friend std::ostream& operator<<(std::ostream &os, const PKCS::RSAPublicKey &PK);
+
     // getters
     const mpz_class& getNReference() const { return n; }
     const mpz_class& getEReference() const { return e; }
@@ -321,28 +307,31 @@ private:
 public:
     // Example: SubjectPublicKeyInfo SPKI1;
     SubjectPublicKeyInfo() {}
+
     // Example: SubjectPublicKeyInfo SPKI2(AlgorithmIdentifier("1.2.840.113549.1.1.1"), RSAPublicKey("1234", "1234"));
     SubjectPublicKeyInfo(AlgorithmIdentifier algorithm_, RSAPublicKey subjectPublicKey_) : algorithm(std::move(algorithm_)), subjectPublicKey(std::move(subjectPublicKey_)) {}
+
     // Example: SubjectPublicKeyInfo SPKI3("1.2.840.113549.1.1.1", "1234", "1234");
     SubjectPublicKeyInfo(string algorithm_, string n_, string e_) : algorithm(std::move(algorithm_)), subjectPublicKey(std::move(n_), std::move(e_)) {}
+
+    // Example: SubjectPublicKeyInfo SPKI3("1.2.840.113549.1.1.1", mpz_class("1234"), mpz_class("1234"));
     SubjectPublicKeyInfo(string algorithm_, mpz_class n_, mpz_class e_) : algorithm(std::move(algorithm_)),  subjectPublicKey(std::move(n_), std::move(e_)) {}
+
     // Example SubjectPublicKeyInfo SPKI5(rsaEncryption, "1234", "1234");
     SubjectPublicKeyInfo(algorithm_t algorithm_, string n_, string e_) : algorithm(std::move(algorithm_)), subjectPublicKey(std::move(n_), std::move(e_)) {}
+
+    // Example: SubjectPublicKeyInfo SPKI3("1.2.840.113549.1.1.1", mpz_class("1234"), mpz_class("1234"));
     SubjectPublicKeyInfo(algorithm_t algorithm_, mpz_class n_, mpz_class e_) : algorithm(std::move(algorithm_)),  subjectPublicKey(std::move(n_), std::move(e_)) {}
 
     // encode to DER
-    vector<uint8_t> encode() const {
-        return encode_der_sequence({
-            algorithm.encode(),
-            subjectPublicKey.encode()
-        });
-    }
+    vector<uint8_t> encode() const;
 
     // << operator
     friend std::ostream& operator<<(std::ostream &os, const PKCS::SubjectPublicKeyInfo &SPKI);
+
     // getters
-    const PKCS::AlgorithmIdentifier& getAlgorithmReference() { return algorithm; }
-    const PKCS::RSAPublicKey& getPublicKeyReference() { return subjectPublicKey; }
+    const PKCS::AlgorithmIdentifier& getAlgorithmReference() const { return algorithm; }
+    const PKCS::RSAPublicKey& getPublicKeyReference() const { return subjectPublicKey; }
 
 };
 
@@ -368,7 +357,6 @@ class Attribute{
     
 
     // modify this if additional types are to be allowed in variant_object
-    // Variant is fancy C++ Union
     using variant_object = 
     variant<
     string,
@@ -376,82 +364,87 @@ class Attribute{
     >;
 
     vector<pair<variant_object,ASN1_tag>> values;             
+
 public:
     Attribute() {}
     Attribute(
     string type_,
     vector<pair<variant_object,ASN1_tag>> values_) : type(std::move(type_)), values(std::move(values_)) {}
     
-    // Single string constructor with explicit tag
+    // Single string constructor with tag
     // Example: Attribute Attr1("1.1.1.1", "test", IA5_STRING);
-    explicit Attribute(string type_, string value_,  ASN1_tag tag_) : type(std::move(type_)) {
+    Attribute(string type_, string value_,  ASN1_tag tag_) {
         if(tag_ != UTF8_STRING && tag_ != IA5_STRING && tag_ != PRINTABLE_STRING){
             throw MyError("Attribute(string, tag): Tag doesn't match string type");
         }
         if(validate_string_type(value_,tag_) == false){
-            throw MyError("Attribute(string, tag): value_ contains illegal chars");
+            throw MyError("Attribute(string, tag): attempt to create object with value that contains illegal characters");
         }
         values.emplace_back(std::move(value_), tag_);
+        type = std::move(type_);
     }
+
 
     // Single string constructor
     // Example: Attribute Attr2("2.2.2.2", "test");
-    explicit Attribute(string type_, string value_) : type(std::move(type_)) {
+    Attribute(string type_, string value_) {
         ASN1_tag tag_;
         try {
             tag_ = AttributeStringType.at(type);
-            if(validate_string_type(value_,tag_) == false){
+            if(validate_string_type(value_, tag_) == false){
                 throw MyError("Attribute(string): value_ contains illegal chars");
             }
         } catch (const std::out_of_range &e) { 
             tag_ = UTF8_STRING;
         }
         values.emplace_back(std::move(value_), tag_);
+        type = std::move(type_);
     }
 
     // Multiple string constructor with explicit tags
     // Example Attribute Attr3("3.3.3.3", {std::make_pair("test", IA5_STRING), {"meow",UTF8_STRING}, {"TEST",PRINTABLE_STRING}});
     // Note the make pair, without it constructor call might become ambigious
-    explicit Attribute(string type_, std::initializer_list<pair<string,ASN1_tag>> list ) : type(std::move(type_)) {
+    Attribute(string type_, std::initializer_list<pair<string,ASN1_tag>> list ) {
         values.reserve(list.size());
         for (auto &v : list){
             if(v.second != UTF8_STRING && v.second != IA5_STRING && v.second != PRINTABLE_STRING){
                 throw MyError("Attribute({string, tag}): Tag doesn't match string type");
             }
             if(validate_string_type(v.first,v.second) == false){
-                throw MyError("Attribute({string, tag}): value_ contains illegal chars");
+                throw MyError("Attribute({string, tag}): attempt to create object with value that contains illegal characters");
             }
-
             values.emplace_back(std::move(v.first), v.second);
+            type = std::move(type_);
         }
     }
 
     // Multiple string constructor
     // Exmaple Attribute Attr4("4.4.4.4", {"test", "TEST"});
-    explicit Attribute(string type_, std::initializer_list<string> list ) : type(std::move(type_)) {
+    Attribute(string type_, std::initializer_list<string> list ) {
         values.reserve(list.size());
         for (auto &v : list){
             ASN1_tag tag_;
             try {
                 tag_ = AttributeStringType.at(type);
                 if(validate_string_type(v,tag_) == false){
-                    throw MyError("Attribute(string): value_ contains illegal chars");
+                    throw MyError("Attribute(string): attempt to create object with value that contains illegal characters");
                 }
             } catch (const std::out_of_range &e) { 
                 tag_ = UTF8_STRING;
             }
             values.emplace_back(std::move(v), tag_);
         }
+        type = std::move(type_);
     }
 
     // single byte array constructor
     // Example Attribute Attr5("5.5.5.5", vector<uint8_t>{1,2,3,4,5}, OCTET_STRING);
-    explicit Attribute(string type_, vector<uint8_t> value_, ASN1_tag tag) : type(std::move(type_)) {
+    Attribute(string type_, vector<uint8_t> value_, ASN1_tag tag) : type(std::move(type_)) {
         values.emplace_back(std::move(value_), tag);
     }
 
     // multiple byte array constructor
-    // Example: Attribute Attr6("6.6.6.6", {{std::move(vec1),OCTET_STRING}, {std::move(vec2),OCTET_STRING}, {std::move(vec3),OCTET_STRING}});
+    // Example: Attribute Attr6("6.6.6.6", {{std::move(vec1),OCTET_STRING}, {std::move(vec2), OCTET_STRING}, {std::move(vec3),OCTET_STRING}});
     Attribute(string type_, vector<pair<vector<uint8_t>,ASN1_tag>> list ) : type(std::move(type_)) {
         for (auto &v : list){
             values.emplace_back(std::move(v.first), v.second);
@@ -460,42 +453,19 @@ public:
 
     // returns encoded bytes
     // It assumes that tag stores sensible information
-    vector<uint8_t> encode() const {
-        vector<vector<uint8_t>> encoded_components;
-        for(const auto &element : values){
-            const variant_object &val = element.first;
-            const ASN1_tag &tag = element.second;
-            switch(tag){
-                case PRINTABLE_STRING:
-                case IA5_STRING:
-                case UTF8_STRING:
-                    // std::get() will throw an error if it's not of this type but that means that
-                    // tag stores incorrect information which shouldn't have happened in the first place
-                    encoded_components.push_back(encode_der_string(std::get<string>(val), tag));
-                    break;
-                case OCTET_STRING:
-                    encoded_components.push_back(encode_der_octet_string(std::get<vector<uint8_t>>(val)));
-                    break;
-                default:
-                    throw MyError("Attribute.encode(): Tag " + std::to_string(tag) + " isn't currently handled by the enocode function");
-                    break;
-            }
-        }
-        return encode_der_sequence({encode_der_oid(type), encode_der_set((encoded_components))});
-    }
+    vector<uint8_t> encode() const; 
 
     // << operator
     friend std::ostream& operator<<(std::ostream &os, const PKCS::Attribute &ATTR);
+
     // getters
-    const string& getTypeReference() { return type; }
-    const vector<pair<variant_object,ASN1_tag>>& getValuesReference() { return values; }
+    const string& getTypeReference() const { return type; }
+    const vector<pair<variant_object,ASN1_tag>>& getValuesReference() const { return values; }
 };
 
 
 
-
 // ----------------------------------------------------------------------------------------------------
-
 
 
 
@@ -507,21 +477,24 @@ public:
 //      subjectPKInfo SubjectPublicKeyInfo{{ PKInfoAlgorithms }},
 //      attributes    [0] Attributes{{ CRIAttributes }}
 //  }
-//
-//
 class CertificationRequestInfo {
 private:
     // Version is always set to 0
     int version = 0;
+    
     // contains information about subject that sends the request
     PKCS::rdnSequence subjectName;
+
     // contains information about sender's public key
     PKCS::SubjectPublicKeyInfo subjectPKInfo;
+
     // contains additional data fields
     vector<PKCS::Attribute> attributes;
+
 public:
     // Example: CertificationRequestInfo CRI1
     CertificationRequestInfo() {}
+
     // Example:
     //     CertificationRequestInfo CRI2(rdnSequence({{"2.5.4.6","PL"}, {"2.5.4.8", "Lesser Poland"}, {"2.5.4.10", "AGH"}}), 
     //                            SubjectPublicKeyInfo(rsaEncryption, "1234567890", "987654321"),
@@ -535,7 +508,7 @@ public:
     //                              rsaEncryption, std::move(mpz_class("1234567890")), std::move(mpz_class("987654321")),
     //                              { {"1.2.840.113549.1.1.1", "example.com"} });
     CertificationRequestInfo(vector<pair<string,string>> subjectName_, algorithm_t algorithm_, mpz_class n_, mpz_class e_, vector<pair<string,string>> attributes_) 
-    : subjectName(subjectName_), subjectPKInfo(std::move(algorithm_), std::move(n_), std::move(e_)){
+    : subjectName(std::move(subjectName_)), subjectPKInfo(std::move(algorithm_), std::move(n_), std::move(e_)){
         for(auto& [OID, val] : attributes_){
             attributes.emplace_back(std::move(OID), std::move(val));
         }
@@ -543,7 +516,7 @@ public:
 
     // Same as above but use string with OID instead of rsaEncryption
     CertificationRequestInfo(vector<pair<string,string>> subjectName_, string algorithm_, mpz_class n_, mpz_class e_, vector<pair<string,string>> attributes_) 
-    : subjectName(subjectName_), subjectPKInfo(std::move(algorithm_), std::move(n_), std::move(e_)){
+    : subjectName(std::move(subjectName_)), subjectPKInfo(std::move(algorithm_), std::move(n_), std::move(e_)){
         for(auto& [OID, val] : attributes_){
             attributes.emplace_back(std::move(OID), std::move(val));
         }
@@ -554,7 +527,7 @@ public:
     //                              rsaEncryption, "1234567890", "987654321",
     //                              { {"1.2.840.113549.1.1.1", "example.com"} });
     CertificationRequestInfo(vector<pair<string,string>> subjectName_, algorithm_t algorithm_, string n_, string e_, vector<pair<string,string>> attributes_) 
-    : subjectName(subjectName_), subjectPKInfo(std::move(algorithm_), std::move(n_), std::move(e_)){
+    : subjectName(std::move(subjectName_)), subjectPKInfo(std::move(algorithm_), std::move(n_), std::move(e_)){
         for(auto& [OID, val] : attributes_){
             attributes.emplace_back(std::move(OID), std::move(val));
         }
@@ -562,41 +535,29 @@ public:
 
     // Same as above but use string with OID instead of rsaEncryption
     CertificationRequestInfo(vector<pair<string,string>> subjectName_, string algorithm_, string n_, string e_, vector<pair<string,string>> attributes_) 
-    : subjectName(subjectName_), subjectPKInfo(std::move(algorithm_), std::move(n_), std::move(e_)){
+    : subjectName(std::move(subjectName_)), subjectPKInfo(std::move(algorithm_), std::move(n_), std::move(e_)){
         for(auto& [OID, val] : attributes_){
             attributes.emplace_back(std::move(OID), std::move(val));
         }
     }
 
-    vector<uint8_t> encode() const {
-        vector<vector<uint8_t>> encoded_components = {encode_der_integer(version), subjectName.encode(), subjectPKInfo.encode() };
-        vector<uint8_t> encoded_attrs;
-
-        for(const Attribute &attr : attributes){
-            vector<uint8_t> temp = attr.encode();
-            encoded_attrs.insert(encoded_attrs.end(), temp.begin(), temp.end());
-        }
-        encoded_components.push_back(encode_der_non_universal(std::move(encoded_attrs), ATTRIBUTES_CONSTRUCTED_TYPE));
-        return encode_der_sequence(std::move(encoded_components));
-    }
+    vector<uint8_t> encode() const;
 
     // << operator
     friend std::ostream& operator<<(std::ostream &os, const PKCS::CertificationRequestInfo &CRI);
+
     // getters
-    const PKCS::rdnSequence& getSubjectNameReference() { return subjectName; }
-    const PKCS::SubjectPublicKeyInfo& getsubjectPKinfoReference() { return subjectPKInfo; }
-    const vector<PKCS::Attribute>& getAttributesReference() { return attributes; }
+    const PKCS::rdnSequence& getSubjectNameReference() const { return subjectName; }
+    const PKCS::SubjectPublicKeyInfo& getsubjectPKinfoReference() const { return subjectPKInfo; }
+    const vector<PKCS::Attribute>& getAttributesReference() const { return attributes; }
 
     // does not include signature
 
-    // returns signature but also stores it in the signature property
 };
 
 
 
-
 // ----------------------------------------------------------------------------------------------------
-
 
 
 
@@ -647,39 +608,11 @@ public:
     ) : version(0), n(std::move(n_)), e(std::move(e_)), d(std::move(d_)), p(std::move(p_)), q(std::move(q_)), dP(std::move(dP_)), dQ(std::move(dQ_)), qInv(std::move(qInv_)) {}
 
 
-    static RSAPrivateKey decode(const vector<uint8_t> &der_buffer, size_t offset){
-        try{
-            size_t entire_length = decode_der_octet_string(der_buffer, offset);
-            size_t ints_length = decode_der_sequence(der_buffer, offset);
-            int version_ = decode_der_integer(der_buffer, offset).get_ui();
-            if(version_ != 0) { throw MyError("RSAPrivateKey::decode(): version is not zero"); }
-            mpz_class n_ = decode_der_integer(der_buffer, offset);
-            mpz_class e_ = decode_der_integer(der_buffer, offset);
-            mpz_class d_ = decode_der_integer(der_buffer, offset);
-            mpz_class p_ = decode_der_integer(der_buffer, offset);
-            mpz_class q_ = decode_der_integer(der_buffer, offset);
-            mpz_class dP_ = decode_der_integer(der_buffer, offset);
-            mpz_class dQ_ = decode_der_integer(der_buffer, offset);
-            mpz_class qInv_ = decode_der_integer(der_buffer, offset);
-            return RSAPrivateKey(std::move(n_), std::move(e_), std::move(d_), std::move(p_), std::move(q_), std::move(dP_), std::move(dQ_), std::move(qInv_));
-        } catch (const MyError &e) {
-            std::throw_with_nested(MyError("RSAPrivateKey::decode:"));
-        }
-    }
+    // creates this object using DER bytes
+    static RSAPrivateKey decode(const vector<uint8_t> &der_buffer, size_t offset);
 
-    vector<uint8_t> encode() const {
-            return encode_der_sequence({
-                encode_der_integer(version),
-                encode_der_integer(n),
-                encode_der_integer(e),
-                encode_der_integer(d),
-                encode_der_integer(p),
-                encode_der_integer(q),
-                encode_der_integer(dP),
-                encode_der_integer(dQ),
-                encode_der_integer(qInv),
-            });
-    }
+    // returns object as DER encoded bytes
+    vector<uint8_t> encode() const;
 
     // getters
     const mpz_class& getNReference() const { return n; }
@@ -691,6 +624,7 @@ public:
     const mpz_class& getDQReference() const { return dQ; }
     const mpz_class& getQInvReference() const { return qInv; }
 
+    // << operator
     friend std::ostream& operator<<(std::ostream& os, PKCS::RSAPrivateKey PK);
 };
 
@@ -712,14 +646,17 @@ public:
 //      PrivateKey ::= OCTET STRING
 //      Attributes ::= SET OF Attribute
 //
-// Attribute are OPTIONAL so I decided to skip them as I noticed
-// that most tools I tried do skip them
+// Attribute are OPTIONAL so I decided to skip them as I noticed that most tools I tried do skip them
 class PrivateKeyInfo {
     int version;
     AlgorithmIdentifier privateKeyAlgorithm;
     RSAPrivateKey privateKey;
 public:
-    PrivateKeyInfo(const AlgorithmIdentifier &privateKeyAlgorithm_, const RSAPrivateKey &privateKey_, int version_ = 0) : version(version_), privateKeyAlgorithm(privateKeyAlgorithm_), privateKey(privateKey_) {}
+    PrivateKeyInfo(const AlgorithmIdentifier &privateKeyAlgorithm_, const RSAPrivateKey &privateKey_, int version_ = 0) : version(version_), privateKeyAlgorithm(std::move(privateKeyAlgorithm_)), privateKey(std::move(privateKey_)) {}
+
+    // Constructors
+    // I made 4 version as I assumed that you can used string or algorithm_t to indicate which algorithm was used
+    // and that you can initialize mpz_class both as mpz_class and a string
 
     PrivateKeyInfo() {}
     //Example: PrivateKeyInfo RPK(rsaEncryption "1", "2", "3", "4", "5", "6", "7", "8");
@@ -748,23 +685,15 @@ public:
     algorithm_t algorithm_, string n_, string e_, string d_, string p_, string q_, string dP_, string dQ_, string qInv_, int version_ = 0
     ) : privateKeyAlgorithm(algorithm_), privateKey(std::move(n_), std::move(e_), std::move(d_), std::move(p_), std::move(q_), std::move(dP_), std::move(dQ_), std::move(qInv_)),  version(version_) {}
 
+    // getters
     const RSAPrivateKey& getPrivateKeyReference() const { return  privateKey; };
     const AlgorithmIdentifier& getPrivateKeyAlgorithmReference() const { return  privateKeyAlgorithm; };
 
+    // << operator
     friend std::ostream& operator<<(std::ostream &os, PrivateKeyInfo &PKI);
 
-    static PrivateKeyInfo decode(const vector<uint8_t> &der_buffer, size_t &offset){
-        try{
-            size_t length = decode_der_sequence(der_buffer, offset);
-            size_t version_ = decode_der_integer(der_buffer, offset).get_ui();
-            if(version_ != 0) { throw MyError("RSAPrivateKey::decode(): version is not zero"); }
-            AlgorithmIdentifier AI = AlgorithmIdentifier::decode(der_buffer, offset);
-            RSAPrivateKey RSAPK = RSAPrivateKey::decode(der_buffer, offset);
-            return PrivateKeyInfo(std::move(AI), std::move(RSAPK));
-        } catch (const MyError &e) {
-            std::throw_with_nested(MyError("PKCS::PrivateKeyInfo::decode: "));
-        }
-    }
+    // create object from DER bytes
+    static PrivateKeyInfo decode(const vector<uint8_t> &der_buffer, size_t &offset);
 
     };
 
@@ -782,6 +711,8 @@ private:
     AlgorithmIdentifier signatureAlgorithm;
     vector<uint8_t> signature;
 public:
+    // Constructors
+    // as above for versions for algorithm_t/string and mpz_class/string
 
     // Example: CertificationRequest CR1
     CertificationRequest() {}
@@ -802,37 +733,31 @@ public:
 
 
     CertificationRequest(vector<pair<string,string>> subjectName_, string algorithm_, mpz_class n_, mpz_class e_, vector<pair<string,string>> attributes_, string sig_algorithm_) 
-    : certificationRequestInfo(std::move(subjectName_), algorithm_, std::move(n_), std::move(e_), std::move(attributes_)), signatureAlgorithm(std::move(sig_algorithm_)) {}
+    : certificationRequestInfo(std::move(subjectName_), std::move(algorithm_), std::move(n_), std::move(e_), std::move(attributes_)), signatureAlgorithm(std::move(sig_algorithm_)) {}
 
     CertificationRequest(vector<pair<string,string>> subjectName_, string algorithm_, string n_, string e_, vector<pair<string,string>> attributes_, string sig_algorithm_) 
-    : certificationRequestInfo(std::move(subjectName_), algorithm_, std::move(n_), std::move(e_), std::move(attributes_)), signatureAlgorithm(std::move(sig_algorithm_)) {}
+    : certificationRequestInfo(std::move(subjectName_), std::move(algorithm_), std::move(n_), std::move(e_), std::move(attributes_)), signatureAlgorithm(std::move(sig_algorithm_)) {}
 
     // << operator
     friend std::ostream& operator<<(std::ostream& os, CertificationRequest &CR);
+
     // << getters
-    const CertificationRequestInfo& getCertificationRequestInfoReference() { return certificationRequestInfo; };
-    const AlgorithmIdentifier& getSignatureAlgorithmReference() { return signatureAlgorithm; }
-    const vector<uint8_t>& getSignatureReference() { return signature;}
+    const CertificationRequestInfo& getCertificationRequestInfoReference() const { return certificationRequestInfo; };
+    const AlgorithmIdentifier& getSignatureAlgorithmReference() const { return signatureAlgorithm; }
+    const vector<uint8_t>& getSignatureReference() const { return signature;}
+    const RSAPublicKey& getPublicKeyReference() const { return certificationRequestInfo.getsubjectPKinfoReference().getPublicKeyReference(); }
 
-    vector<uint8_t> encode() const {
-        return encode_der_sequence({
-            certificationRequestInfo.encode(), 
-            signatureAlgorithm.encode(), 
-            encode_der_bitstring(signature)
-        });
-    }
+    // returns content of this object as DER encoded bytes
+    vector<uint8_t> encode() const;
 
+    // seperate function for generating signature move to PKCSObjects.cpp
+    // returns signature but also stores it in the signature property
     vector<uint8_t> sign(const PrivateKeyInfo &private_key);
 };
 
 
 
 };
-
-
-
-
-
 
 
 

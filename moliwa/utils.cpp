@@ -6,14 +6,7 @@ void print_bytes(const vector<uint8_t> &bytes){
     printf("\n");
 }
 
-void der_check_boundry(size_t length, size_t start, size_t curr) {
-    if(start + length < curr)
-        throw MyError("Pointer went out of bounds when parsing DER" );
-}
 
-bool der_check_finish(const vector<uint8_t> &der, const size_t &curr) {
-    return (der.size() == curr);
-}
 
 
 // test if string doesn't contain illegal characters; printable_string version

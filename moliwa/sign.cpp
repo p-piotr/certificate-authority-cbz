@@ -149,7 +149,7 @@ vector<uint8_t> RSASSA_PKCS1_V1_5_SIGN(const PKCS::RSAPrivateKey &K, const vecto
 }
 
 // https://datatracker.ietf.org/doc/html/rfc8017#section-8.2.2
-bool RSASSA_PKCS1_V1_5_VERIFY(const PKCS::RSAPublicKey &K, vector<uint8_t> &M, const vector<uint8_t> &S){
+bool RSASSA_PKCS1_V1_5_VERIFY(const PKCS::RSAPublicKey &K, const vector<uint8_t> &M, const vector<uint8_t> &S){
     mpz_class n = K.getNReference();
 
     size_t k = (mpz_sizeinbase(n.get_mpz_t(), 2) + 7) / 8;

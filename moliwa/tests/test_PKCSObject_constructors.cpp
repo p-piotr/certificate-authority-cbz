@@ -125,7 +125,18 @@ int main(){
     string v2="test";
     Attribute Attr1("1.1.1.1", "test", IA5_STRING);
     cout << Attr1 << endl;
+
+
+
+
+
+
     Attribute Attr2("2.2.2.1", {std::make_pair("test", IA5_STRING), {"meow",UTF8_STRING}, {"TEST",PRINTABLE_STRING}});
+
+
+
+
+
     Attribute Attr4("1.2.840.113549.1.9.2", "example.com");
     cout << Attr2 << endl;
     cout << Attr4 << endl;
@@ -178,7 +189,12 @@ int main(){
     RSAPrivateKey RPK("1", "2", "3", "4", "5", "6", "7", "8");
     cout<< RPK << endl;
     PrivateKeyInfo PKI(rsaEncryption, "1", "2", "3", "4", "5", "6", "7", "8");
+
+    string str1 = "abcd";
+    string str2 = "afcd";
     cout << PKI << endl;
+    AttributeTypeAndValue test(std::move(str1), std::move(str2));
+    cout << test;
     return 0;
 }
 

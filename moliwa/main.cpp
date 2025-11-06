@@ -1,5 +1,6 @@
 #include "encoding.h"
 #include "input_and_output.h"
+#include "sign.h"
 #include "PKCSObjects.h"
 
 
@@ -35,7 +36,6 @@ int main(int argc, char* argv[]){
     }
 
 
-    #define SKIP_INPUT
 
     // For debugging not to enter the the input manually each time
     #ifdef SKIP_INPUT
@@ -45,10 +45,21 @@ int main(int argc, char* argv[]){
 
     // If not skipping input just call the functions responsible for getting input from the user
     #ifndef SKIP_INPUT
-    vector<pair<string,string>> subject = ask_for_subject_info();
+    vector<pair<string,string>> subject_info = ask_for_subject_info();
     cout << endl;
-    vector<pair<string,string>> attrs = ask_for_attrs_info();
+    vector<pair<string,string>> attributes = ask_for_attrs_info();
     cout << endl;
+    #endif
+
+
+    #ifdef DEBUG
+    for(const auto &[fir, sec] : subject_info){
+        cout << fir << " " << sec;
+    }
+
+    for(const auto &[fir, sec] : attributes){
+        cout << fir << " " << sec;
+    }
     #endif
 
     // this buffer will hold the raw DER-encoded bytes of PrivateKey
@@ -59,9 +70,10 @@ int main(int argc, char* argv[]){
     PKCS::PrivateKeyInfo private_key;
     read_privatekey_from_file(inputFile, file_buffer); 
     try{
-        private_key = std::move(PKCS::PrivateKeyInfo::decode(file_buffer,offset));
+        private_key = PKCS::PrivateKeyInfo::decode(file_buffer,offset);
     } catch (const MyError &e) {
         print_nested(e, 0);
+        std::cerr << "failed to decode file with private key" << endl;
         exit(1);
     }
     zeroize(file_buffer);
@@ -83,11 +95,11 @@ int main(int argc, char* argv[]){
     zeroize(DER_encoding);
     zeroize(base64_output);
 
-    //// ---- TEST SIGNATURE VERIFICATION ----
-    //PublicKey pub_key = CR.getPublicKeyReference();
-    //vector<uint8_t> mess = CR.getCRIBytes();
-    //vector<uint8_t> signature = CR.getSignatureReference();
-    //cout << std::boolalpha << RSASSA_PKCS1_V1_5_VERIFY(pub_key, mess, signature) << endl;
+    // test signature verification
+    PKCS::RSAPublicKey pub_key = certification_request.getPublicKeyReference();
+    vector<uint8_t> mess = certification_request.getCertificationRequestInfoReference().encode();
+    vector<uint8_t> signature = certification_request.getSignatureReference();
+    cout << std::boolalpha << RSASSA_PKCS1_V1_5_VERIFY(pub_key, mess, signature) << endl;
 
 
     return 0;

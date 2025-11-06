@@ -143,7 +143,7 @@ int main() {
     const int ITERATIONS = 10000;
     
     std::cout << "\n╔═══════════════════════════════════════════════════════════════╗\n";
-    std::cout << "║     C++ Object Instantiation Analysis - Single Objects       ║\n";
+    std::cout << "║     C++ Object Instantiation Analysis - Single Objects        ║\n";
     std::cout << "╚═══════════════════════════════════════════════════════════════╝\n\n";
     
     printHeader();
@@ -303,7 +303,7 @@ int main() {
     
     // BENCHMARK SECTION
     std::cout << "\n╔═══════════════════════════════════════════════════════════════╗\n";
-    std::cout << "║         Benchmark - " << ITERATIONS << " Objects per Test                ║\n";
+    std::cout << "║         Benchmark - " << ITERATIONS << " Objects per Test               ║\n";
     std::cout << "╚═══════════════════════════════════════════════════════════════╝\n\n";
     
     printHeader();

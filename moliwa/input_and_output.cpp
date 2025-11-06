@@ -97,10 +97,9 @@ vector<pair<string,string>> ask_for_subject_info(){
 
 
     // will store the data
-    vector<pair<string,string>> result(OIDs.size());
+    vector<pair<string,string>> result;
 
-    int i = 0;
-    while(i < OIDs.size()){
+    for(int i = 0; i < OIDs.size(); i++){
         string curr;
 
         // display i-th message
@@ -108,20 +107,19 @@ vector<pair<string,string>> ask_for_subject_info(){
 
         getline(cin, curr);
         // There's a requirement for Country name to be 2 chars long
-        if(OIDs[i] == "2.5.4.6" && curr.size() != 2){
-            cout << "Country Name must be 2 characters long" << endl;
-            continue;
-        }
 
         // if there was no input or user input the dot "." just use defaults
         if(curr == "." || curr == "")
             curr = defaults[i];
 
+        if(OIDs[i] == "2.5.4.6" && curr.size() != 2){
+            cout << "Country Name must be 2 characters long" << endl;
+            continue;
+        }
+
         // don't add empty fields 
         if(curr != "")
-            result[i] = {OIDs[i], curr};
-
-        i++;
+            result.push_back({OIDs[i], curr});
     }
 
     return  result;
@@ -152,7 +150,7 @@ vector<pair<string,string>> ask_for_attrs_info(){
     cout << start_message;
 
 
-    vector<pair<string,string>> result(OIDs.size());
+    vector<pair<string,string>> result;
     for(int i = 0; i < OIDs.size(); i++){
         string curr;
 
@@ -165,7 +163,7 @@ vector<pair<string,string>> ask_for_attrs_info(){
             curr = "";
 
         if(curr != "")
-            result[i] = {OIDs[i], curr};
+            result.push_back({OIDs[i], curr});
     }
 
     return  result;

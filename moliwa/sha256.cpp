@@ -1,5 +1,8 @@
 #include "sha256.h"
 
+// Copied from wikipedia
+// Look here for more information
+// https://en.wikipedia.org/wiki/SHA-2#Pseudocode
 
 const static std::array<uint32_t,64> k{
    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -12,12 +15,16 @@ const static std::array<uint32_t,64> k{
    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 };
 
+
+// rotate right
+// https://en.wikipedia.org/wiki/Bitwise_operation#Rotate
 static inline uint32_t rotr(uint32_t x, size_t n){
     return (x >> n) | (x << (32 - n));
 }
 
 
-//https://stackoverflow.com/questions/1001307/detecting-endianness-programmatically-in-a-c-program
+// simply checks if value is stored as big endian or little endian
+// https://stackoverflow.com/questions/1001307/detecting-endianness-programmatically-in-a-c-program
 static inline bool is_big_endian(){
     union {
         uint32_t i;
@@ -30,60 +37,80 @@ static inline bool is_big_endian(){
 
 // technically there should be check if the message isn't too long but that's pretty much not possible so IDGAF
 vector<uint8_t> sha256(const vector<uint8_t> &input){
-    uint32_t h0 = 0x6a09e667;
-    uint32_t h1 = 0xbb67ae85;
-    uint32_t h2 = 0x3c6ef372;
-    uint32_t h3 = 0xa54ff53a;
-    uint32_t h4 = 0x510e527f;
-    uint32_t h5 = 0x9b05688c;
-    uint32_t h6 = 0x1f83d9ab;
-    uint32_t h7 = 0x5be0cd19;
+    std::array<uint32_t, 8> H = {
+        0x6a09e667,
+        0xbb67ae85,
+        0x3c6ef372,
+        0xa54ff53a,
+        0x510e527f,
+        0x9b05688c,
+        0x1f83d9ab,
+        0x5be0cd19
+    };
 
-    // Padding
+    // calculate padding length
 
-
+    // how many bytes we needed to get 64
     size_t mod_len = input.size() % 64;
-    size_t pad_len = (mod_len < 56) ? (56 - mod_len) : (120 - mod_len); // this works because we have to pad it with number K such that L + K = 56 mod 64
-    
+
+    // 2 cases
+    //
+    // if mod_len is than 56  message_length will fit in this block hence 56 - mod_len
+    // we always have to add pad the 0x80 byte hence strict inequality
+    //
+    // if greater on equal we have to pad to the next block hence the 120 - mod_len
+    size_t pad_len = (mod_len < 56) ? (56 - mod_len) : (120 - mod_len); 
+
+    // add padding
     vector<uint8_t> padded(input.begin(), input.end());
     padded.resize(padded.size() + pad_len + 8);
+
+    // add 0x80 byte
     padded[input.size()] = 0x80;
+    // add 0x00 bytes
     std::fill(padded.begin() + input.size() + 1, padded.end() - 8, 0x00);
 
-    uint64_t bit_length = static_cast<uint64_t>(input.size() * 8);
+    // add message length
+    uint64_t message_length = static_cast<uint64_t>(input.size() * 8);
 
-    // https://stackoverflow.com/questions/105252/how-do-i-convert-between-big-endian-and-little-endian-values-in-c
+    // We need to check if uint64 message_length is stored in big endian
     if(!is_big_endian()){
-        bit_length = __builtin_bswap64(bit_length);
+        // https://stackoverflow.com/questions/105252/how-do-i-convert-between-big-endian-and-little-endian-values-in-c
+        message_length = __builtin_bswap64(message_length);
     }
-    memcpy(&padded[padded.size() - 8], &bit_length, sizeof(bit_length));
+    // append message_length 
+    memcpy(&padded[padded.size() - 8], &message_length, sizeof(message_length));
 
+    std::array<uint8_t, 32> digest;
+    std::array<uint32_t,64> w;
     for(size_t chunk = 0; chunk < padded.size(); chunk += 64){
-        std::array<uint32_t,64> w;
 
-        // padded chunk into first 16 entries of w;
+        // adding padded chunk into first 16 entries of w;
         for(size_t w_index = 0; w_index < 16; w_index++){
             w[w_index] = (padded[chunk + 4*w_index + 0] << 24)
-                        | (padded[chunk + 4*w_index + 1] << 16)
-                        | (padded[chunk + 4*w_index + 2] << 8)
-                        | (padded[chunk + 4*w_index + 3]);
+                | (padded[chunk + 4*w_index + 1] << 16)
+                | (padded[chunk + 4*w_index + 2] << 8)
+                | (padded[chunk + 4*w_index + 3]);
         }
 
-        // calculate the rest of w
+        // calculate the rest of w using hashing operations
         for(size_t i = 16; i < 64; i++){
             uint32_t s0 = (rotr(w[i-15], 7) ^ rotr(w[i-15], 18) ^ (w[i-15] >> 3));
             uint32_t s1 = (rotr(w[i-2], 17) ^ rotr(w[i-2], 19) ^ (w[i-2] >> 10));
             w[i] = w[i-16] + s0 + w[i-7] + s1;
         }
 
-        uint32_t a = h0;
-        uint32_t b = h1;
-        uint32_t c = h2;
-        uint32_t d = h3;
-        uint32_t e = h4;
-        uint32_t f = h5;
-        uint32_t g = h6;
-        uint32_t h = h7;
+        // store state (value h0-h7) into working variables
+        uint32_t a = H[0];
+        uint32_t b = H[1];
+        uint32_t c = H[2];
+        uint32_t d = H[3];
+        uint32_t e = H[4];
+        uint32_t f = H[5];
+        uint32_t g = H[6];
+        uint32_t h = H[7];
+
+        // more hashing operations
         for(int i = 0; i < 64; i++){
             uint32_t s1 = (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25));
             uint32_t ch = (e & f) ^ ((~e) & g);
@@ -100,25 +127,28 @@ vector<uint8_t> sha256(const vector<uint8_t> &input){
             b = a;
             a = temp1 + temp2;
         }
-        h0 = h0 + a;
-        h1 = h1 + b;
-        h2 = h2 + c;
-        h3 = h3 + d;
-        h4 = h4 + e;
-        h5 = h5 + f;
-        h6 = h6 + g;
-        h7 = h7 + h;
+
+        // update state
+        H[0] = H[0] + a;
+        H[1] = H[1] + b;
+        H[2] = H[2] + c;
+        H[3] = H[3] + d;
+        H[4] = H[4] + e;
+        H[5] = H[5] + f;
+        H[6] = H[6] + g;
+        H[7] = H[7] + h;
     }
 
-    vector<uint32_t> temp = {h0, h1, h2, h3, h4, h5, h6, h7};
-    vector<uint8_t> digest;
-    for(uint32_t h : temp){
-        for(int i = 3; i >= 0; i--){
-            digest.push_back((h >> (8 * i)) & 0xFF);
-        }
+    // convert bytes to big-endian bytes
+    for (size_t i = 0; i < 8; ++i) {
+        digest[i * 4 + 0] = static_cast<uint8_t>((H[i] >> 24) & 0xFF);
+        digest[i * 4 + 1] = static_cast<uint8_t>((H[i] >> 16) & 0xFF);
+        digest[i * 4 + 2] = static_cast<uint8_t>((H[i] >> 8)  & 0xFF);
+        digest[i * 4 + 3] = static_cast<uint8_t>((H[i] >> 0)  & 0xFF);
     }
 
-    return digest;
+    // return digest as vector (that's what is needed)
+    return vector<uint8_t>(digest.begin(), digest.end());
 }
 
 
