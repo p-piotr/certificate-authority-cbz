@@ -5,6 +5,8 @@ csr.pem
 private-key.pem
 test.*
 
+createCSR
+
 uwu.pem
 csr2.pem
 

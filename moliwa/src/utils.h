@@ -35,6 +35,9 @@ using std::cin;
 using std::getline;
 
 
+// ----------------------------------------------------------------------------------------------------
+
+
 // used to compare two values in constant time
 // @arg1 - first value to be compared
 // @arg2 - second value to be compared
@@ -60,6 +63,7 @@ inline bool const_equal(vector<T> &arg1, vector<T> &arg2){
     return diff == 0;
 }
  
+// same as above
 inline bool const_equal(string &arg1, string &arg2){
     uint8_t diff = 0;
     size_t count = std::min(arg1.size(), arg2.size());
@@ -79,19 +83,8 @@ inline void print_bytes(const vector<uint8_t> &bytes){
        printf("%.2X ", byte);
 }
 
-// function used to zeroize an object
-// it could be overloaded more to zeroize more objects
-// @arg - object to be zeroized
-template <typename T>
-inline void zeroize(vector<T> &arg){
-    std::fill(arg.begin(), arg.end(), 0);
-    arg.clear();
-}
- 
-inline void zeroize(string &arg){
-    std::fill(arg.begin(), arg.end(), 0);
-    arg.clear();
-}
+
+// ----------------------------------------------------------------------------------------------------
 
 
 // used to print a arg if debug is defiend
@@ -114,6 +107,60 @@ inline void debug_print(const T &arg) {
     cout << arg ;
 #endif
 }
+
+
+// ----------------------------------------------------------------------------------------------------
+
+
+
+// function used to zeroize an object
+// it could be overloaded more to zeroize more objects
+// @arg - object to be zeroized
+template <typename T>
+inline void zeroize(vector<T> &arg){
+    volatile T *ptr = arg.data();
+    for (size_t i = 0; i < arg.size(); i++){
+        ptr[i] = 0;
+    }
+    arg.clear();
+}
+ 
+inline void zeroize(string &arg){
+    volatile char *ptr = arg.data();
+    for (size_t i = 0; i < arg.size(); i++){
+        ptr[i] = 0;
+    }
+    arg.clear();
+}
+
+// stolen from Piotrek
+inline void zeroize(void *ptr, size_t size){
+    if (ptr != nullptr) {
+        volatile uint8_t *vptr = static_cast<volatile uint8_t*>(ptr);
+        for (size_t i = 0; i < size; i++) {
+            vptr[i] = 0;
+        }
+    }
+}
+
+
+// this 2 function sets a custom memory deallocation for GMP to zeroize mpz_class after mpz_class objects are no longer needed
+// also stolen from Piotrek
+static inline void zeroize_policy_util(void *ptr, size_t size) {
+    zeroize(ptr, size);
+    free(ptr);
+}
+
+inline void mpz_set_zeroize_policy() {
+    mp_set_memory_functions(
+        nullptr, 
+        nullptr, 
+        zeroize_policy_util
+    );
+}
+
+// ----------------------------------------------------------------------------------------------------
+
 
 // enum that stores algorithms handled by the program
 enum algorithm_t{
@@ -166,10 +213,16 @@ static const std::unordered_map<algorithm_t, string> AlgorithmsToOIDs= {
     {sha256,                    "2.16.840.1.101.3.4.2.1"}
 };
 
+
+
 // used check if a given string doesn't contain illegal chars
 // @s - string to be checked
 // @type - type of the string (e.g. PRINTABLE_STRING)
 bool validate_string_type(const string &s, ASN1_tag type);
+
+
+// ----------------------------------------------------------------------------------------------------
+
 
 // this is my custom error class that inherits from exception
 // honestly it was added partially just because I could and also

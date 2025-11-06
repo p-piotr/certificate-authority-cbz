@@ -126,6 +126,7 @@ vector<pair<string,string>> ask_for_subject_info(){
         if(curr != "")
             result.push_back({OIDs[i], curr});
     }
+    cout << endl;
 
     return  result;
 }
@@ -170,12 +171,13 @@ vector<pair<string,string>> ask_for_attrs_info(){
         if(curr != "")
             result.push_back({OIDs[i], curr});
     }
+    cout << endl;
 
     return  result;
 }
 
-// Just prints out how to use the program
-void print_usage(const string &name) {
+// prints out how to call the program
+static void print_usage(const string &name) {
     cout << "Usage: " << name << " -in <inputfile> -out <outputfile>" << endl << endl;
 }
 
@@ -236,4 +238,37 @@ void read_privatekey_from_file(const string &path, vector<uint8_t> &return_buffe
     // it base64_decode will write bytes directly into the target buffer
     base64_decode(base64_buffer, return_buffer);
     zeroize(base64_buffer);
+}
+
+
+// this function is used handle the command-line arguments
+void handle_arguments(
+    int argc, char** argv, 
+    string &inputFile, string &outputFile
+) {
+    for (int i = 1; i < argc; ++i) {
+        string arg = argv[i];
+        // -in flag is used to indicate inputFile
+        if (arg == "-in" && i + 1 < argc) {
+            inputFile = argv[++i];
+        } 
+        // -out flag is used to indicate outputFile
+        else if (arg == "-out" && i + 1 < argc) {
+            outputFile = argv[++i];
+        } 
+        else {
+            print_usage(argv[0]);
+            exit(1);
+        }
+    }
+
+    // if user forgot some parameters print usage message and exit 
+    if (inputFile.empty()) {
+        print_usage(argv[0]);
+        exit(1);
+    }
+    if (outputFile.empty()) {
+        print_usage(argv[0]);
+        exit(1);
+    }
 }

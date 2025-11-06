@@ -1,11 +1,11 @@
-# Compiler & flags
+# --- Compiler & flags ---
 CXX := g++
 CXXFLAGS := -g -Wall -std=c++17
 # -g			for debugging symbols
 # -Wall			enable all warnings
 # -std=c++17	use C++17 standard
 
-# Libraries
+# --- Libraries ---
 LIBS := -lgmp -lgmpxx
 # link GMP
 
@@ -22,8 +22,8 @@ ifeq ($(SKIP_INPUT),1)
 	# define SKIP_INPUT macro
 endif
 
-# used to disable optimizations
-# also can be useful for debugging
+
+# to skip SKIP_OPTIMIZATION: make SKIP_OPTIMIZATION=1
 ifeq ($(SKIP_OPTIMIZATION),1)
     CXXFLAGS += -O0
 	# add -O0 compiler flag
@@ -33,8 +33,7 @@ else
 endif
 
 
-# Directories
-
+# --- Directories ---
 SRC_DIR := src
 # source files (.cpp .h) directory
 OBJ_DIR := obj
@@ -42,14 +41,16 @@ OBJ_DIR := obj
 BIN := createCSR
 # name of the created executable 
 
-# Source & object files
-SRCS := $(wildcard $(SRC_DIR)/*.cpp) 							# variable that holds all .cpp files in SRC_DIR
-OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRCS)) 	# variable that holds the corresponding .o files in OBJ_DIR for each .cpp in SRCS
+# --- Source & object files ---
+SRCS := $(wildcard $(SRC_DIR)/*.cpp)
+# variable that holds all .cpp files in SRC_DIR
+OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRCS))
+# variable that holds the corresponding .o files in OBJ_DIR for each .cpp in SRCS
 
-# Default target
+# --- Default target ---
 all: $(BIN)
 
-# Link step
+# - Linking -
 $(BIN): $(OBJS)
 	@echo "Linking $^ into $@..."
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LIBS)
@@ -57,7 +58,7 @@ $(BIN): $(OBJS)
 # $@ - target here $(BIN)
 # $^ - all object files (dependencies)
 
-# Compile step
+# - Compiling -
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
 	@echo "Compiling $<..."
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -67,7 +68,7 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
 # $@  - the target (here: the object file, e.g. obj/foo.o)
 # '|' - makes $(OBJ_DIR) an order-only prerequisite (ensures the directory exists before the rule runs, but changes to the directory won't mark the target out-of-date)
 
-# Ensure obj directory exists
+# - Ensure obj directory exists -
 $(OBJ_DIR):
 	mkdir -p $(OBJ_DIR)
 	@echo ""

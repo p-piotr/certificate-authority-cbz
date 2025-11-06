@@ -29,10 +29,6 @@ vector<pair<string,string>> ask_for_subject_info();
 // e.g. { {"1.2.840.113549.1.9.7", "1234"} }
 vector<pair<string,string>> ask_for_attrs_info();
 
-// This function is used to write usage message
-// @name - name of the current program i.e. argv[0]
-void print_usage(const string &name);
-
 // This function is used to read PrivateKey from file;
 // As of now it only support PKCS#8 fromated file
 // In future it will also implemented the JIT decryption of the PrivateKey file
@@ -40,5 +36,14 @@ void print_usage(const string &name);
 // @path - path to the file
 // @return_buffer - into this buffer DER encoded bytes from file will be written
 void read_privatekey_from_file(const string &path, vector<uint8_t> &return_buffer);
+
+// this function is called immediately after the program is run
+// it handles command-line arguments and prints usage message if program was run incorrectly
+// @argc - value of argc
+// @argv - pointer ro argv
+// @inputFile - string that holds path from which Private Key will be read
+// @outputFile - string that holds path into which CSR will be written
+// more parametrs should be added if 
+void handle_arguments(int argc, char** argv, string &inputFile, string &outputFile);
 
 #endif

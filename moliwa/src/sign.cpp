@@ -73,12 +73,12 @@ static vector<uint8_t> I2OSP(const mpz_class &in, size_t xLen){
 // return value: integer representative of the signature
 static mpz_class RSAPS1(const PKCS::RSAPrivateKey &K, const mpz_class &m){
     // get all the needed values
-    mpz_class n = K.getNReference();
-    mpz_class p = K.getPReference();
-    mpz_class q = K.getQReference();
-    mpz_class qInv = K.getQInvReference();
-    mpz_class dP = K.getDPReference();
-    mpz_class dQ = K.getDQReference();
+    const mpz_class &n = K.getNReference();
+    const mpz_class &p = K.getPReference();
+    const mpz_class &q = K.getQReference();
+    const mpz_class &qInv = K.getQInvReference();
+    const mpz_class &dP = K.getDPReference();
+    const mpz_class &dQ = K.getDQReference();
 
     // message representative cannot be 0 nor can it be greater than n (RSA wouldn't work)
     if (m < 0 || m >= n) {
@@ -166,8 +166,8 @@ static mpz_class RSAPS1(const PKCS::RSAPrivateKey &K, const mpz_class &m){
 // actaul cryptographic primitive used for verfictaion
 mpz_class RSAVP1 (const PKCS::RSAPublicKey &K, const mpz_class &s){
     // get needed values
-    mpz_class n = K.getNReference();
-    mpz_class e = K.getEReference();
+    const mpz_class &n = K.getNReference();
+    const mpz_class &e = K.getEReference();
 
     // signature representative must be positive and can't be greater than (Otherwise RSA won't work)
     if(s < 0 || s >= n)
@@ -226,7 +226,7 @@ vector<uint8_t> EMSA_PKCS1_V1_5_ENCODE_sha256(const vector<uint8_t> &M, size_t e
 vector<uint8_t> RSASSA_PKCS1_V1_5_SIGN(const PKCS::RSAPrivateKey &K, const vector<uint8_t> &M){
 
     // n is used to calculate k
-    mpz_class n = K.getNReference();
+    const mpz_class &n = K.getNReference();
 
     // k is the length of signature
     // it is calculated as length in of bytes n from RSA key
@@ -276,7 +276,7 @@ vector<uint8_t> RSASSA_PKCS1_V1_5_SIGN(const PKCS::RSAPrivateKey &K, const vecto
 // It is a bit of dispatcher that calls some functions above
 bool RSASSA_PKCS1_V1_5_VERIFY(const PKCS::RSAPublicKey &K, const vector<uint8_t> &M, const vector<uint8_t> &S){
     // n used to calculate k
-    mpz_class n = K.getNReference();
+    const mpz_class &n = K.getNReference();
 
 
     // check if signature has length k
