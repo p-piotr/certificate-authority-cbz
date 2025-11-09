@@ -2,26 +2,27 @@
 #include <fstream>
 #include <vector>
 #include <iomanip>
-#include "base64.h"
-#include "asn1.h"
-#include "rsa.h"
-#include "security.h"
+#include "include/base64.h"
+#include "include/asn1.h"
+#include "include/rsa.h"
+#include "include/security.h"
+#include "include/sha.h"
+#include "include/aes.h"
 
-int main(int argc, char** argv) {
-    mpz_initialize_secure();
+using namespace CBZ;
 
-
+void RSA_ASN1_test(int argc, char **argv) {
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " [KEY FILE]" << std::endl;
-        return 1;
+        return;
     }
 
-    RSA::RSAPrivateKey rsa_private_key;
+    CBZ::RSA::RSAPrivateKey rsa_private_key;
     std::cout << "DECODING TEST" << std::endl << std::endl;
 
     try {
         std::string key_file_path = argv[1];
-        rsa_private_key = RSA::RSAPrivateKey(key_file_path);
+        rsa_private_key = CBZ::RSA::RSAPrivateKey(key_file_path);
         rsa_private_key.print();
 
         std::vector<uint8_t> data = { 0x12, 0x34, 0x56 };
@@ -30,7 +31,7 @@ int main(int argc, char** argv) {
         std::cout << ASN1::ASN1Integer::decode(object.value()) << std::endl;
     } catch (const std::exception &e) {
         std::cerr << "Error: " << e.what() << std::endl;
-        return 1;
+        return;
     }
 
     std::cout << std::endl << "----------------------------------------" << std::endl << std::endl;
@@ -69,6 +70,20 @@ int main(int argc, char** argv) {
         std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte) << ' ';
     }
     std::cout << std::dec << std::endl;
+}
 
+void AES_test(int argc, char ** argv) {
+    AES::KEY128 key = { 0x30, 0x30, 0x31, 0x31, 0x32, 0x32, 0x33, 0x33, 0x34, 0x34, 0x35, 0x35, 0x36, 0x36, 0x37, 0x37 };
+    AES::IV iv = { 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30 };
+    std::vector<uint8_t> enc = AES::AES_128_CBC::encrypt(const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>("hello")), 5, key, iv);
+    for (uint8_t b : enc)
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
+
+    std::cout << std::endl;
+}
+
+int main(int argc, char **argv) {
+    mpz_initialize_secure();
+    AES_test(argc, argv);
     return 0;
 }

@@ -1,12 +1,13 @@
 #include <iostream>
 #include <cstdint>
+#include <cstddef>
 #include <vector>
 #include <fstream>
 #include <gmpxx.h>
-#include "debug.h"
-#include "rsa.h"
-#include "asn1.h"
-#include "base64.h"
+#include "include/debug.h"
+#include "include/rsa.h"
+#include "include/asn1.h"
+#include "include/base64.h"
 
 /*
 
@@ -25,7 +26,7 @@ we only support rsaEncryption => algorithm = 1.2.840.113549.1.1.1 && parameters 
 */
 
 // Contains all functionality related to RSA
-namespace RSA {
+namespace CBZ::RSA {
 
     using namespace ASN1;
 
@@ -42,52 +43,49 @@ namespace RSA {
     // Input:
     // @root_object - root ASN1Object representing the whole key
     bool _RSAPrivateKey_format_check(std::shared_ptr<ASN1Object> root_object) {
-        if (root_object->tag() != ASN1Tag::SEQUENCE || root_object->children().size() != 3) {
+        if (root_object->tag() != ASN1Tag::SEQUENCE || root_object->children().size() != 3)
             return false;
-        }
 
         auto version = root_object->children()[0];
-        if (version->tag() != ASN1Tag::INTEGER && version->children().size() != 0) {
+        if (version->tag() != ASN1Tag::INTEGER && version->children().size() != 0)
             return false;
-        }
 
         auto private_key_algorithm = root_object->children()[1];
-        if (private_key_algorithm->tag() != ASN1Tag::SEQUENCE || private_key_algorithm->children().size() != 2) {
+        if (private_key_algorithm->tag() != ASN1Tag::SEQUENCE || private_key_algorithm->children().size() != 2)
             return false;
-        }
 
         auto algorithm = private_key_algorithm->children()[0];
         auto parameters = private_key_algorithm->children()[1];
-        if (algorithm->tag() != ASN1Tag::OBJECT_IDENTIFIER || algorithm->children().size() != 0 || parameters->tag() != ASN1Tag::NULL_TYPE) {
+        if (
+            algorithm->tag() != ASN1Tag::OBJECT_IDENTIFIER 
+            || algorithm->children().size() != 0 
+            || parameters->tag() != ASN1Tag::NULL_TYPE
+        )
             return false;
-        }
 
         auto private_key = root_object->children()[2];
-        if (private_key->tag() != ASN1Tag::OCTET_STRING) {
+        if (private_key->tag() != ASN1Tag::OCTET_STRING)
             return false;
-        }
 
         std::shared_ptr<ASN1Object> pk_sequence;
         if (private_key->children().size() == 0) {
             // decode the private_key according to the PKCS#1 structure, since the ASN.1 parser didn't do it (it's a Primitive OCTET STRING after all)
             pk_sequence = ASN1Parser::decode_all(std::move(private_key->value()), 0);
-            if (pk_sequence->tag() != ASN1Tag::SEQUENCE || pk_sequence->children().size() != 9) {
+            if (pk_sequence->tag() != ASN1Tag::SEQUENCE || pk_sequence->children().size() != 9)
                 return false;
-            }
+
             private_key->_children.push_back(pk_sequence);
         }
         else {
             // maybe it's not the first time we're checking this object, so it's been already decoded - just check if everything is intact
             pk_sequence = private_key->children()[0];
-            if (pk_sequence->tag() != ASN1Tag::SEQUENCE || pk_sequence->children().size() != 9) {
+            if (pk_sequence->tag() != ASN1Tag::SEQUENCE || pk_sequence->children().size() != 9)
                 return false;
-            }
         }
 
         for (auto child : pk_sequence->children()) {
-            if (child->tag() != ASN1Tag::INTEGER || child->children().size() != 0) {
+            if (child->tag() != ASN1Tag::INTEGER || child->children().size() != 0)
                 return false;
-            }
         }
         return true;
     }
@@ -98,14 +96,12 @@ namespace RSA {
     // @root_object - root ASN1Object representing the whole key
     bool _RSAPrivateKey_is_supported(std::shared_ptr<ASN1Object> root_object) {
         auto version = std::static_pointer_cast<ASN1::ASN1Integer>(root_object->children()[0]);
-        if (version->value() != 0) {
+        if (version->value() != 0)
             return false;
-        }
 
         auto algorithm = std::static_pointer_cast<ASN1::ASN1ObjectIdentifier>(root_object->children()[1]->children()[0]);
-        if (algorithm->value() != RSA_ENCRYPTION_OBJECT_IDENTIFIER) {
+        if (algorithm->value() != RSA_ENCRYPTION_OBJECT_IDENTIFIER)
             return false;
-        }
     
         return true;
     }
@@ -119,9 +115,8 @@ namespace RSA {
 
         // read the key file and complain if needed
         std::getline(keyfile, line1);
-        if (line1 != PRIVATE_KEY_HEADER) {
+        if (line1 != PRIVATE_KEY_HEADER)
             throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key header doesn't match the standard");
-        }
 
         // read all lines till the end and append to key_asn1_b64, except the footer
         std::getline(keyfile, line1);
@@ -130,21 +125,19 @@ namespace RSA {
             line1 = line2;
         }
 
-        if (line1 != PRIVATE_KEY_FOOTER) {
+        if (line1 != PRIVATE_KEY_FOOTER)
             throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key footer doesn't match the standard");
-        }
 
         std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
         std::shared_ptr<ASN1Object> asn1_root = ASN1Parser::decode_all(std::move(key_asn1), 0);
 
         // validate the overall key ASN.1 structure
-        if (!_RSAPrivateKey_format_check(asn1_root)) {
+        if (!_RSAPrivateKey_format_check(asn1_root))
             throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key format check failed");
-        }
+
         // validate the key contents (supported algorithm, version), since we are very picky in what we actually support
-        if (!_RSAPrivateKey_is_supported(asn1_root)) {
+        if (!_RSAPrivateKey_is_supported(asn1_root))
             throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key format not supported");
-        }
 
         // RSAPrivateKey sequence - https://www.rfc-editor.org/rfc/rfc8017.html#page-55
         auto pk_sequence = asn1_root->children()[2]->children()[0];

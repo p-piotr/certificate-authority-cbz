@@ -4,8 +4,8 @@ TARGET_DIR=out
 TARGET=$(TARGET_DIR)/poc
 DEBUG_TARGET=$(TARGET_DIR)/poc-debug
 CXX=g++
-CXXFLAGS=-g
-LIBS=-lgmp -lgmpxx
+CXXFLAGS=-g -I$(SRC_DIR)
+LIBS=-lgmp -lgmpxx -lcrypto
 
 all:
 	mkdir -p $(TARGET_DIR)
