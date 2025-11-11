@@ -3,18 +3,38 @@
 #include <iostream>
 #include <cstddef>
 #include <cstdint>
+#include <concepts>
+#include <tuple>
 #include <array>
 #include <openssl/evp.h>
 #include "include/debug.h"
 
 namespace CBZ {
 
+    // Different message digest sizes for various SHA variants
+    typedef std::array<uint8_t, 28> MD224;
+    typedef std::array<uint8_t, 32> MD256;
+
+    // Concept of a hashing function
+    // This essentially works as an interface and is used in other template objects
+    // to check if given typename is compatibile with this, i.e. is a hashing function
+    // (used by HMAC, for instance - see "hmac.h")
+    template <typename _H>
+    concept HashFunction = requires(_H& hash, const uint8_t *data, size_t size) {
+        
+        // First, check if the MD (Message Digest) type has been defined as a size variation
+        // of type std::array<uint8_t, S> and if S > 0
+        typename _H::MD; // Message Digest type (some are declared above, like MD224 or MD256)
+        requires std::same_as<typename _H::MD::value_type, uint8_t>;
+        requires (std::tuple_size_v<typename _H::MD> > 0);
+
+        { _H::DIGEST_SIZE } -> std::convertible_to<size_t>; // Size of a hashing function's digest, in bytes
+        { _H::BLOCK_SIZE } -> std::convertible_to<size_t>; // Size of a hashing function's internal block, in bytes
+        { _H::digest(data, size) } -> std::same_as<typename _H::MD>; // Main functionality of a hash function - digest
+    };
+
     // This namespace contains everything related to SHAs
     namespace SHA {
-
-        // Different message digest sizes for various SHA variants
-        typedef std::array<uint8_t, 28> MD224;
-        typedef std::array<uint8_t, 32> MD256;
 
         // This is a generic SHA digest template function capable 
         // of digesting messages for multiple digest sizes,
@@ -32,23 +52,25 @@ namespace CBZ {
         // SHA224 class
         class SHA224 {
         public:
-            // Get a SHA224 digest
-            //
-            // Input:
-            // @data - data to digest
-            // @size - size of that data
-            static MD224 digest(uint8_t *data, size_t size);
+            typedef MD224 MD;
+            static constexpr size_t BLOCK_SIZE = 64;
+            static constexpr size_t DIGEST_SIZE = std::tuple_size_v<MD>;
+
+            SHA224() = delete;
+            ~SHA224() = delete;
+            static MD224 digest(uint8_t const *data, size_t size);
         };
 
         // SHA256 class
         class SHA256 {
         public:
-            // Get a SHA256 digest
-            //
-            // Input:
-            // @data - data to digest
-            // @size - size of that data
-            static MD256 digest(uint8_t *data, size_t size);
+            typedef MD256 MD;
+            static constexpr size_t BLOCK_SIZE = 64;
+            static constexpr size_t DIGEST_SIZE = 32;
+
+            SHA256() = delete;
+            ~SHA256() = delete;
+            static MD256 digest(uint8_t const *data, size_t size);
         };
 
         // Wrapper class for EVP_MD* object, since it's declared as 'static' in every

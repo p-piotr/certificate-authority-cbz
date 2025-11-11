@@ -141,7 +141,7 @@ namespace CBZ {
             }
 
             // take value by const-reference to avoid overload ambiguity with the rvalue overload
-            ASN1Object(ASN1Tag tag, const std::vector<uint8_t>& value) :
+            ASN1Object(ASN1Tag tag, const std::vector<uint8_t> &value) :
             _tag(tag),
             _length(value.size()),
             _value(value) {

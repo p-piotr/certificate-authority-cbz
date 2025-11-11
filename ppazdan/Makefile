@@ -4,7 +4,7 @@ TARGET_DIR=out
 TARGET=$(TARGET_DIR)/poc
 DEBUG_TARGET=$(TARGET_DIR)/poc-debug
 CXX=g++
-CXXFLAGS=-g -I$(SRC_DIR)
+CXXFLAGS=-I$(SRC_DIR) -std=c++23
 LIBS=-lgmp -lgmpxx -lcrypto
 
 all:

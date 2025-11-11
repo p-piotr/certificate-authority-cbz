@@ -8,6 +8,7 @@
 #include "include/security.h"
 #include "include/sha.h"
 #include "include/aes.h"
+#include "include/hmac.h"
 
 using namespace CBZ;
 
@@ -72,7 +73,7 @@ void RSA_ASN1_test(int argc, char **argv) {
     std::cout << std::dec << std::endl;
 }
 
-void AES_test(int argc, char ** argv) {
+void AES_test(int argc, char **argv) {
     AES::KEY128 key = { 0x30, 0x30, 0x31, 0x31, 0x32, 0x32, 0x33, 0x33, 0x34, 0x34, 0x35, 0x35, 0x36, 0x36, 0x37, 0x37 };
     AES::IV iv = { 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30 };
     std::vector<uint8_t> enc = AES::AES_128_CBC::encrypt(const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>("hello")), 5, key, iv);
@@ -82,8 +83,37 @@ void AES_test(int argc, char ** argv) {
     std::cout << std::endl;
 }
 
+void SHA_test(int argc, char **argv) {
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " [message]" << std::endl;
+        return;
+    }
+    auto digest = CBZ::SHA::SHA224::digest(reinterpret_cast<uint8_t*>(argv[1]), strlen(argv[1]));
+    for (uint8_t b : digest)
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
+    std::cout << std::endl;
+}
+
+void HMAC_test(int argc, char **argv) {
+    auto test = [](std::vector<uint8_t> const &key) {
+        auto derived_key = HMAC<SHA::SHA256>::derive_blocksized_key(key);
+        for (uint8_t b : derived_key)
+            std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b) << ' ';
+        std::cout << std::dec << "    (size=" << derived_key.size() << ')' << std::endl;
+    };
+
+    std::vector<uint8_t> key1 = { 1, 2, 3, 4 };
+    std::vector<uint8_t> key2(63, 0x55);
+    std::vector<uint8_t> key3(64, 0x55);
+    std::vector<uint8_t> key4(65, 0x55);
+    test(key1);
+    test(key2);
+    test(key3);
+    test(key4);
+}
+
 int main(int argc, char **argv) {
     mpz_initialize_secure();
-    AES_test(argc, argv);
+    HMAC_test(argc, argv);
     return 0;
 }

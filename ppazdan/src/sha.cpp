@@ -17,7 +17,7 @@ namespace CBZ::SHA {
     // @message - message to digest
     // @size - size of the message to digest
     template <typename _MD>
-    _MD _SHA_digest_generic(EVP_MD *md, const char *class_name, uint8_t *message, size_t size) {
+    _MD _SHA_digest_generic(EVP_MD *md, const char *class_name, uint8_t const *message, size_t size) {
         EVP_MD_CTX *ctx = nullptr;
         _MD outdigest;
         int ret = 1;
@@ -53,12 +53,12 @@ namespace CBZ::SHA {
 
     // See "sha.h" for further documentation, if needed
 
-    MD224 SHA224::digest(uint8_t *message, size_t size) {
+    MD224 SHA224::digest(uint8_t const *message, size_t size) {
         static _EVP_MD_wrapper sha224(nullptr, "SHA224", nullptr);
         return _SHA_digest_generic<MD224>(sha224.md(), "SHA224", message, size);
     }
 
-    MD256 SHA256::digest(uint8_t *message, size_t size) {
+    MD256 SHA256::digest(uint8_t const *message, size_t size) {
         static _EVP_MD_wrapper sha256(nullptr, "SHA256", nullptr);
         return _SHA_digest_generic<MD256>(sha256.md(), "SHA256", message, size);
     }
