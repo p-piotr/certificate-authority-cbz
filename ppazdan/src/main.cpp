@@ -8,7 +8,7 @@
 #include "include/security.h"
 #include "include/sha.h"
 #include "include/aes.h"
-#include "include/hmac.h"
+#include "include/hmac.hpp"
 
 using namespace CBZ;
 
