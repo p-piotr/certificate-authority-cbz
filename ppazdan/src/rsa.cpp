@@ -8,6 +8,7 @@
 #include "include/rsa.h"
 #include "include/asn1.h"
 #include "include/base64.h"
+#include "include/pkcs.h"
 
 /*
 
@@ -30,16 +31,9 @@ namespace CBZ::RSA {
 
     using namespace ASN1;
 
-    // Header and footer of a valid PKCS#8 private key
-    std::string PRIVATE_KEY_HEADER = "-----BEGIN PRIVATE KEY-----";
-    std::string PRIVATE_KEY_FOOTER = "-----END PRIVATE KEY-----";
-
-    // RSA Encryption OBJECT IDENTIFIER - look at the beginning of this file
-    std::string RSA_ENCRYPTION_OBJECT_IDENTIFIER = "1.2.840.113549.1.1.1";
-
-
     // Checks if the ASN.1 structure of the RSA private key is correct
     // Additionally decodes the RSAPrivateKey structure inside the OCTET STRING, if hasn't been done yet
+    //
     // Input:
     // @root_object - root ASN1Object representing the whole key
     bool _RSAPrivateKey_format_check(std::shared_ptr<ASN1Object> root_object) {
@@ -47,24 +41,24 @@ namespace CBZ::RSA {
             return false;
 
         auto version = root_object->children()[0];
+        auto private_key_algorithm = root_object->children()[1];
+        auto private_key = root_object->children()[2];
+
         if (version->tag() != ASN1Tag::INTEGER && version->children().size() != 0)
             return false;
-
-        auto private_key_algorithm = root_object->children()[1];
         if (private_key_algorithm->tag() != ASN1Tag::SEQUENCE || private_key_algorithm->children().size() != 2)
+            return false;
+        if (private_key->tag() != ASN1Tag::OCTET_STRING)
             return false;
 
         auto algorithm = private_key_algorithm->children()[0];
         auto parameters = private_key_algorithm->children()[1];
+
         if (
             algorithm->tag() != ASN1Tag::OBJECT_IDENTIFIER 
             || algorithm->children().size() != 0 
             || parameters->tag() != ASN1Tag::NULL_TYPE
         )
-            return false;
-
-        auto private_key = root_object->children()[2];
-        if (private_key->tag() != ASN1Tag::OCTET_STRING)
             return false;
 
         std::shared_ptr<ASN1Object> pk_sequence;
@@ -90,6 +84,67 @@ namespace CBZ::RSA {
         return true;
     }
 
+    // Checks if the ASN.1 structure of the encrypted RSA private key is correct
+    //
+    // Input:
+    // @root_object - root ASN1Object representing the whole key
+    bool _EncryptedRSAPrivateKey_format_check(std::shared_ptr<ASN1Object> root_object) {
+        if (root_object->tag() != ASN1Tag::SEQUENCE || root_object->children().size() != 2)
+            return false;
+        
+        auto encryption_algorithm = root_object->children()[0];
+        auto encrypted_data = root_object->children()[1];
+
+        if (encryption_algorithm->tag() != ASN1Tag::SEQUENCE || encryption_algorithm->children().size() != 2)
+            return false;
+        if (encrypted_data->tag() != ASN1Tag::OCTET_STRING)
+            return false;
+
+        auto algorithm = encryption_algorithm->children()[0];
+        auto parameters = encryption_algorithm->children()[1];
+
+        if (algorithm->tag() != ASN1Tag::OBJECT_IDENTIFIER)
+            return false;
+        if (parameters->tag() != ASN1Tag::SEQUENCE || parameters->children().size() != 2)
+            return false;
+
+        auto 
+            kdf = parameters->children()[0],
+            encryption_scheme = parameters->children()[1];
+
+        if (kdf->tag() != ASN1Tag::SEQUENCE || kdf->children().size() != 2)
+            return false;
+        if (encryption_scheme->tag() != ASN1Tag::SEQUENCE || encryption_scheme->children().size() != 2)
+            return false;
+
+        auto
+            kdf_oid = kdf->children()[0],
+            kdf_oid_params = kdf->children()[1];
+        
+        if (kdf_oid->tag() != ASN1Tag::OBJECT_IDENTIFIER)
+            return false;
+        if (kdf_oid_params->tag() != ASN1Tag::SEQUENCE || kdf_oid_params->children().size() != 3)
+            return false;
+        
+        auto
+            salt = kdf_oid_params->children()[0],
+            iteration_count = kdf_oid_params->children()[1],
+            prf = kdf_oid_params->children()[2];
+    }
+
+    // Prints the private key (use only for debugging purposes)
+    void RSAPrivateKey::print() {
+        std::cout << "Version: " << version() << std::endl;
+        std::cout << "Modulus (n): " << n() << std::endl;
+        std::cout << "Public Exponent (e): " << e() << std::endl;
+        std::cout << "Private Exponent (d): " << d() << std::endl;
+        std::cout << "Prime 1 (p): " << p() << std::endl;
+        std::cout << "Prime 2 (q): " << q() << std::endl;
+        std::cout << "Exponent1 (d mod (p-1)): " << exponent1() << std::endl;
+        std::cout << "Exponent2 (d mod (q-1)): " << exponent2() << std::endl;
+        std::cout << "Coefficient (q^-1 mod p): " << coefficient() << std::endl;
+    }
+
     // Checks if the RSA private key is supported (version, algorithm OID)
     // Currently only version 0 and rsaEncryption algorithm are supported
     // Input:
@@ -100,23 +155,28 @@ namespace CBZ::RSA {
             return false;
 
         auto algorithm = std::static_pointer_cast<ASN1::ASN1ObjectIdentifier>(root_object->children()[1]->children()[0]);
-        if (algorithm->value() != RSA_ENCRYPTION_OBJECT_IDENTIFIER)
+        if (algorithm->value() != PKCS::OID::rsaEncryption)
             return false;
     
         return true;
     }
 
-    // Loads an RSA private key from file
+    // Loads a private key from file
+    // This variant may only parse unencryptd keys
+    //
     // Input:
-    // @filepath - path to the file containing the RSA private key in PKCS#8
+    // @filepath - path to the file containing the private key in PKCS#8
     RSAPrivateKey RSAPrivateKey::from_file(std::string const &filepath) {
         std::ifstream keyfile(filepath);
         std::string line1, line2, key_asn1_b64 = "";
 
         // read the key file and complain if needed
         std::getline(keyfile, line1);
-        if (line1 != PRIVATE_KEY_HEADER)
+        if (line1 != PKCS::Labels::privateKeyHeader) {
+            if (line1 == PKCS::Labels::encryptedPrivateKeyHeader)
+                throw std::runtime_error("[RSAPrivateKey::from_file] Cannot open encrypted RSA private key without a passphrase");
             throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key header doesn't match the standard");
+        }
 
         // read all lines till the end and append to key_asn1_b64, except the footer
         std::getline(keyfile, line1);
@@ -125,7 +185,7 @@ namespace CBZ::RSA {
             line1 = line2;
         }
 
-        if (line1 != PRIVATE_KEY_FOOTER)
+        if (line1 != PKCS::Labels::privateKeyFooter)
             throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key footer doesn't match the standard");
 
         std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
@@ -173,5 +233,29 @@ namespace CBZ::RSA {
             std::move(rsa_params[7]),
             std::move(rsa_params[8])
         );
+    }
+    
+    // Checks whether given file represents an encrypted private key
+    // This function only checks if the header and footer are valid
+    // for performance purposes - if the file turns out to be corrupted, it'll be discovered
+    // later on, while trying to parse
+    //
+    // Input:
+    // @filepath - path to the file assumed to contain the encrypted private key
+    bool is_key_encrypted(std::string const &filepath) {
+        std::ifstream keyfile(filepath);
+        std::string line1, line2;
+
+        std::getline(keyfile, line1);
+        if (line1 != PKCS::Labels::encryptedPrivateKeyHeader)
+            return false;
+
+        while (std::getline(keyfile, line2))
+            line1 = line2;
+
+        if (line1 != PKCS::Labels::encryptedPrivateKeyFooter)
+            return false;
+
+        return true;
     }
 }

@@ -13,18 +13,18 @@ namespace CBZ {
     // Namespace containing RSA functionality
     namespace RSA {
 
-        // Header and footer of a valid PKCS#8 private key
-        extern std::string PRIVATE_KEY_HEADER;
-        extern std::string PRIVATE_KEY_FOOTER;
-
-        // RSA Encryption OBJECT IDENTIFIER value
-        extern std::string RSA_ENCRYPTION_OBJECT_IDENTIFIER;
-
         // Checks if the ASN.1 structure of the RSA private key is correct
+        // Additionally decodes the RSAPrivateKey structure inside the OCTET STRING, if hasn't been done yet
         //
         // Input:
         // @root_object - root ASN1Object representing the whole key
         bool _RSAPrivateKey_format_check(std::shared_ptr<ASN1::ASN1Object> root_object);
+
+        // Checks if the ASN.1 structure of the encrypted RSA private key is correct
+        //
+        // Input:
+        // @root_object - root ASN1Object representing the whole key
+        bool _EncryptedRSAPrivateKey_format_check(std::shared_ptr<ASN1::ASN1Object> root_object);
 
         // Checks if the RSA private key is supported (version, algorithm OID)
         // Currently only version 0 and rsaEncryption algorithm are supported
@@ -32,6 +32,15 @@ namespace CBZ {
         // Input:
         // @root_object - root ASN1Object representing the whole key
         bool _RSAPrivateKey_is_supported(std::shared_ptr<ASN1::ASN1Object> root_object);
+
+        // Checks whether given file represents an encrypted private key
+        // This function only checks if the header and footer are valid
+        // for performance purposes - if the file turns out to be corrupted, it'll be discovered
+        // later on, while trying to parse
+        //
+        // Input:
+        // @filepath - path to the file assumed to contain the encrypted private key
+        bool is_key_encrypted(std::string const &filepath);
 
         // Object representing an RSA private key (PKCS#1 compatibile)
         class RSAPrivateKey {
@@ -63,8 +72,12 @@ namespace CBZ {
             }
 
             // Constructor loading key from file
+            // Can only parse unencrypted keys
             RSAPrivateKey(std::string const &filepath)
                 : RSAPrivateKey(from_file(filepath)) {}
+
+            RSAPrivateKey(std::string const &filepath, std::string const &passphrase)
+                : RSAPrivateKey(from_file(filepath, passphrase)) {}
 
             inline mpz_class version() const {
                 return _version;
@@ -102,23 +115,24 @@ namespace CBZ {
                 return _coefficient;
             }
 
-            void print() {
-                std::cout << "Version: " << version() << std::endl;
-                std::cout << "Modulus (n): " << n() << std::endl;
-                std::cout << "Public Exponent (e): " << e() << std::endl;
-                std::cout << "Private Exponent (d): " << d() << std::endl;
-                std::cout << "Prime 1 (p): " << p() << std::endl;
-                std::cout << "Prime 2 (q): " << q() << std::endl;
-                std::cout << "Exponent1 (d mod (p-1)): " << exponent1() << std::endl;
-                std::cout << "Exponent2 (d mod (q-1)): " << exponent2() << std::endl;
-                std::cout << "Coefficient (q^-1 mod p): " << coefficient() << std::endl;
-            }
+            // Prints the private key (use only for debugging purposes)
+            void print();
 
-            // Loads an RSA private key from file
+            // Loads a private key from file
+            // This variant may only parse unencryptd keys
             //
             // Input:
-            // @filepath - path to the file containing the RSA private key in PKCS#8
+            // @filepath - path to the file containing the private key in PKCS#8
             static RSAPrivateKey from_file(std::string const &filepath);
+
+            // Loads a private key from file
+            // This variant may parse either encrypted or unencrypted keys
+            // If used for unencrypted key, the function behaves exactly like
+            // the overload specifically for unencrypted keys (the passphrase is omitted)
+            // Input:
+            // @filepath - path to the file containing the private key in PKCS#8
+            // @passphrase - passphrase used when the key turns out to be encrypted
+            static RSAPrivateKey from_file(std::string const &filepath, std::string const &passphrase);
         };
     }
 }

@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <concepts>
 #include <iostream>
 #include <gmpxx.h>
+#include <type_traits>
 #include "debug.h"
 
 namespace CBZ {
@@ -13,41 +15,69 @@ namespace CBZ {
     and I really didn't give a fuck to create a separate .cpp file for them
     */
 
-    // Securely zeroes memory at given pointer
+    // Helper template for sizeof, since the compiler
+    // doesn't like "sizeof(void)" - hence an explicit value assignment
+    template <typename _T>
+    constexpr size_t _sizeof_helper() {
+        if constexpr (std::is_void_v<_T>)
+            return 1;
+        else
+            return sizeof(_T);
+    }
+
+    // Securely zeroes memory at given pointer _T*, 
+    // Note: no_of_freed_bytes = @size * sizeof(_T)
     // Beware! this function does NOT free the memory after zeroing!
     //
     // Input:
-    // @ptr - pointer to memory
-    // @size - size of memory (in bytes)
-    inline void secure_zero_memory(void *ptr, size_t size) {
+    // @ptr - pointer to memory of given type
+    // @size - number of contiguous elements to zero-out (size() for containers)
+    template <typename _T>
+    inline void secure_zero_memory(_T *ptr, size_t size) {
+        constexpr size_t t_s = _sizeof_helper<_T>();
+        size_t total_size = size * t_s;
         if (ptr != nullptr) {
             // zero the memory before freeing
-            volatile uint8_t *vptr = static_cast<volatile uint8_t*>(ptr);
-            for (size_t i = 0; i < size; i++) {
+            volatile uint8_t *vptr = reinterpret_cast<volatile uint8_t*>(ptr);
+            for (size_t i = 0; i < total_size; i++) {
                 vptr[i] = 0;
             }
 
             #ifdef SECURE_FREE_DEBUG
-            std::cerr << "[secure_free] Cleared " << size << " bytes at " << ptr << std::endl;
+            std::cerr << "[secure_free] Cleared " << total_size << " bytes at " << reinterpret_cast<void*>(ptr) << std::endl;
             #endif // SECURE_FREE_DEBUG
         }
     }
 
-    // Securely zeroes and deletes the vector
+    // Concept for an object applicable to be securely deleted
+    // it must have the data() and size() functions defined
+    template <typename _T>
+    concept SecureDeleteContainer = requires(_T &c) {
+        typename _T::value_type;
+        { c.data() } -> std::convertible_to<void*>;
+        { c.size() } -> std::convertible_to<size_t>;
+    };
+
+    // Securely zeroes and deletes the container
     //
     // Input:
-    // @ptr - raw pointer to the vector
-    inline void secure_delete_vector(std::vector<uint8_t> *ptr) {
-        secure_zero_memory(ptr->data(), ptr->size());
+    // @ptr - raw pointer to the container object
+    template <SecureDeleteContainer _Container>
+    inline void secure_delete(_Container *ptr) {
+        constexpr size_t v_s = _sizeof_helper<typename _Container::value_type>();
+        secure_zero_memory(ptr->data(), ptr->size() * v_s);
         delete ptr;
     }
 
+
     // Securely zeroes and frees the memory
+    // Note: no_of_freed_bytes = size * sizeof(_T)
     //
     // Input:
     // @ptr - pointer to the memory
-    // @size - size of memory (in bytes)
-    inline void secure_free_memory(void *ptr, size_t size) {
+    // @size - number of contiguous elements to zero-out (size() for containers)
+    template <typename _T>
+    inline void secure_free_memory(_T *ptr, size_t size) {
         secure_zero_memory(ptr, size);
         free(ptr);
     }
@@ -58,7 +88,7 @@ namespace CBZ {
         mp_set_memory_functions(
             nullptr, 
             nullptr, 
-            secure_free_memory
+            secure_free_memory<void>
         );
     }
 }

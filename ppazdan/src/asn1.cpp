@@ -13,7 +13,7 @@
 namespace CBZ::ASN1 {
 
     // Converts an ASN.1 tag (enum) to string
-    const char* ASN1Parser::tag_to_string(ASN1Tag tag) {
+    constexpr const char* tag_to_string(ASN1Tag tag) {
         switch (tag) {
             case (INTEGER): return "INTEGER";
             case (BIT_STRING): return "BIT_STRING";
@@ -56,7 +56,7 @@ namespace CBZ::ASN1 {
 
         return std::shared_ptr<std::vector<uint8_t>>(
             new std::vector<uint8_t>(std::move(encoded_object)), 
-            secure_delete_vector
+            secure_delete<std::vector<uint8_t>>
         );
     }
 
@@ -104,7 +104,7 @@ namespace CBZ::ASN1 {
 
         return std::shared_ptr<std::vector<uint8_t>>(
             new std::vector<uint8_t>(std::move(encoded_root_object)),
-            secure_delete_vector
+            secure_delete<std::vector<uint8_t>>
         );
     }
 
@@ -175,7 +175,7 @@ namespace CBZ::ASN1 {
     ) {
         std::shared_ptr<std::vector<uint8_t>> data_t(
             new std::vector<uint8_t>(std::move(data)),
-            secure_delete_vector
+            secure_delete<std::vector<uint8_t>>
         );
         return decode_all(data_t, offset);
     }
@@ -212,7 +212,7 @@ namespace CBZ::ASN1 {
             output += '\t';
 
         output += "TYPE: ";
-        output += ASN1Parser::tag_to_string(_tag);
+        output += tag_to_string(_tag);
         // output value in format depending on the tag
         std::cout << output << std::endl;
         for (auto child : _children)

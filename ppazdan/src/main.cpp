@@ -14,7 +14,7 @@ using namespace CBZ;
 
 void RSA_ASN1_test(int argc, char **argv) {
     if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " [KEY FILE]" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " KEY_FILE [KEY_FILE2]" << std::endl;
         return;
     }
 
@@ -71,6 +71,15 @@ void RSA_ASN1_test(int argc, char **argv) {
         std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte) << ' ';
     }
     std::cout << std::dec << std::endl;
+
+    try {
+        std::string key_file_path = argv[2];
+        bool is_encrypted = CBZ::RSA::is_key_encrypted(key_file_path);
+        std::cout << std::boolalpha << is_encrypted << std::noboolalpha << std::endl;
+    } catch  (const std::exception &e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return;
+    }
 }
 
 void AES_test(int argc, char **argv) {
@@ -85,24 +94,32 @@ void AES_test(int argc, char **argv) {
 
 void SHA_test(int argc, char **argv) {
     if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " [message]" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " MESSAGE" << std::endl;
         return;
     }
-    auto digest = CBZ::SHA::SHA224::digest(reinterpret_cast<uint8_t*>(argv[1]), strlen(argv[1]));
+    auto digest = CBZ::SHA::SHA256::digest(reinterpret_cast<uint8_t*>(argv[1]), strlen(argv[1]));
     for (uint8_t b : digest)
         std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
     std::cout << std::endl;
 }
 
 void HMAC_test(int argc, char **argv) {
-    auto test = [](std::vector<uint8_t> const &key) {
-        auto derived_key = HMAC<SHA::SHA256>::derive_blocksized_key(key);
-        for (uint8_t b : derived_key)
+    auto print_vector = [&](std::vector<uint8_t> const &v) {
+        for (uint8_t b : v)
             std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b) << ' ';
-        std::cout << std::dec << "    (size=" << derived_key.size() << ')' << std::endl;
+        std::cout << std::dec << "    (size=" << v.size() << ')' << std::endl;
+    };
+    auto print_array = [&]<size_t _N>(std::array<uint8_t, _N> const &v) {
+        for (uint8_t b : v)
+            std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b) << ' ';
+        std::cout << std::dec << "    (size=" << v.size() << ')' << std::endl;
+    };
+    auto test = [&](std::vector<uint8_t> const &key) {
+        auto derived_key = HMAC<SHA::SHA256>::derive_blocksized_key(key);
+        print_array(derived_key);
     };
 
-    std::vector<uint8_t> key1 = { 1, 2, 3, 4 };
+    std::vector<uint8_t> key1 = { 0x55 };
     std::vector<uint8_t> key2(63, 0x55);
     std::vector<uint8_t> key3(64, 0x55);
     std::vector<uint8_t> key4(65, 0x55);
@@ -110,10 +127,14 @@ void HMAC_test(int argc, char **argv) {
     test(key2);
     test(key3);
     test(key4);
+
+    std::string message = "hello";
+    auto hmac = HMAC<SHA::SHA256>::digest(reinterpret_cast<uint8_t*>(message.data()), message.size(), key1);   
+    print_array(hmac);
 }
 
 int main(int argc, char **argv) {
     mpz_initialize_secure();
-    HMAC_test(argc, argv);
+    RSA_ASN1_test(argc, argv);
     return 0;
 }
