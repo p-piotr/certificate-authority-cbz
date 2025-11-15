@@ -4,7 +4,7 @@
 #include <concepts>
 #include <iostream>
 #include <gmpxx.h>
-#include <type_traits>
+// #include <type_traits>
 #include "debug.h"
 
 namespace CBZ {
@@ -31,11 +31,11 @@ namespace CBZ {
     //
     // Input:
     // @ptr - pointer to memory of given type
-    // @size - number of contiguous elements to zero-out (size() for containers)
+    // @no_elements - number of contiguous elements to zero-out (size() for containers)
     template <typename _T>
-    inline void secure_zero_memory(_T *ptr, size_t size) {
+    inline void secure_zero_memory(_T *ptr, size_t no_elements) {
         constexpr size_t t_s = _sizeof_helper<_T>();
-        size_t total_size = size * t_s;
+        size_t total_size = no_elements * t_s;
         if (ptr != nullptr) {
             // zero the memory before freeing
             volatile uint8_t *vptr = reinterpret_cast<volatile uint8_t*>(ptr);

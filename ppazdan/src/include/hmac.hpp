@@ -5,15 +5,32 @@
 #include <cstddef>
 #include <vector>
 #include "include/sha.h"
-#include "include/security.h"
+#include "include/security.hpp"
 
 namespace CBZ {
+
+    template <typename _PRF>
+    concept PseudoRandomFunction = requires(
+        _PRF &prf,
+        uint8_t const *m,
+        size_t msize,
+        uint8_t const *k,
+        size_t ksize,
+        uint8_t *od
+    ) {
+        { _PRF::KEY_SIZE } -> std::convertible_to<size_t>;
+        { _PRF::DIGEST_SIZE } -> std::convertible_to<size_t>;
+
+        { _PRF::digest(m, msize, k, ksize, od) } -> std::same_as<void>;
+    };
 
     // Class describing a HMAC function template, based on given HashFunction object (interface implementation)
     template <HashFunction _H>
     class HMAC {
     public:
-        typedef std::array<uint8_t, _H::BLOCK_SIZE> KEY; // Derived key used with the HMAC is always of internal block size
+        static const constexpr size_t KEY_SIZE = _H::BLOCK_SIZE;
+        static const constexpr size_t DIGEST_SIZE = _H::DIGEST_SIZE;
+
         // This class is not intended to be instantianized
         HMAC() = delete;
         ~HMAC() = delete;
@@ -26,96 +43,127 @@ namespace CBZ {
         //
         // Input:
         // @key: Key to derive from, as a byte vector
-        static KEY derive_blocksized_key(std::vector<uint8_t> const &key) {
-            constexpr size_t derived_key_size = _H::BLOCK_SIZE;
-            std::array<uint8_t, derived_key_size> derived_key; // decltype(std::array<uint8_t, derived_key_size>) = decltype(_H::MD)
-
-            if (key.size() == derived_key_size) {
-                std::copy_n(key.begin(), derived_key_size, derived_key.begin());
-                return derived_key;
-            }
-
-            if (key.size() < derived_key_size) {
-                std::copy_n(key.begin(), key.size(), derived_key.begin());
-                std::fill_n(
-                    derived_key.begin() + key.size(),
-                    derived_key_size - key.size(),
-                    0
+        static void derive_blocksized_key(
+            uint8_t const *input_key,
+            size_t input_key_size,
+            uint8_t *derived_key
+        ) {
+            if (input_key_size == KEY_SIZE) {
+                std::memcpy(
+                    derived_key,
+                    const_cast<uint8_t*>(input_key),
+                    KEY_SIZE
                 );
-                return derived_key;
+                return;
             }
 
-            constexpr const size_t digest_size = _H::DIGEST_SIZE;
-            typename _H::MD hashed_key = _H::digest(key.data(), key.size());
-            std::copy_n(hashed_key.begin(), digest_size, derived_key.begin());
-            std::fill_n(
-                derived_key.begin() + digest_size,
-                derived_key_size - digest_size,
-                0
+            if (input_key_size < KEY_SIZE) {
+                std::memcpy(
+                    derived_key,
+                    const_cast<uint8_t*>(input_key),
+                    input_key_size
+                );
+                std::memset(
+                    derived_key + input_key_size,
+                    0,
+                    KEY_SIZE - input_key_size
+                );
+                return;
+            }
+
+            _H::digest(input_key, input_key_size, derived_key);
+            std::memset(
+                const_cast<uint8_t*>(derived_key + DIGEST_SIZE),
+                0,
+                KEY_SIZE - DIGEST_SIZE
             );
-            secure_zero_memory(hashed_key.data(), _H::DIGEST_SIZE);
-            return derived_key;
         }
 
-        static _H::MD digest(uint8_t *message, size_t size, std::vector<uint8_t> const &key) {
+        // Calculates the HMAC
+        //
+        // Input:
+        // @m - message
+        // @msize - message size (in bytes)
+        // @k - key
+        // @ksize - key size (in bytes)
+        // @od - out pointer to buffer storing the calculated HMAC
+        //       this buffer MUST be of size at least DIGEST_SIZE
+        static void digest(
+            uint8_t const *m,
+            size_t msize,
+            uint8_t const *k,
+            size_t ksize,
+            uint8_t *od
+        ) {
             // small lambda function to perform XOR of every byte of arbitralily large array against a given value 'v'
-            auto _xor_v = []<size_t _N>(std::array<uint8_t, _N> const &arr, uint8_t v) {
-                auto arr_copy = arr;
-                for (size_t i = 0; i < _N; i++)
-                    arr_copy[i] ^= v;
-                return arr_copy;
+            auto _xor_v = [](uint8_t *ar, size_t ar_size, uint8_t v) {
+                for (size_t i = 0; i < ar_size; i++)
+                    ar[i] ^= v;
             };
 
-            KEY derived_key = derive_blocksized_key(key);
-            KEY derived_key_opad = _xor_v(derived_key, 0x5C), derived_key_ipad = _xor_v(derived_key, 0x36);
+            uint8_t 
+                derived_key[KEY_SIZE],
+                derived_key_opad[KEY_SIZE],
+                derived_key_ipad[KEY_SIZE],
+                inner_hash[DIGEST_SIZE];
+
+            derive_blocksized_key(k, ksize, derived_key);
+            std::memcpy(
+                derived_key_opad,
+                derived_key,
+                KEY_SIZE
+            );
+            _xor_v(derived_key_opad, KEY_SIZE, 0x5C);
+            std::memcpy(
+                derived_key_ipad,
+                derived_key,
+                KEY_SIZE
+            );
+            _xor_v(derived_key_ipad, KEY_SIZE, 0x36);
+
             std::vector<uint8_t> concat_message;
             // in concat_message we will store:
-            // (K' ^ ipad) || m                           - sizeof(_H::BLOCK_SIZE) + size
-            // (K' ^ opad) || H((K' ^ ipad) || m))        - sizeof(_H::BLOCK_SIZE) + sizeof(_H::MD)
+            // (K' ^ ipad) || m                           - KEY_SIZE + msize
+            // (K' ^ opad) || H((K' ^ ipad) || m))        - KEY_SIZE + DIGEST_SIZE
             // so we can reserve the bigger size
             concat_message.reserve(
-                size > sizeof(typename _H::MD) ? 
-                sizeof(_H::BLOCK_SIZE) + size 
-                : sizeof(_H::BLOCK_SIZE) + sizeof(typename _H::MD)
+                msize > DIGEST_SIZE ? 
+                KEY_SIZE + msize 
+                : KEY_SIZE + DIGEST_SIZE
             );
 
-            concat_message.insert(
-                concat_message.cend(), 
-                derived_key_ipad.begin(), 
-                derived_key_ipad.end()
+            concat_message.resize(KEY_SIZE + msize);
+            std::memcpy(
+                concat_message.data(),
+                derived_key_ipad,
+                KEY_SIZE
             );
-            concat_message.insert(
-                concat_message.cend(),
-                message,
-                message + size
+            std::memcpy(
+                concat_message.data() + KEY_SIZE,
+                m,
+                msize
             );
-            typename _H::MD 
-                inner_hash = _H::digest(concat_message.data(), concat_message.size());
+            _H::digest(concat_message.data(), concat_message.size(), inner_hash);
             
-            secure_zero_memory(derived_key.data(), derived_key.size());
-            secure_zero_memory(derived_key_ipad.data(), derived_key_ipad.size());
-            secure_zero_memory(concat_message.data(), concat_message.size());
+            secure_zero_memory(derived_key, KEY_SIZE);
+            secure_zero_memory(derived_key_ipad, KEY_SIZE);
 
-            concat_message.resize(0);
-            concat_message.insert(
-                concat_message.cend(),
-                derived_key_opad.begin(),
-                derived_key_opad.end()
+            concat_message.resize(KEY_SIZE + DIGEST_SIZE);
+            std::memcpy(
+                concat_message.data(),
+                derived_key_opad,
+                KEY_SIZE
             );
-            concat_message.insert(
-                concat_message.cend(),
-                inner_hash.begin(),
-                inner_hash.end()
+            std::memcpy(
+                concat_message.data() + KEY_SIZE,
+                inner_hash,
+                DIGEST_SIZE
             );
+            _H::digest(concat_message.data(), concat_message.size(), od);
 
-            secure_zero_memory(derived_key_opad.data(), derived_key_opad.size());
-            secure_zero_memory(inner_hash.data(), inner_hash.size());
-
-            typename _H::MD result_hmac = _H::digest(concat_message.data(), concat_message.size());
-
+            secure_zero_memory(derived_key_opad, KEY_SIZE);
+            secure_zero_memory(inner_hash, DIGEST_SIZE);
             secure_zero_memory(concat_message.data(), concat_message.size());
-
-            return result_hmac;
         }
     };
 }

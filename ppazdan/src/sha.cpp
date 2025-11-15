@@ -14,12 +14,18 @@ namespace CBZ::SHA {
     // @md - EVP_MD* message digest object used internally by OpenSSL
     // @class_name - name of the class implementing this template - used
     //               only to print clear error debug logs
-    // @message - message to digest
-    // @size - size of the message to digest
-    template <typename _MD>
-    _MD _SHA_digest_generic(EVP_MD *md, const char *class_name, uint8_t const *message, size_t size) {
+    // @m - message to digest
+    // @s - size of the message to digest
+    // @od - pointer to the buffer storing digest; it MUST
+    //               be able to contain at least DIGEST_SIZE bytes
+    void _SHA_digest_generic(
+        EVP_MD *md,
+        char const *class_name,
+        uint8_t const *m,
+        size_t s,
+        uint8_t *od
+    ) {
         EVP_MD_CTX *ctx = nullptr;
-        _MD outdigest;
         int ret = 1;
 
         ctx = EVP_MD_CTX_new();
@@ -32,10 +38,10 @@ namespace CBZ::SHA {
         if (!EVP_DigestInit_ex(ctx, md, nullptr))
             goto err;
 
-        if (!EVP_DigestUpdate(ctx, message, size))
+        if (!EVP_DigestUpdate(ctx, m, s))
             goto err;
 
-        if (!EVP_DigestFinal_ex(ctx, outdigest.begin(), nullptr))
+        if (!EVP_DigestFinal_ex(ctx, od, nullptr))
             goto err;
 
         ret = 0;
@@ -47,19 +53,17 @@ namespace CBZ::SHA {
             err_msg << "[" << class_name << "::digest] Error while digesting";
             throw std::runtime_error(err_msg.str());
         }
-        
-        return outdigest;
     }
 
     // See "sha.h" for further documentation, if needed
 
-    MD224 SHA224::digest(uint8_t const *message, size_t size) {
+    void SHA224::digest(uint8_t const *m, size_t s, uint8_t *od) {
         static _EVP_MD_wrapper sha224(nullptr, "SHA224", nullptr);
-        return _SHA_digest_generic<MD224>(sha224.md(), "SHA224", message, size);
+        _SHA_digest_generic(sha224.md(), "SHA224", m, s, od);
     }
 
-    MD256 SHA256::digest(uint8_t const *message, size_t size) {
+    void SHA256::digest(uint8_t const *m, size_t s, uint8_t *od) {
         static _EVP_MD_wrapper sha256(nullptr, "SHA256", nullptr);
-        return _SHA_digest_generic<MD256>(sha256.md(), "SHA256", message, size);
+        _SHA_digest_generic(sha256.md(), "SHA256", m, s, od);
     }
 }

@@ -6,7 +6,7 @@
 #include <memory>
 #include <gmpxx.h>
 #include "include/debug.h"
-#include "include/security.h"
+#include "include/security.hpp"
 
 namespace CBZ {
 
@@ -27,6 +27,7 @@ namespace CBZ {
 
         // Chosen set of ASN.1 tags
         enum ASN1Tag {
+            ANY = 0x00,
             INTEGER = 0x02,
             BIT_STRING = 0x03,
             OCTET_STRING = 0x04,
@@ -47,23 +48,41 @@ namespace CBZ {
         // Look for definition below
         class ASN1Object;
 
-        // Responsible for parsing ASN.1
-        namespace ASN1Parser {
+        class _ASN1Parser_helpers {
+        public:
+            // Calculates the size of 'length' field based on provided size
+            //
+            // Input:
+            // @size - size of object's data, in bytes
+            static size_t calculate_length_field_size(size_t size);
 
+            // This function takes size of object's data and returns an encoded length field
+            //
+            // Input:
+            // @size - size of object's data, in bytes
+            static std::vector<uint8_t> encode_length_field(size_t size);
+
+            _ASN1Parser_helpers() = delete;
+            ~_ASN1Parser_helpers() = delete;
+        };
+
+        // Responsible for parsing ASN.1
+        class ASN1Parser {
+        public:
             // This function encodes a singular ASN.1 object into binary form
             // Note: this function can only encode an object with value set, otherwise
             // it throws an exception
             //
             // Input:
             // @object - ASN1Object to encode
-            std::shared_ptr<std::vector<uint8_t>> encode(std::shared_ptr<ASN1Object> object);
+            static std::shared_ptr<std::vector<uint8_t>> encode(std::shared_ptr<ASN1Object> object);
 
             // This function encodes an ASN.1 object (and its children recursively) into binary form
             // returning a byte vector
             //
             // Input:
             // @root_object - root ASN1Object to encode
-            std::shared_ptr<std::vector<uint8_t>> encode_all(std::shared_ptr<ASN1Object> root_object);
+            static std::shared_ptr<std::vector<uint8_t>> encode_all(std::shared_ptr<ASN1Object> root_object);
 
             // This function parses ASN.1 binary data and returns a parsed element 
             // (does not parse recursively - see ASN1Parser::decode_all)
@@ -76,7 +95,7 @@ namespace CBZ {
             // @copy_value - boolean specifying if data is to be copied to the returned 
             //               object - set to "true" only if you know the object has 
             //               no children for performance
-            std::shared_ptr<ASN1Object> decode(
+            static std::shared_ptr<ASN1Object> decode(
                 std::shared_ptr<std::vector<uint8_t>> data, 
                 size_t offset, 
                 bool copy_value
@@ -86,10 +105,10 @@ namespace CBZ {
             //
             // Input:
             // @data - shared pointer to byte vector containing ASN.1 binary data 
-            // as an rvalue - this buffer will be managed by ASN1ObjectData instances 
+            // as an rvalue - this buffer will be managed by ASN1Object instances 
             // and safely destroyed when no longer needed (memory zeroed before deallocation)
             // @offset - offset in @data to start from
-            std::shared_ptr<ASN1Object> decode_all(std::vector<uint8_t> &&data, size_t offset=0);
+            static std::shared_ptr<ASN1Object> decode_all(std::vector<uint8_t> &&data, size_t offset=0);
 
             // Parses ASN.1 binary data recursively to create a module tree, returning the root element
             // This function operates on an already created shared pointer to a byte vector
@@ -97,21 +116,12 @@ namespace CBZ {
             // Input:
             // @data - shared pointer to byte vector containing ASN.1 binary data
             // @offset - offset in @data to start from
-            std::shared_ptr<ASN1Object> decode_all(std::shared_ptr<std::vector<uint8_t>> data, size_t offset=0);
+            static std::shared_ptr<ASN1Object> decode_all(std::shared_ptr<std::vector<uint8_t>> data, size_t offset=0);
 
-            // Calculates the size of 'length' field based on provided size
-            //
-            // Input:
-            // @size - size of object's data, in bytes
-            size_t _ASN1Parser_calculate_length_field_size(size_t size);
-
-            // This function takes size of object's data and returns an encoded length field
-            //
-            // Input:
-            // @size - size of object's data, in bytes
-            std::vector<uint8_t> _ASN1Parser_encode_length_field(size_t size);
+            ASN1Parser() = delete;
+            ~ASN1Parser() = delete;
         };
-
+        
         // Class representing an ASN.1 object - contains a tag (see ASN1Tag above),
         // raw value and children, if parsed recursively
         class ASN1Object {
@@ -190,12 +200,12 @@ namespace CBZ {
 
             // Returns object's encoded 'length' field
             inline std::vector<uint8_t> encode_length() const {
-                return ASN1Parser::_ASN1Parser_encode_length_field(_length);
+                return _ASN1Parser_helpers::encode_length_field(_length);
             }
 
             // Returns object's encoded 'length' field size, in bytes (without encoding it)
             inline size_t length_size() const {
-                return ASN1Parser::_ASN1Parser_calculate_length_field_size(_length);
+                return _ASN1Parser_helpers::calculate_length_field_size(_length);
             }
 
             // Returns object's total size (in bytes) - that sums up the 'tag' field size, 
@@ -222,17 +232,7 @@ namespace CBZ {
             // friends may take what's protected stuff instead of asking for it
             // those friends need to be able to change the internal state of ASN1Object
 
-            friend std::shared_ptr<std::vector<uint8_t>> ASN1Parser::encode_all(
-                std::shared_ptr<ASN1Object> root_object
-            );
-            friend std::shared_ptr<ASN1Object> ASN1Parser::decode_all(
-                std::vector<uint8_t> &&data, 
-                size_t offset
-            );
-            friend std::shared_ptr<ASN1Object> ASN1Parser::decode_all(
-                std::shared_ptr<std::vector<uint8_t>> data, 
-                size_t offset
-            );
+            friend class ASN1Parser;
             friend bool RSA::_RSAPrivateKey_format_check(
                 std::shared_ptr<ASN1Object> root_object
             );

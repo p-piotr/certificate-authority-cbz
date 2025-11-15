@@ -4,11 +4,12 @@
 #include <iomanip>
 #include "include/base64.h"
 #include "include/asn1.h"
-#include "include/rsa.h"
-#include "include/security.h"
+#include "include/private_key.h"
+#include "include/security.hpp"
 #include "include/sha.h"
 #include "include/aes.h"
 #include "include/hmac.hpp"
+#include "include/kdf.hpp"
 
 using namespace CBZ;
 
@@ -97,7 +98,8 @@ void SHA_test(int argc, char **argv) {
         std::cerr << "Usage: " << argv[0] << " MESSAGE" << std::endl;
         return;
     }
-    auto digest = CBZ::SHA::SHA256::digest(reinterpret_cast<uint8_t*>(argv[1]), strlen(argv[1]));
+    uint8_t digest[CBZ::SHA::SHA256::DIGEST_SIZE];
+    CBZ::SHA::SHA256::digest(reinterpret_cast<uint8_t*>(argv[1]), strlen(argv[1]), digest);
     for (uint8_t b : digest)
         std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
     std::cout << std::endl;
@@ -109,13 +111,14 @@ void HMAC_test(int argc, char **argv) {
             std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b) << ' ';
         std::cout << std::dec << "    (size=" << v.size() << ')' << std::endl;
     };
-    auto print_array = [&]<size_t _N>(std::array<uint8_t, _N> const &v) {
+    auto print_array = [&]<size_t _N>(const uint8_t (&v)[_N]) {
         for (uint8_t b : v)
             std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b) << ' ';
-        std::cout << std::dec << "    (size=" << v.size() << ')' << std::endl;
+        std::cout << std::dec << "    (size=" << _N << ')' << std::endl;
     };
     auto test = [&](std::vector<uint8_t> const &key) {
-        auto derived_key = HMAC<SHA::SHA256>::derive_blocksized_key(key);
+        uint8_t derived_key[HMAC<SHA::SHA256>::KEY_SIZE];
+        HMAC<SHA::SHA256>::derive_blocksized_key(key.data(), key.size(), derived_key);
         print_array(derived_key);
     };
 
@@ -129,12 +132,39 @@ void HMAC_test(int argc, char **argv) {
     test(key4);
 
     std::string message = "hello";
-    auto hmac = HMAC<SHA::SHA256>::digest(reinterpret_cast<uint8_t*>(message.data()), message.size(), key1);   
+    uint8_t hmac[HMAC<SHA::SHA256>::DIGEST_SIZE]; 
+    HMAC<SHA::SHA256>::digest(
+        reinterpret_cast<uint8_t*>(message.data()),
+        message.size(),
+        key1.data(),
+        key1.size(),
+        hmac
+    );   
     print_array(hmac);
+}
+
+void KDF_test(int argc, char **argv) {
+    const size_t KEY_SIZE = 256;
+    std::string password = "password1234";
+    std::string salt = "mysuperduperhipersalt88274648";
+    uint8_t derived_key[KEY_SIZE];
+    CBZ::KDF::PBKDF2<CBZ::HMAC<CBZ::SHA::SHA256>>::derive_key(
+        reinterpret_cast<uint8_t*>(password.data()),
+        password.size(),
+        reinterpret_cast<uint8_t*>(salt.data()),
+        salt.size(),
+        1024,
+        KEY_SIZE,
+        derived_key
+    );
+    for (auto b : derived_key)
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b) << ' ';
+
+    std::cout << std::endl;
 }
 
 int main(int argc, char **argv) {
     mpz_initialize_secure();
-    RSA_ASN1_test(argc, argv);
+    KDF_test(argc, argv);
     return 0;
 }

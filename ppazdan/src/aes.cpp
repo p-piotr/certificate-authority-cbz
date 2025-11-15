@@ -22,7 +22,7 @@ namespace CBZ::AES {
     // @size - size of the buffer to encrypt
     // @key - template key object, can be chosen from the keys defined in the AES namespace (see "aes.h")
     // @iv - initialization vector for encryption to use
-    template <typename _KEY>
+    template<typename _KEY>
     std::vector<uint8_t> _AES_encrypt_generic(
         EVP_CIPHER *cipher, 
         const char *class_name, 
@@ -77,7 +77,7 @@ namespace CBZ::AES {
     // @size - size of the buffer to decrypt
     // @key - template key object, can be chosen from { KEY128, KEY192, KEY256 }
     // @iv - initialization vector for decryption to use
-    template <typename _KEY>
+    template<typename _KEY>
     std::vector<uint8_t> _AES_decrypt_generic(
         EVP_CIPHER *cipher, 
         const char *class_name, 

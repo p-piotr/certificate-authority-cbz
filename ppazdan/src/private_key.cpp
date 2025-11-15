@@ -5,7 +5,7 @@
 #include <fstream>
 #include <gmpxx.h>
 #include "include/debug.h"
-#include "include/rsa.h"
+#include "include/private_key.h"
 #include "include/asn1.h"
 #include "include/base64.h"
 #include "include/pkcs.h"
@@ -37,7 +37,11 @@ namespace CBZ::RSA {
     // Input:
     // @root_object - root ASN1Object representing the whole key
     bool _RSAPrivateKey_format_check(std::shared_ptr<ASN1Object> root_object) {
-        if (root_object->tag() != ASN1Tag::SEQUENCE || root_object->children().size() != 3)
+        if (
+            root_object->tag() != ASN1Tag::SEQUENCE 
+            || root_object->children().size() < 3
+            || root_object->children().size() > 4
+        )
             return false;
 
         auto version = root_object->children()[0];
@@ -46,18 +50,19 @@ namespace CBZ::RSA {
 
         if (version->tag() != ASN1Tag::INTEGER && version->children().size() != 0)
             return false;
-        if (private_key_algorithm->tag() != ASN1Tag::SEQUENCE || private_key_algorithm->children().size() != 2)
+        if (
+            private_key_algorithm->tag() != ASN1Tag::SEQUENCE 
+            || private_key_algorithm->children().size() != 2
+        )
             return false;
         if (private_key->tag() != ASN1Tag::OCTET_STRING)
             return false;
 
         auto algorithm = private_key_algorithm->children()[0];
-        auto parameters = private_key_algorithm->children()[1];
 
         if (
             algorithm->tag() != ASN1Tag::OBJECT_IDENTIFIER 
             || algorithm->children().size() != 0 
-            || parameters->tag() != ASN1Tag::NULL_TYPE
         )
             return false;
 
@@ -65,21 +70,7 @@ namespace CBZ::RSA {
         if (private_key->children().size() == 0) {
             // decode the private_key according to the PKCS#1 structure, since the ASN.1 parser didn't do it (it's a Primitive OCTET STRING after all)
             pk_sequence = ASN1Parser::decode_all(std::move(private_key->value()), 0);
-            if (pk_sequence->tag() != ASN1Tag::SEQUENCE || pk_sequence->children().size() != 9)
-                return false;
-
             private_key->_children.push_back(pk_sequence);
-        }
-        else {
-            // maybe it's not the first time we're checking this object, so it's been already decoded - just check if everything is intact
-            pk_sequence = private_key->children()[0];
-            if (pk_sequence->tag() != ASN1Tag::SEQUENCE || pk_sequence->children().size() != 9)
-                return false;
-        }
-
-        for (auto child : pk_sequence->children()) {
-            if (child->tag() != ASN1Tag::INTEGER || child->children().size() != 0)
-                return false;
         }
         return true;
     }
@@ -105,31 +96,8 @@ namespace CBZ::RSA {
 
         if (algorithm->tag() != ASN1Tag::OBJECT_IDENTIFIER)
             return false;
-        if (parameters->tag() != ASN1Tag::SEQUENCE || parameters->children().size() != 2)
-            return false;
 
-        auto 
-            kdf = parameters->children()[0],
-            encryption_scheme = parameters->children()[1];
-
-        if (kdf->tag() != ASN1Tag::SEQUENCE || kdf->children().size() != 2)
-            return false;
-        if (encryption_scheme->tag() != ASN1Tag::SEQUENCE || encryption_scheme->children().size() != 2)
-            return false;
-
-        auto
-            kdf_oid = kdf->children()[0],
-            kdf_oid_params = kdf->children()[1];
-        
-        if (kdf_oid->tag() != ASN1Tag::OBJECT_IDENTIFIER)
-            return false;
-        if (kdf_oid_params->tag() != ASN1Tag::SEQUENCE || kdf_oid_params->children().size() != 3)
-            return false;
-        
-        auto
-            salt = kdf_oid_params->children()[0],
-            iteration_count = kdf_oid_params->children()[1],
-            prf = kdf_oid_params->children()[2];
+        return true;
     }
 
     // Prints the private key (use only for debugging purposes)
@@ -155,10 +123,28 @@ namespace CBZ::RSA {
             return false;
 
         auto algorithm = std::static_pointer_cast<ASN1::ASN1ObjectIdentifier>(root_object->children()[1]->children()[0]);
-        if (algorithm->value() != PKCS::OID::rsaEncryption)
+        auto params = root_object->children()[1]->children()[1];
+
+        if (algorithm->value() != PKCS::SupportedAlgorithms::OIDs::PrivateKeyAlgorithms::rsaEncryption)
             return false;
-    
+        if (params->tag() != ASN1Tag::NULL_TYPE)
+            return false;
+
+        auto pk_sequence = root_object->children()[2]->children()[0];
+        if (pk_sequence->tag() != ASN1Tag::SEQUENCE || pk_sequence->children().size() != 9)
+            return false;
+
+        for (auto child : pk_sequence->children()) {
+            if (child->tag() != ASN1Tag::INTEGER || child->children().size() != 0)
+                return false;
+        }
+
         return true;
+    }
+
+    bool _EncryptedRSAPrivateKey_is_supported(std::shared_ptr<ASN1::ASN1Object> root_object) {
+        auto algorithm = root_object->children()[0]->children()[0];
+        auto parameters = root_object->children()[0]->children()[1];
     }
 
     // Loads a private key from file

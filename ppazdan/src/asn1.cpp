@@ -85,7 +85,7 @@ namespace CBZ::ASN1 {
             total_children_size += child_data->size();
 
         // since the object has children, we need to encode the length field accordingly
-        std::vector<uint8_t> length_field = _ASN1Parser_encode_length_field(total_children_size);
+        std::vector<uint8_t> length_field = _ASN1Parser_helpers::encode_length_field(total_children_size);
         // append length field
         encoded_root_object.insert(
             encoded_root_object.end(),
@@ -219,7 +219,7 @@ namespace CBZ::ASN1 {
             child->print(indent+1);        
     }
 
-    size_t ASN1Parser::_ASN1Parser_calculate_length_field_size(size_t length) {
+    size_t _ASN1Parser_helpers::calculate_length_field_size(size_t length) {
         if (length < 128)
             // short form
             return 1;
@@ -233,7 +233,7 @@ namespace CBZ::ASN1 {
         return 1 + num_bytes;
     }
 
-    std::vector<uint8_t> ASN1Parser::_ASN1Parser_encode_length_field(size_t length) {
+    std::vector<uint8_t> _ASN1Parser_helpers::encode_length_field(size_t length) {
         std::vector<uint8_t> length_field;
         if (length < 128) {
             // short form
@@ -241,7 +241,7 @@ namespace CBZ::ASN1 {
             return length_field;
         }
         // long form
-        size_t num_bytes = _ASN1Parser_calculate_length_field_size(length) - 1;
+        size_t num_bytes = _ASN1Parser_helpers::calculate_length_field_size(length) - 1;
         length_field.push_back(static_cast<uint8_t>(0x80 | num_bytes));
 
         for (size_t i = num_bytes; i > 0; i--)
