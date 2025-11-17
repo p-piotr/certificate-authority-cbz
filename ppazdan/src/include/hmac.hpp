@@ -11,7 +11,6 @@ namespace CBZ {
 
     template <typename _PRF>
     concept PseudoRandomFunction = requires(
-        _PRF &prf,
         uint8_t const *m,
         size_t msize,
         uint8_t const *k,
