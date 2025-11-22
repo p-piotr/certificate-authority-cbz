@@ -18,9 +18,9 @@ namespace CBZ {
         class ASN1Object;
     }
 
-    // This namespace is defined in "rsa.h" - forward declaration of a function used as a friend in ASN1Object
+    // This namespace is defined in "private_key.h" - forward declaration of a function used as a friend in ASN1Object
     namespace RSA {
-        bool _RSAPrivateKey_format_check(std::shared_ptr<ASN1::ASN1Object> root_object);
+        int _RSAPrivateKey_check_and_expand(std::shared_ptr<ASN1::ASN1Object> root_object);
     }
 
     namespace ASN1 {
@@ -214,6 +214,11 @@ namespace CBZ {
                 return 1 + length_size() + _length;
             }
 
+            // Returns object's value vector (immutable reference)
+            constexpr const std::vector<uint8_t>& value() const {
+                return _value;
+            }
+
             // Returns object's value vector (modifiable reference)
             constexpr std::vector<uint8_t>& value() {
                 return _value;
@@ -233,7 +238,7 @@ namespace CBZ {
             // those friends need to be able to change the internal state of ASN1Object
 
             friend class ASN1Parser;
-            friend bool RSA::_RSAPrivateKey_format_check(
+            friend int RSA::_RSAPrivateKey_check_and_expand(
                 std::shared_ptr<ASN1Object> root_object
             );
         };

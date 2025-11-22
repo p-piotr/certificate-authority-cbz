@@ -69,6 +69,12 @@ namespace CBZ {
         delete ptr;
     }
 
+    template <typename _S>
+    inline void secure_delete_struct(_S *s) {
+        constexpr size_t size = sizeof(_S);
+        secure_zero_memory(s, size);
+        delete s;
+    }
 
     // Securely zeroes and frees the memory
     // Note: no_of_freed_bytes = size * sizeof(_T)

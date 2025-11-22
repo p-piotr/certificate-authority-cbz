@@ -3,6 +3,7 @@
 #include <memory>
 #include <cstdint>
 #include <gmpxx.h>
+#include <stdexcept>
 
 namespace CBZ {
 
@@ -18,22 +19,23 @@ namespace CBZ {
         //
         // Input:
         // @root_object - root ASN1Object representing the whole key
-        bool _RSAPrivateKey_format_check(std::shared_ptr<ASN1::ASN1Object> root_object);
+        int _RSAPrivateKey_check_and_expand(std::shared_ptr<ASN1::ASN1Object> root_object);
 
         // Checks if the ASN.1 structure of the encrypted RSA private key is correct
+        // This function only checks the first two levels deep in the ASN.1 structure,
+        // that is it checks for existence of:
+        // - encryption algorithm
+        //     - algorithm
+        //     - parameters
+        // - encrypted data
+        //
+        // For further checks and data extraction, use algorithm-specific functions from the PKCS namespace
         //
         // Input:
         // @root_object - root ASN1Object representing the whole key
         bool _EncryptedRSAPrivateKey_format_check(std::shared_ptr<ASN1::ASN1Object> root_object);
 
-        // Checks if the RSA private key is supported (version, algorithms)
-        // Currently only version 0 and rsaEncryption algorithm are supported
-        //
-        // Input:
-        // @root_object - root ASN1Object representing the whole key
-        bool _RSAPrivateKey_is_supported(std::shared_ptr<ASN1::ASN1Object> root_object);
-
-        // Checks if the encrypted RSA private key is supported (KDFs, encryption algorithms, hashing functions)
+        // Checks if the ASN.1 structure of the encrypted RSA private key is correct
         //
         // Input:
         // @root_object - root ASN1Object representing the whole key
@@ -139,6 +141,24 @@ namespace CBZ {
             // @filepath - path to the file containing the private key in PKCS#8
             // @passphrase - passphrase used when the key turns out to be encrypted
             static RSAPrivateKey from_file(std::string const &filepath, std::string const &passphrase);
+        };
+
+        class FeatureUnsupportedException : public std::runtime_error {
+        public:
+            explicit FeatureUnsupportedException(const char* const message) throw()
+                : std::runtime_error(message) {}
+        };
+
+        class AlgorithmUnsupportedException : public std::runtime_error {
+        public:
+            explicit AlgorithmUnsupportedException(const char* const message) throw()
+                : std::runtime_error(message) {}
+        };
+
+        class SemanticCheckException : public std::runtime_error {
+        public:
+            explicit SemanticCheckException(const char* const message) throw()
+                : std::runtime_error(message) {}
         };
     }
 }

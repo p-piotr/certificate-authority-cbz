@@ -4,6 +4,7 @@
 #include <vector>
 #include <fstream>
 #include <gmpxx.h>
+#include <sstream>
 #include "include/debug.h"
 #include "include/private_key.h"
 #include "include/asn1.h"
@@ -30,52 +31,74 @@ we only support rsaEncryption => algorithm = 1.2.840.113549.1.1.1 && parameters 
 namespace CBZ::RSA {
 
     using namespace ASN1;
+    using namespace PKCS;
 
     // Checks if the ASN.1 structure of the RSA private key is correct
-    // Additionally decodes the RSAPrivateKey structure inside the OCTET STRING, if hasn't been done yet
+    // Additionally expands the key by decoding the RSAPrivateKey structure
+    // inside the OCTET STRING according to the algorithm, if hasn't been done yet
     //
     // Input:
     // @root_object - root ASN1Object representing the whole key
-    bool _RSAPrivateKey_format_check(std::shared_ptr<ASN1Object> root_object) {
+    int _RSAPrivateKey_check_and_expand(std::shared_ptr<ASN1Object> root_object) {
+        // Root object should contain 3 or 4 children (attributies field is optional)
         if (
             root_object->tag() != ASN1Tag::SEQUENCE 
             || root_object->children().size() < 3
             || root_object->children().size() > 4
         )
-            return false;
+            return ERR_SEMANTIC_CHECK_FAILED;
 
         auto version = root_object->children()[0];
         auto private_key_algorithm = root_object->children()[1];
         auto private_key = root_object->children()[2];
 
-        if (version->tag() != ASN1Tag::INTEGER && version->children().size() != 0)
-            return false;
-        if (
-            private_key_algorithm->tag() != ASN1Tag::SEQUENCE 
-            || private_key_algorithm->children().size() != 2
-        )
-            return false;
-        if (private_key->tag() != ASN1Tag::OCTET_STRING)
-            return false;
+        if (version->tag() != ASN1Tag::INTEGER) // 'version' must be of type INTEGER
+            return ERR_SEMANTIC_CHECK_FAILED;
+        if (std::static_pointer_cast<ASN1Integer>(version)->value() != 0) // 'version' must be equal to 0
+            return ERR_FEATURE_UNSUPPORTED;
+        if (private_key_algorithm->tag() != ASN1Tag::SEQUENCE) // 'private_key_algorithm' must be of type SEQUENCE
+            return ERR_SEMANTIC_CHECK_FAILED;
+        if (private_key->tag() != ASN1Tag::OCTET_STRING) // 'private_key' must be of type OCTET_STRING
+            return ERR_SEMANTIC_CHECK_FAILED;
 
-        auto algorithm = private_key_algorithm->children()[0];
+        // Now proceed to the algorithm extraction
+        struct AlgorithmIdentifier alg_id;
+        if (int result = extract_algorithm(private_key_algorithm, &alg_id); result != 0)
+            return result;
+        
+        // Iterate through supported algorithms and act accordingly
+        switch (alg_id.algorithm) {
+            case SupportedAlgorithms::PrivateKeyAlgorithms::rsaEncryption: {
+                // According to the rsaEncryption PKCS specification, the private_key OCTET STRING
+                // is actually a SEQUENCE containing 9 INTEGERs
+                std::shared_ptr<ASN1Object> pk_sequence;
+                if (private_key->children().size() == 0) {
+                    // Decode the private_key according to the PKCS#1 structure, since
+                    // the ASN.1 parser didn't do it (it's a Primitive OCTET STRING after all)
+                    pk_sequence = ASN1Parser::decode_all(std::move(private_key->value()), 0);
+                    if (pk_sequence->children().size() != 9)
+                        return ERR_SEMANTIC_CHECK_FAILED;
 
-        if (
-            algorithm->tag() != ASN1Tag::OBJECT_IDENTIFIER 
-            || algorithm->children().size() != 0 
-        )
-            return false;
+                    private_key->_children.push_back(pk_sequence);
+                } else if (private_key->children()[0]->children().size() != 9)
+                    return ERR_SEMANTIC_CHECK_FAILED;
 
-        std::shared_ptr<ASN1Object> pk_sequence;
-        if (private_key->children().size() == 0) {
-            // decode the private_key according to the PKCS#1 structure, since the ASN.1 parser didn't do it (it's a Primitive OCTET STRING after all)
-            pk_sequence = ASN1Parser::decode_all(std::move(private_key->value()), 0);
-            private_key->_children.push_back(pk_sequence);
+                return ERR_OK;
+            }
+            default:
+                return ERR_ALGORITHM_UNSUPPORTED;
         }
-        return true;
     }
 
     // Checks if the ASN.1 structure of the encrypted RSA private key is correct
+    // This function only checks the first two levels deep in the ASN.1 structure,
+    // that is it checks for existence of the following fields:
+    // - encryption algorithm
+    //     - algorithm
+    //     - parameters
+    // - encrypted data
+    //
+    // For further checks and data extraction, use algorithm-specific functions from the PKCS namespace
     //
     // Input:
     // @root_object - root ASN1Object representing the whole key
@@ -113,38 +136,22 @@ namespace CBZ::RSA {
         std::cout << "Coefficient (q^-1 mod p): " << coefficient() << std::endl;
     }
 
-    // Checks if the RSA private key is supported (version, algorithm OID)
-    // Currently only version 0 and rsaEncryption algorithm are supported
+    // Checks if the encrypted RSA private key is supported (encryption algorithm)
+    //
     // Input:
-    // @root_object - root ASN1Object representing the whole key
-    bool _RSAPrivateKey_is_supported(std::shared_ptr<ASN1Object> root_object) {
-        auto version = std::static_pointer_cast<ASN1::ASN1Integer>(root_object->children()[0]);
-        if (version->value() != 0)
-            return false;
+    // @root_object - root ASN1Object representing the encrypted key
+    bool _EncryptedRSAPrivateKey_is_supported(std::shared_ptr<ASN1::ASN1Object> root_object) {
+        using namespace SupportedAlgorithms::EncryptionAlgorithms;
 
-        auto algorithm = std::static_pointer_cast<ASN1::ASN1ObjectIdentifier>(root_object->children()[1]->children()[0]);
-        auto params = root_object->children()[1]->children()[1];
+        auto algorithm = std::static_pointer_cast<ASN1::ASN1ObjectIdentifier>(
+            root_object->children()[0]->children()[0]
+        );
 
-        if (algorithm->value() != PKCS::SupportedAlgorithms::OIDs::PrivateKeyAlgorithms::rsaEncryption)
+        // Check if such OID exists in our supported encryption algorithms hashmap
+        if (auto search = encryptionAlgorithmsMap.find(algorithm->value()); search == encryptionAlgorithmsMap.end())
             return false;
-        if (params->tag() != ASN1Tag::NULL_TYPE)
-            return false;
-
-        auto pk_sequence = root_object->children()[2]->children()[0];
-        if (pk_sequence->tag() != ASN1Tag::SEQUENCE || pk_sequence->children().size() != 9)
-            return false;
-
-        for (auto child : pk_sequence->children()) {
-            if (child->tag() != ASN1Tag::INTEGER || child->children().size() != 0)
-                return false;
-        }
 
         return true;
-    }
-
-    bool _EncryptedRSAPrivateKey_is_supported(std::shared_ptr<ASN1::ASN1Object> root_object) {
-        auto algorithm = root_object->children()[0]->children()[0];
-        auto parameters = root_object->children()[0]->children()[1];
     }
 
     // Loads a private key from file
@@ -161,7 +168,7 @@ namespace CBZ::RSA {
         if (line1 != PKCS::Labels::privateKeyHeader) {
             if (line1 == PKCS::Labels::encryptedPrivateKeyHeader)
                 throw std::runtime_error("[RSAPrivateKey::from_file] Cannot open encrypted RSA private key without a passphrase");
-            throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key header doesn't match the standard");
+            throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key header doesn't match the standard");
         }
 
         // read all lines till the end and append to key_asn1_b64, except the footer
@@ -172,18 +179,24 @@ namespace CBZ::RSA {
         }
 
         if (line1 != PKCS::Labels::privateKeyFooter)
-            throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key footer doesn't match the standard");
+            throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key footer doesn't match the standard");
 
         std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
         std::shared_ptr<ASN1Object> asn1_root = ASN1Parser::decode_all(std::move(key_asn1), 0);
 
-        // validate the overall key ASN.1 structure
-        if (!_RSAPrivateKey_format_check(asn1_root))
-            throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key format check failed");
-
-        // validate the key contents (supported algorithm, version), since we are very picky in what we actually support
-        if (!_RSAPrivateKey_is_supported(asn1_root))
-            throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key format not supported");
+        // validate the overall key ASN.1 structure and expand it, if needed
+        if (int result = _RSAPrivateKey_check_and_expand(asn1_root); result != 0) {
+            switch (result) {
+                case ERR_SEMANTIC_CHECK_FAILED:
+                    throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key semantic check failed");
+                case ERR_FEATURE_UNSUPPORTED:
+                    throw FeatureUnsupportedException("[RSAPrivateKey::from_file] RSA private key feature is unsupported");
+                case ERR_ALGORITHM_UNSUPPORTED:
+                    throw AlgorithmUnsupportedException("[RSAPrivateKey::from_file] RSA private key algorithm is unsupported");
+                default:
+                    throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key unknown error");
+            }
+        }
 
         // RSAPrivateKey sequence - https://www.rfc-editor.org/rfc/rfc8017.html#page-55
         auto pk_sequence = asn1_root->children()[2]->children()[0];
