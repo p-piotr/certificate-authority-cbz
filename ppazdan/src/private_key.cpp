@@ -5,6 +5,7 @@
 #include <fstream>
 #include <gmpxx.h>
 #include <sstream>
+#include "include/security.hpp"
 #include "include/debug.h"
 #include "include/private_key.h"
 #include "include/asn1.h"
@@ -38,9 +39,11 @@ namespace CBZ::RSA {
     // Input:
     // @root_object - root ASN1Object representing the whole key
     int _RSAPrivateKey_check_and_expand(std::shared_ptr<ASN1Object> root_object) {
+        using namespace SupportedAlgorithms;
+
         // Root object should contain 3 or 4 children (attributies field is optional)
         if (
-            root_object->tag() != ASN1Tag::SEQUENCE 
+            root_object->tag() != ASN1Tag::SEQUENCE
             || root_object->children().size() < 3
             || root_object->children().size() > 4
         )
@@ -61,12 +64,15 @@ namespace CBZ::RSA {
 
         // Now proceed to the algorithm extraction
         struct AlgorithmIdentifier alg_id;
-        if (int result = extract_algorithm(private_key_algorithm, &alg_id); result != 0)
+        if (
+            int result = PrivateKeyAlgorithms::extract_algorithm(private_key_algorithm, &alg_id);
+            result != 0
+        )
             return result;
         
         // Iterate through supported algorithms and act accordingly
         switch (alg_id.algorithm) {
-            case SupportedAlgorithms::PrivateKeyAlgorithms::rsaEncryption: {
+            case PrivateKeyAlgorithms::rsaEncryption: {
                 // According to the rsaEncryption PKCS specification, the private_key OCTET STRING
                 // is actually a SEQUENCE containing 9 INTEGERs
                 std::shared_ptr<ASN1Object> pk_sequence;
@@ -89,36 +95,24 @@ namespace CBZ::RSA {
     }
 
     // Checks if the ASN.1 structure of the encrypted RSA private key is correct
-    // This function only checks the first two levels deep in the ASN.1 structure,
-    // that is it checks for existence of the following fields:
-    // - encryption algorithm
-    //     - algorithm
-    //     - parameters
-    // - encrypted data
-    //
-    // For further checks and data extraction, use algorithm-specific functions from the PKCS namespace
     //
     // Input:
     // @root_object - root ASN1Object representing the whole key
-    bool _EncryptedRSAPrivateKey_format_check(std::shared_ptr<ASN1Object> root_object) {
+    int _EncryptedRSAPrivateKey_check(std::shared_ptr<ASN1Object const> root_object) {
+        using namespace SupportedAlgorithms;
+
         if (root_object->tag() != ASN1Tag::SEQUENCE || root_object->children().size() != 2)
-            return false;
+            return ERR_SEMANTIC_CHECK_FAILED;
         
         auto encryption_algorithm = root_object->children()[0];
         auto encrypted_data = root_object->children()[1];
-
-        if (encryption_algorithm->tag() != ASN1Tag::SEQUENCE || encryption_algorithm->children().size() != 2)
-            return false;
+        
+        if (int result = EncryptionAlgorithms::extract_algorithm(encryption_algorithm, nullptr); result != ERR_OK)
+            return result;
         if (encrypted_data->tag() != ASN1Tag::OCTET_STRING)
-            return false;
+            return ERR_SEMANTIC_CHECK_FAILED;
 
-        auto algorithm = encryption_algorithm->children()[0];
-        auto parameters = encryption_algorithm->children()[1];
-
-        if (algorithm->tag() != ASN1Tag::OBJECT_IDENTIFIER)
-            return false;
-
-        return true;
+        return ERR_OK;
     }
 
     // Prints the private key (use only for debugging purposes)
@@ -134,24 +128,6 @@ namespace CBZ::RSA {
         std::cout << "Coefficient (q^-1 mod p): " << coefficient() << std::endl;
     }
 
-    // Checks if the encrypted RSA private key is supported (encryption algorithm)
-    //
-    // Input:
-    // @root_object - root ASN1Object representing the encrypted key
-    bool _EncryptedRSAPrivateKey_is_supported(std::shared_ptr<ASN1::ASN1Object> root_object) {
-        using namespace SupportedAlgorithms::EncryptionAlgorithms;
-
-        auto algorithm = std::static_pointer_cast<ASN1::ASN1ObjectIdentifier>(
-            root_object->children()[0]->children()[0]
-        );
-
-        // Check if such OID exists in our supported encryption algorithms hashmap
-        if (auto search = encryptionAlgorithmsMap.find(algorithm->value()); search == encryptionAlgorithmsMap.end())
-            return false;
-
-        return true;
-    }
-
     // Loads a private key from file
     // This variant may only parse unencryptd keys
     //
@@ -163,11 +139,18 @@ namespace CBZ::RSA {
 
         // read the key file and complain if needed
         std::getline(keyfile, line1);
-        if (line1 != PKCS::Labels::privateKeyHeader) {
-            if (line1 == PKCS::Labels::encryptedPrivateKeyHeader)
-                throw std::runtime_error("[RSAPrivateKey::from_file] Cannot open encrypted RSA private key without a passphrase");
-            throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key header doesn't match the standard");
+        if (line1 == PKCS::Labels::encryptedPrivateKeyHeader) {
+            // the header says it's encrypted, so let's try to parse it accordingly
+            std::string passphrase;
+            std::cout << "Enter passphrase: ";
+            set_stdin_echo(false);
+            std::cin >> passphrase;
+            set_stdin_echo(true);
+            std::cout << std::endl;
+            return from_file(filepath, std::move(passphrase));
         }
+        if (line1 != PKCS::Labels::privateKeyHeader)
+            throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key header doesn't match the standard");
 
         // read all lines till the end and append to key_asn1_b64, except the footer
         std::getline(keyfile, line1);
@@ -232,27 +215,48 @@ namespace CBZ::RSA {
         );
     }
     
-    // Checks whether given file represents an encrypted private key
-    // This function only checks if the header and footer are valid
-    // for performance purposes - if the file turns out to be corrupted, it'll be discovered
-    // later on, while trying to parse
-    //
-    // Input:
-    // @filepath - path to the file assumed to contain the encrypted private key
-    bool is_key_encrypted(std::string const &filepath) {
+    RSAPrivateKey RSAPrivateKey::from_file(std::string const &filepath, std::string &&passphrase) {
         std::ifstream keyfile(filepath);
-        std::string line1, line2;
+        std::string line1, line2, key_asn1_b64 = "";
 
         std::getline(keyfile, line1);
+        if (line1 == PKCS::Labels::privateKeyHeader) {
+            // i don't know why, but it seems this key is unencrypted, although we received a password for it
+            // assume this key is unencrypted and it was a mistake - discard the password and proceed with the
+            // unencrypted procedure
+            secure_zero_memory(passphrase.data(), passphrase.size());
+            return from_file(filepath);
+        }
         if (line1 != PKCS::Labels::encryptedPrivateKeyHeader)
-            return false;
+            throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key header doesn't match the standard");
 
-        while (std::getline(keyfile, line2))
+        // read all lines till the end and append to key_asn1_b64, except the footer
+        std::getline(keyfile, line1);
+        while (std::getline(keyfile, line2)) { // read next line and append the previous one
+            key_asn1_b64 += line1;
             line1 = line2;
+        }
 
         if (line1 != PKCS::Labels::encryptedPrivateKeyFooter)
-            return false;
+            throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key footer doesn't match the standard");
 
-        return true;
+        std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
+        std::shared_ptr<ASN1Object> asn1_root = ASN1Parser::decode_all(std::move(key_asn1), 0);
+
+        if (int result = _EncryptedRSAPrivateKey_check(asn1_root); result != ERR_OK) {
+            switch (result) {
+                case ERR_SEMANTIC_CHECK_FAILED:
+                    throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key semantic check failed");
+                case ERR_FEATURE_UNSUPPORTED:
+                    throw FeatureUnsupportedException("[RSAPrivateKey::from_file] RSA private key feature is unsupported");
+                case ERR_ALGORITHM_UNSUPPORTED:
+                    throw AlgorithmUnsupportedException("[RSAPrivateKey::from_file] RSA private key algorithm is unsupported");
+                default:
+                    throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key unknown error");
+            }
+        }
+
+        std::cout << "oai m8 that's bloody lovely" << std::endl;
+        return RSAPrivateKey();
     }
 }

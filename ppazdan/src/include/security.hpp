@@ -4,7 +4,8 @@
 #include <concepts>
 #include <iostream>
 #include <gmpxx.h>
-// #include <type_traits>
+#include <termios.h>
+#include <unistd.h>
 #include "debug.h"
 
 namespace CBZ {
@@ -12,8 +13,22 @@ namespace CBZ {
     /*
     I only marked those functions as inline because
     the compiler complained about multiple definitions during linking
-    and I really didn't give a fuck to create a separate .cpp file for them
+    and I really didn't give a damn to create a separate .cpp file for them
     */
+
+    // Enables (or disables) stdin echo
+    // Temporarily disable while prompting for a passphrase or other secrets
+    inline void set_stdin_echo(bool enable = true) {
+        struct termios tty;
+        tcgetattr(STDIN_FILENO, &tty);
+
+        if (!enable)
+            tty.c_lflag &= ~ECHO;
+        else
+            tty.c_lflag |= ECHO;
+
+        tcsetattr(STDIN_FILENO, TCSANOW, &tty);
+    }
 
     // Helper template for sizeof, since the compiler
     // doesn't like "sizeof(void)" - hence an explicit value assignment

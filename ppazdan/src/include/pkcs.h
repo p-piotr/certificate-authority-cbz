@@ -27,7 +27,25 @@ namespace CBZ::PKCS {
 
     namespace SupportedAlgorithms {
 
+        // Extracts the PKCS AlgorithmIdentifier structure found at @algorithm
+        // If out_ptr != nullptr, extracted data is moved to the buffer. Otherwise,
+        // only the semantic check is performed
+        //
+        // Input:
+        // @algorithm - ASN1Object representing the PKCS AlgorithmIdentifier type (algorithm + parameters)
+        // @out_ptr - optional pointer to the AlgorithmIdentifier structure
+        int extract_algorithm(
+            std::shared_ptr<ASN1Object const> algorithm,
+            struct AlgorithmIdentifier *out_ptr
+        );
+
         namespace PrivateKeyAlgorithms {
+
+            int extract_algorithm(
+                std::shared_ptr<ASN1Object const> algorithm,
+                struct AlgorithmIdentifier *out_ptr,
+                std::string const &oid = ""
+            );
 
             namespace RSAEncryption {
                 extern const OID oid;
@@ -44,6 +62,12 @@ namespace CBZ::PKCS {
         }
 
         namespace EncryptionAlgorithms {
+
+            int extract_algorithm(
+                std::shared_ptr<ASN1Object const> algorithm,
+                struct AlgorithmIdentifier *out_ptr,
+                std::string const &oid = ""
+            );
 
             namespace PBES2 {
                 extern const OID oid;
@@ -66,6 +90,12 @@ namespace CBZ::PKCS {
             extern const std::unordered_map<OID, EncryptionAlgorithmsEnum> encryptionAlgorithmsMap;
         }
         namespace KDFs {
+
+            int extract_algorithm(
+                std::shared_ptr<ASN1Object const> algorithm,
+                struct AlgorithmIdentifier *out_ptr,
+                std::string const &oid = ""
+            );
 
             namespace PBKDF2 {
                 extern const OID oid;
@@ -93,6 +123,12 @@ namespace CBZ::PKCS {
 
         namespace HMACFunctions {
 
+            int extract_algorithm(
+                std::shared_ptr<ASN1Object const> algorithm,
+                struct AlgorithmIdentifier *out_ptr,
+                std::string const &oid = ""
+            );
+
             // This is a generic function for validating the HMACWithSHA* functions,
             // so there are no specific ones for each HMAC function declared
             int _generic_validate_parameters(std::shared_ptr<ASN1Object const> parameters_object);
@@ -113,6 +149,12 @@ namespace CBZ::PKCS {
         }
 
         namespace EncryptionSchemes {
+
+            int extract_algorithm(
+                std::shared_ptr<ASN1Object const> algorithm,
+                struct AlgorithmIdentifier *out_ptr,
+                std::string const &oid = ""
+            );
 
             namespace AES_128_CBC {
                 extern const OID oid;
@@ -141,16 +183,4 @@ namespace CBZ::PKCS {
         extern const std::string encryptedPrivateKeyHeader;
         extern const std::string encryptedPrivateKeyFooter;
     }
-
-    // Extracts the PKCS AlgorithmIdentifier structure found at @algorithm
-    // If out_ptr != nullptr, extracted data is moved to the buffer. Otherwise,
-    // only the semantic check is performed
-    //
-    // Input:
-    // @algorithm - ASN1Object representing the PKCS AlgorithmIdentifier type (algorithm + parameters)
-    // @out_ptr - optional pointer to the AlgorithmIdentifier structure
-    int extract_algorithm(
-        std::shared_ptr<ASN1Object const> algorithm,
-        struct AlgorithmIdentifier *out_ptr
-    );
 }

@@ -33,22 +33,7 @@ namespace CBZ {
         //
         // Input:
         // @root_object - root ASN1Object representing the whole key
-        bool _EncryptedRSAPrivateKey_format_check(std::shared_ptr<ASN1::ASN1Object> root_object);
-
-        // Checks if the ASN.1 structure of the encrypted RSA private key is correct
-        //
-        // Input:
-        // @root_object - root ASN1Object representing the whole key
-        bool _EncryptedRSAPrivateKey_is_supported(std::shared_ptr<ASN1::ASN1Object> root_object);
-
-        // Checks whether given file represents an encrypted private key
-        // This function only checks if the header and footer are valid
-        // for performance purposes - if the file turns out to be corrupted, it'll be discovered
-        // later on, while trying to parse
-        //
-        // Input:
-        // @filepath - path to the file assumed to contain the encrypted private key
-        bool is_key_encrypted(std::string const &filepath);
+        int _EncryptedRSAPrivateKey_check(std::shared_ptr<ASN1::ASN1Object const> root_object);
 
         // Object representing an RSA private key (PKCS#1 compatibile)
         class RSAPrivateKey {
@@ -84,8 +69,8 @@ namespace CBZ {
             RSAPrivateKey(std::string const &filepath)
                 : RSAPrivateKey(from_file(filepath)) {}
 
-            RSAPrivateKey(std::string const &filepath, std::string const &passphrase)
-                : RSAPrivateKey(from_file(filepath, passphrase)) {}
+            RSAPrivateKey(std::string const &filepath, std::string &&passphrase)
+                : RSAPrivateKey(from_file(filepath, std::move(passphrase))) {}
 
             inline mpz_class version() const {
                 return _version;
@@ -139,8 +124,9 @@ namespace CBZ {
             // the overload specifically for unencrypted keys (the passphrase is omitted)
             // Input:
             // @filepath - path to the file containing the private key in PKCS#8
-            // @passphrase - passphrase used when the key turns out to be encrypted
-            static RSAPrivateKey from_file(std::string const &filepath, std::string const &passphrase);
+            // @passphrase - passphrase used when the key turns out to be encrypted, as an rvalue
+            //               - gets securely deleted when not needed anymore
+            static RSAPrivateKey from_file(std::string const &filepath, std::string &&passphrase);
         };
 
         class FeatureUnsupportedException : public std::runtime_error {

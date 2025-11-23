@@ -72,15 +72,6 @@ void RSA_ASN1_test(int argc, char **argv) {
         std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte) << ' ';
     }
     std::cout << std::dec << std::endl;
-
-    try {
-        std::string key_file_path = argv[2];
-        bool is_encrypted = CBZ::RSA::is_key_encrypted(key_file_path);
-        std::cout << std::boolalpha << is_encrypted << std::noboolalpha << std::endl;
-    } catch  (const std::exception &e) {
-        std::cerr << "Error: " << e.what() << std::endl;
-        return;
-    }
 }
 
 void AES_test(int argc, char **argv) {
@@ -164,8 +155,24 @@ void KDF_test(int argc, char **argv) {
     std::cout << std::endl;
 }
 
+void RSA_encrypted_test(int argc, char **argv) {
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " ENCRYPTED_KEY_FILE" << std::endl;
+        return;
+    }
+    try {
+        std::string encrypted_key_filepath = argv[1];
+        CBZ::RSA::RSAPrivateKey rsa_private_key(encrypted_key_filepath);
+    } catch (const std::exception &e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return;
+    }
+
+    return;
+}
+
 int main(int argc, char **argv) {
     mpz_initialize_secure();
-    SHA_test(argc, argv);
+    RSA_encrypted_test(argc, argv);
     return 0;
 }

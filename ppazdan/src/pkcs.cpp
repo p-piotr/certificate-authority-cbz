@@ -61,20 +61,22 @@ namespace CBZ::PKCS {
             auto kdf = parameters_object->children()[0],
                 enc = parameters_object->children()[1];
             
-            if (kdf->children().size() != 2)
-                return false;
-            if (enc->children().size() != 2)
-                return false;
+            AlgorithmIdentifier kdf_ai, enc_ai;
 
-            auto kdf_oi = std::static_pointer_cast<ASN1ObjectIdentifier>(kdf->children()[0]);
-            auto kdf_params = kdf->children()[1];
+            if (int result = KDFs::extract_algorithm(kdf, &kdf_ai); result != ERR_OK)
+                return result;
 
-            auto search = KDFs::kdfsMap.find(kdf_oi->value());
-            if (search == KDFs::kdfsMap.end())
-                return ERR_ALGORITHM_UNSUPPORTED;
+            if (int result = EncryptionSchemes::extract_algorithm(enc, &enc_ai); result != ERR_OK)
+                return result;
 
-            auto kdf_algorithm = search->second;
-            // TODO: finish
+            if (out_ptr) {
+                *out_ptr = Parameters{
+                    kdf_ai,
+                    enc_ai
+                };
+            }
+
+            return ERR_OK;
         }
 
         int PBKDF2::extract_parameters(
@@ -133,7 +135,7 @@ namespace CBZ::PKCS {
 
                         // Try to extract the algorithm
                         AlgorithmIdentifier _prf;
-                        if (int result = extract_algorithm(next_field, &_prf); result != 0)
+                        if (int result = SupportedAlgorithms::extract_algorithm(next_field, &_prf); result != 0)
                             return result;
 
                         prf = _prf;
@@ -187,6 +189,208 @@ namespace CBZ::PKCS {
             } 
             return ERR_OK;
         }
+
+        int PrivateKeyAlgorithms::extract_algorithm(
+            std::shared_ptr<ASN1Object const> algorithm,
+            struct AlgorithmIdentifier *out_ptr,
+            std::string const &oid
+        ) {
+            if (algorithm->children().size() != 2)
+                return ERR_SEMANTIC_CHECK_FAILED;
+
+            const std::string algorithm_oid = (oid.empty()) ? 
+                std::static_pointer_cast<ASN1ObjectIdentifier const>(algorithm->children()[0])->value() : oid;
+            auto parameters = algorithm->children()[1];
+
+            // PrivateKeyAlgorithms
+            if (
+                auto search = SupportedAlgorithms::PrivateKeyAlgorithms::privateKeyAlgorithmsMap.find(algorithm_oid);
+                search != SupportedAlgorithms::PrivateKeyAlgorithms::privateKeyAlgorithmsMap.end()
+            ) {
+                using namespace SupportedAlgorithms::PrivateKeyAlgorithms;
+                switch (search->second) {
+                    case rsaEncryption: {
+                        if (int result = RSAEncryption::validate_parameters(parameters); result != ERR_OK)
+                            return result;
+
+                        if (out_ptr) {
+                            *out_ptr = AlgorithmIdentifier{
+                                rsaEncryption,
+                                std::shared_ptr<void>(nullptr)
+                            };
+                        }
+                        return ERR_OK;
+                    }
+                    default:
+                        throw std::runtime_error("[PKCS::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                }
+            }
+
+            return ERR_ALGORITHM_UNSUPPORTED;
+        }
+
+        int EncryptionAlgorithms::extract_algorithm(
+            std::shared_ptr<ASN1Object const> algorithm,
+            struct AlgorithmIdentifier *out_ptr,
+            std::string const &oid
+        ) {
+            if (algorithm->children().size() != 2)
+                return ERR_SEMANTIC_CHECK_FAILED;
+
+            const std::string algorithm_oid = (oid.empty()) ? 
+                std::static_pointer_cast<ASN1ObjectIdentifier const>(algorithm->children()[0])->value() : oid;
+            auto parameters = algorithm->children()[1];
+
+            // EncryptionAlgorithms
+            if (
+                auto search = SupportedAlgorithms::EncryptionAlgorithms::encryptionAlgorithmsMap.find(algorithm_oid);
+                search != SupportedAlgorithms::EncryptionAlgorithms::encryptionAlgorithmsMap.end()
+            ) {
+                using namespace SupportedAlgorithms::EncryptionAlgorithms;
+                switch (search->second) {
+                    case pbes2: {
+                        auto pbes2_parameters = out_ptr ? 
+                            std::make_shared<PBES2::Parameters>() : std::shared_ptr<PBES2::Parameters>(nullptr);
+                        if (int result = PBES2::extract_parameters(parameters, pbes2_parameters.get()); result != ERR_OK)
+                            return result;
+
+                        if (out_ptr) {
+                            *out_ptr = AlgorithmIdentifier{
+                                pbes2,
+                                pbes2_parameters
+                            };
+                        }
+                        return ERR_OK;
+                    }
+                    default:
+                        throw std::runtime_error("[PKCS::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                }
+            }
+
+            return ERR_ALGORITHM_UNSUPPORTED;
+        }
+
+        int KDFs::extract_algorithm(
+            std::shared_ptr<ASN1Object const> algorithm,
+            struct AlgorithmIdentifier *out_ptr,
+            std::string const &oid
+        ) {
+            if (algorithm->children().size() != 2)
+                return ERR_SEMANTIC_CHECK_FAILED;
+
+            const std::string algorithm_oid = (oid.empty()) ? 
+                std::static_pointer_cast<ASN1ObjectIdentifier const>(algorithm->children()[0])->value() : oid;
+            auto parameters = algorithm->children()[1];
+
+            // KDFs
+            if (
+                auto search = SupportedAlgorithms::KDFs::kdfsMap.find(algorithm_oid);
+                search != SupportedAlgorithms::KDFs::kdfsMap.end()
+            ) {
+                using namespace SupportedAlgorithms::KDFs;
+                switch (search->second) {
+                    case pbkdf2: {
+                        auto pbkdf2_parameters = out_ptr ?
+                            std::make_shared<PBKDF2::Parameters>() : std::shared_ptr<PBKDF2::Parameters>(nullptr);
+                        if (int result = PBKDF2::extract_parameters(parameters, pbkdf2_parameters.get()); result != ERR_OK)
+                            return result;
+                        
+                        if (out_ptr) {
+                            *out_ptr = AlgorithmIdentifier{
+                                pbkdf2,
+                                pbkdf2_parameters
+                            };
+                        }
+                        return ERR_OK;
+                    }
+                    default:
+                        throw std::runtime_error("[PKCS::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                }
+            }
+
+            return ERR_ALGORITHM_UNSUPPORTED;
+        }
+
+        int HMACFunctions::extract_algorithm(
+            std::shared_ptr<ASN1Object const> algorithm,
+            struct AlgorithmIdentifier *out_ptr,
+            std::string const &oid
+        ) {
+            if (algorithm->children().size() != 2)
+                return ERR_SEMANTIC_CHECK_FAILED;
+
+            const std::string algorithm_oid = (oid.empty()) ? 
+                std::static_pointer_cast<ASN1ObjectIdentifier const>(algorithm->children()[0])->value() : oid;
+            auto parameters = algorithm->children()[1];
+
+            // HMACFunctions
+            if (
+                auto search = SupportedAlgorithms::HMACFunctions::hmacFunctionsMap.find(algorithm_oid);
+                search != SupportedAlgorithms::HMACFunctions::hmacFunctionsMap.end()
+            ) {
+                using namespace SupportedAlgorithms::HMACFunctions;
+                switch (search->second) {
+                    case hmacWithSHA1:
+                    case hmacWithSHA256: {
+                        if (int result = _generic_validate_parameters(parameters); result != ERR_OK)
+                            return result;
+
+                        if (out_ptr) {
+                            *out_ptr = AlgorithmIdentifier{
+                                search->second,
+                                std::shared_ptr<void>(nullptr)
+                            };
+                        }
+                        return ERR_OK;
+                    }
+                    default:
+                        throw std::runtime_error("[PKCS::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                }
+            }
+
+            return ERR_ALGORITHM_UNSUPPORTED;
+        }
+
+        int EncryptionSchemes::extract_algorithm(
+            std::shared_ptr<ASN1Object const> algorithm,
+            struct AlgorithmIdentifier *out_ptr,
+            std::string const &oid
+        ) {
+            if (algorithm->children().size() != 2)
+                return ERR_SEMANTIC_CHECK_FAILED;
+
+            const std::string algorithm_oid = (oid.empty()) ? 
+                std::static_pointer_cast<ASN1ObjectIdentifier const>(algorithm->children()[0])->value() : oid;
+            auto parameters = algorithm->children()[1];
+
+            // EncryptionSchemes
+            if (
+                auto search = SupportedAlgorithms::EncryptionSchemes::encryptionSchemesMap.find(algorithm_oid);
+                search != SupportedAlgorithms::EncryptionSchemes::encryptionSchemesMap.end()
+            ) {
+                using namespace SupportedAlgorithms::EncryptionSchemes;
+                switch (search->second) {
+                    case aes_128_CBC: {
+                        auto aes_parameters = out_ptr ?
+                            std::make_shared<AES_128_CBC::Parameters>() : std::shared_ptr<AES_128_CBC::Parameters>(nullptr);
+                        if (int result = AES_128_CBC::extract_parameters(parameters, aes_parameters.get()); result != ERR_OK)
+                            return result;
+                        
+                        if (out_ptr) {
+                            *out_ptr = AlgorithmIdentifier{
+                                aes_128_CBC,
+                                aes_parameters
+                            };
+                        }
+                        return ERR_OK;
+                    }
+                    default:
+                        throw std::runtime_error("[PKCS::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                }
+            }
+
+            return ERR_ALGORITHM_UNSUPPORTED;
+        }
     }
 
     namespace Labels {
@@ -196,7 +400,7 @@ namespace CBZ::PKCS {
         const std::string encryptedPrivateKeyFooter = "-----END ENCRYPTED PRIVATE KEY-----";
     }
 
-    int extract_algorithm(
+    int SupportedAlgorithms::extract_algorithm(
         std::shared_ptr<ASN1Object const> algorithm,
         struct AlgorithmIdentifier *out_ptr
     ) {
@@ -208,137 +412,27 @@ namespace CBZ::PKCS {
 
         // Iterate through all supported algorithm categories
 
-        // PrivateKeyAlgorithms
-        if (
-            auto search = SupportedAlgorithms::PrivateKeyAlgorithms::privateKeyAlgorithmsMap.find(algorithm_oid);
-            search != SupportedAlgorithms::PrivateKeyAlgorithms::privateKeyAlgorithmsMap.end()
-        ) {
-            using namespace SupportedAlgorithms::PrivateKeyAlgorithms;
-            switch (search->second) {
-                case rsaEncryption: {
-                    if (int result = RSAEncryption::validate_parameters(parameters); result != ERR_OK)
-                        return result;
+        int result;
+        result = PrivateKeyAlgorithms::extract_algorithm(algorithm, out_ptr, algorithm_oid);
+        if (result != ERR_ALGORITHM_UNSUPPORTED) // If algorithm was supported, we could succeed or fail; either way return
+            return result;
+        
+        result = EncryptionAlgorithms::extract_algorithm(algorithm, out_ptr, algorithm_oid);
+        if (result != ERR_ALGORITHM_UNSUPPORTED)
+            return result;
 
-                    if (out_ptr) {
-                        *out_ptr = AlgorithmIdentifier{
-                            rsaEncryption,
-                            std::shared_ptr<void>(nullptr)
-                        };
-                    }
-                    return ERR_OK;
-                }
-                default:
-                    // call the cops
-                    goto call_the_cops;
-            }
-        }
+        result = KDFs::extract_algorithm(algorithm, out_ptr, algorithm_oid);
+        if (result != ERR_ALGORITHM_UNSUPPORTED)
+            return result;
 
-        // EncryptionAlgorithms
-        if (
-            auto search = SupportedAlgorithms::EncryptionAlgorithms::encryptionAlgorithmsMap.find(algorithm_oid);
-            search != SupportedAlgorithms::EncryptionAlgorithms::encryptionAlgorithmsMap.end()
-        ) {
-            using namespace SupportedAlgorithms::EncryptionAlgorithms;
-            switch (search->second) {
-                case pbes2: {
-                    auto pbes2_parameters = out_ptr ? 
-                        std::make_shared<PBES2::Parameters>() : std::shared_ptr<PBES2::Parameters>(nullptr);
-                    if (int result = PBES2::extract_parameters(parameters, pbes2_parameters.get()); result != ERR_OK)
-                        return result;
+        result = HMACFunctions::extract_algorithm(algorithm ,out_ptr, algorithm_oid);
+        if (result != ERR_ALGORITHM_UNSUPPORTED)
+            return result;
 
-                    if (out_ptr) {
-                        *out_ptr = AlgorithmIdentifier{
-                            pbes2,
-                            pbes2_parameters
-                        };
-                    }
-                    return ERR_OK;
-                }
-                default:
-                    goto call_the_cops;
-            }
-        }
-
-        // KDFs
-        if (
-            auto search = SupportedAlgorithms::KDFs::kdfsMap.find(algorithm_oid);
-            search != SupportedAlgorithms::KDFs::kdfsMap.end()
-        ) {
-            using namespace SupportedAlgorithms::KDFs;
-            switch (search->second) {
-                case pbkdf2: {
-                    auto pbkdf2_parameters = out_ptr ?
-                        std::make_shared<PBKDF2::Parameters>() : std::shared_ptr<PBKDF2::Parameters>(nullptr);
-                    if (int result = PBKDF2::extract_parameters(parameters, pbkdf2_parameters.get()); result != ERR_OK)
-                        return result;
-                    
-                    if (out_ptr) {
-                        *out_ptr = AlgorithmIdentifier{
-                            pbkdf2,
-                            pbkdf2_parameters
-                        };
-                    }
-                    return ERR_OK;
-                }
-                default:
-                    goto call_the_cops;
-            }
-        }
-
-        // HMACFunctions
-        if (
-            auto search = SupportedAlgorithms::HMACFunctions::hmacFunctionsMap.find(algorithm_oid);
-            search != SupportedAlgorithms::HMACFunctions::hmacFunctionsMap.end()
-        ) {
-            using namespace SupportedAlgorithms::HMACFunctions;
-            switch (search->second) {
-                case hmacWithSHA1:
-                case hmacWithSHA256: {
-                    if (int result = _generic_validate_parameters(parameters); result != ERR_OK)
-                        return result;
-
-                    if (out_ptr) {
-                        *out_ptr = AlgorithmIdentifier{
-                            search->second,
-                            std::shared_ptr<void>(nullptr)
-                        };
-                    }
-                    return ERR_OK;
-                }
-                default:
-                    goto call_the_cops;
-            }
-        }
-
-        // EncryptionSchemes
-        if (
-            auto search = SupportedAlgorithms::EncryptionSchemes::encryptionSchemesMap.find(algorithm_oid);
-            search != SupportedAlgorithms::EncryptionSchemes::encryptionSchemesMap.end()
-        ) {
-            using namespace SupportedAlgorithms::EncryptionSchemes;
-            switch (search->second) {
-                case aes_128_CBC: {
-                    auto aes_parameters = out_ptr ?
-                        std::make_shared<AES_128_CBC::Parameters>() : std::shared_ptr<AES_128_CBC::Parameters>(nullptr);
-                    if (int result = AES_128_CBC::extract_parameters(parameters, aes_parameters.get()); result != ERR_OK)
-                        return result;
-                    
-                    if (out_ptr) {
-                        *out_ptr = AlgorithmIdentifier{
-                            aes_128_CBC,
-                            aes_parameters
-                        };
-                    }
-                    return ERR_OK;
-                }
-                default:
-                    goto call_the_cops;
-            }
-        }
+        result = EncryptionSchemes::extract_algorithm(algorithm, out_ptr, algorithm_oid);
+        if (result != ERR_ALGORITHM_UNSUPPORTED)
+            return result;
 
         return ERR_ALGORITHM_UNSUPPORTED;
-
-        call_the_cops:
-        throw std::runtime_error("[PKCS::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
     }
 }
