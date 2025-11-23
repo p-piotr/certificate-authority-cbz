@@ -33,7 +33,7 @@ namespace CBZ::PKCS {
                 extern const OID oid;
 
                 // Parameters for this function should be NULL according to the PKCS
-                // See: https://datatracker.ietf.org/doc/html/rfc8017#appendix-A.2
+                // https://datatracker.ietf.org/doc/html/rfc8017#appendix-A.1
                 int validate_parameters(std::shared_ptr<ASN1Object const> parameters_object);
             }
 
@@ -48,6 +48,7 @@ namespace CBZ::PKCS {
             namespace PBES2 {
                 extern const OID oid;
 
+                // https://www.rfc-editor.org/rfc/rfc8018.html#appendix-A.4
                 struct Parameters {
                     struct AlgorithmIdentifier kdf;
                     struct AlgorithmIdentifier enc;
@@ -69,9 +70,12 @@ namespace CBZ::PKCS {
             namespace PBKDF2 {
                 extern const OID oid;
 
+                // https://www.rfc-editor.org/rfc/rfc8018.html#appendix-A.2
+                // 
                 struct Parameters {
                     std::shared_ptr<std::vector<uint8_t>> salt;
                     uint32_t iterationCount;
+                    uint32_t keyLength; // optional
                     struct AlgorithmIdentifier prf;
                 };
 
@@ -89,21 +93,28 @@ namespace CBZ::PKCS {
 
         namespace HMACFunctions {
 
+            // This is a generic function for validating the HMACWithSHA* functions,
+            // so there are no specific ones for each HMAC function declared
+            int _generic_validate_parameters(std::shared_ptr<ASN1Object const> parameters_object);
+
+            namespace HMACWithSHA1 {
+                extern const OID oid;
+            }
+
             namespace HMACWithSHA256 {
                 extern const OID oid;
-
-                int validate_parameters(std::shared_ptr<ASN1Object const> parameters_object);
             }
             
             enum HMACFunctionsEnum : uint32_t {
-                hmacWithSHA256 = 0x3001
+                hmacWithSHA1 = 0x3001,
+                hmacWithSHA256
             };
             extern const std::unordered_map<OID, HMACFunctionsEnum> hmacFunctionsMap;
         }
 
         namespace EncryptionSchemes {
 
-            namespace AES_128_CBC{
+            namespace AES_128_CBC {
                 extern const OID oid;
 
                 struct Parameters {

@@ -23,8 +23,6 @@ PrivateKeyInfo ::= SEQUENCE {
         attributes           [0]  IMPLICIT Attributes OPTIONAL
 }
 
-we only support rsaEncryption => algorithm = 1.2.840.113549.1.1.1 && parameters = NULL
-
 */
 
 // Contains all functionality related to RSA

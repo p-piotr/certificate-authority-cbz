@@ -22,19 +22,19 @@ namespace CBZ::PKCS {
         const OID HMACWithSHA256::oid = "1.2.840.113549.2.9";
         const OID AES_128_CBC::oid = "2.16.840.1.101.3.4.1.2";
 
-        const std::unordered_map<OID, PrivateKeyAlgorithmsEnum> privateKeyAlgorithmsMap = {
+        const std::unordered_map<OID, PrivateKeyAlgorithmsEnum> PrivateKeyAlgorithms::privateKeyAlgorithmsMap = {
             { RSAEncryption::oid, PrivateKeyAlgorithmsEnum::rsaEncryption }
         };
-        const std::unordered_map<OID, EncryptionAlgorithmsEnum> encryptionAlgorithmsMap = {
+        const std::unordered_map<OID, EncryptionAlgorithmsEnum> EncryptionAlgorithms::encryptionAlgorithmsMap = {
             { PBES2::oid, EncryptionAlgorithmsEnum::pbes2 }
         };
-        const std::unordered_map<OID, KDFsEnum> kdfsMap = {
+        const std::unordered_map<OID, KDFsEnum> KDFs::kdfsMap = {
             { PBKDF2::oid, KDFsEnum::pbkdf2 }
         };
-        const std::unordered_map<OID, HMACFunctionsEnum> hmacFunctionsMap = {
+        const std::unordered_map<OID, HMACFunctionsEnum> HMACFunctions::hmacFunctionsMap = {
             { HMACWithSHA256::oid, HMACFunctionsEnum::hmacWithSHA256 }
         };
-        const std::unordered_map<OID, EncryptionSchemesEnum> encryptionSchemesMap = {
+        const std::unordered_map<OID, EncryptionSchemesEnum> EncryptionSchemes::encryptionSchemesMap = {
             { AES_128_CBC::oid, EncryptionSchemesEnum::aes_128_CBC }
         };
 
@@ -53,6 +53,8 @@ namespace CBZ::PKCS {
         ) {
             using namespace PKCS::SupportedAlgorithms;
 
+            if (parameters_object->tag() != ASN1Tag::SEQUENCE)
+                return ERR_SEMANTIC_CHECK_FAILED;
             if (parameters_object->children().size() != 2)
                 return ERR_SEMANTIC_CHECK_FAILED;
 
@@ -79,10 +81,84 @@ namespace CBZ::PKCS {
             std::shared_ptr<ASN1Object const> parameters_object,
             struct Parameters *out_ptr
         ) {
+            if (parameters_object->tag() != ASN1Tag::SEQUENCE)
+                return ERR_SEMANTIC_CHECK_FAILED;
+            if (parameters_object->children().size() < 2)
+                return ERR_SEMANTIC_CHECK_FAILED;
 
+            std::shared_ptr<ASN1Object> salt;
+            uint32_t iteration_count = 0, key_length = 0;
+            AlgorithmIdentifier prf = {
+                HMACFunctions::hmacWithSHA1,
+                std::shared_ptr<void>(nullptr)
+            };
+
+            salt = parameters_object->children()[0];
+            if (salt->tag() != ASN1Tag::OCTET_STRING)
+                return ERR_SEMANTIC_CHECK_FAILED;
+
+            mpz_class _iteration_count_mpz = std::static_pointer_cast<ASN1Integer>(parameters_object->children()[1])->value();
+            if (_iteration_count_mpz > 0xFFFFFFFF) // This should never happen, but just in case
+                return ERR_FEATURE_UNSUPPORTED;
+            
+            iteration_count = static_cast<uint32_t>(_iteration_count_mpz.get_ui());
+            
+            // Small bitmap to help with further field extraction
+            // 1st LSB stands for the keyLength, while 2nd LSB stands for the prf
+            uint8_t _bm = 0; 
+
+            for (size_t i = 2; i < parameters_object->children().size(); i++) {
+                auto next_field = parameters_object->children()[i];
+                switch (next_field->tag()) {
+                    case ASN1Tag::INTEGER: {
+                        // Optional keyLength
+                        if (_bm & 0x01 || _bm & 0x02)
+                            // We either see the INTEGER for the second time, or already parsed the prf
+                            // Either way, abort
+                            return ERR_SEMANTIC_CHECK_FAILED;
+
+                        mpz_class _key_length = std::static_pointer_cast<ASN1Integer>(parameters_object->children()[2])->value();
+                        if (_key_length > 0xFFFFFFFF) // This also should never happen, but again, just in case
+                            return ERR_FEATURE_UNSUPPORTED;
+                        
+                        key_length = _key_length.get_ui();
+                        _bm |= 0x01;
+                        break;
+                    }
+                    case ASN1Tag::SEQUENCE: {
+                        // prf
+                        if (_bm & 0x02)
+                            // We've already been there; abort
+                            return ERR_SEMANTIC_CHECK_FAILED;
+
+                        // Try to extract the algorithm
+                        AlgorithmIdentifier _prf;
+                        if (int result = extract_algorithm(next_field, &_prf); result != 0)
+                            return result;
+
+                        prf = _prf;
+                        _bm |= 0x02;
+                        break;
+                    }
+                    default:
+                        return ERR_SEMANTIC_CHECK_FAILED;
+                }
+            }
+            
+            // Finish up; copy data if needed and return
+            if (out_ptr) {
+                *out_ptr = PBKDF2::Parameters{
+                    std::make_shared<std::vector<uint8_t>>(salt->value()),
+                    iteration_count,
+                    key_length,
+                    prf
+                };
+            }
+
+            return ERR_OK;
         }
 
-        int HMACWithSHA256::validate_parameters(
+        int HMACFunctions::_generic_validate_parameters(
             std::shared_ptr<ASN1Object const> parameters_object
         ) {
             if (parameters_object->tag() != ASN1Tag::NULL_TYPE)
@@ -140,20 +216,20 @@ namespace CBZ::PKCS {
             using namespace SupportedAlgorithms::PrivateKeyAlgorithms;
             switch (search->second) {
                 case rsaEncryption: {
-                    int result = RSAEncryption::validate_parameters(parameters);
-                    if (result != ERR_OK)
+                    if (int result = RSAEncryption::validate_parameters(parameters); result != ERR_OK)
                         return result;
 
                     if (out_ptr) {
-                        out_ptr->algorithm = rsaEncryption;
-                        out_ptr->params = std::make_shared<void>(nullptr);
+                        *out_ptr = AlgorithmIdentifier{
+                            rsaEncryption,
+                            std::shared_ptr<void>(nullptr)
+                        };
                     }
                     return ERR_OK;
                 }
-                default: {
+                default:
                     // call the cops
-                    throw std::runtime_error("[PKCS::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
-                }
+                    goto call_the_cops;
             }
         }
 
@@ -162,7 +238,25 @@ namespace CBZ::PKCS {
             auto search = SupportedAlgorithms::EncryptionAlgorithms::encryptionAlgorithmsMap.find(algorithm_oid);
             search != SupportedAlgorithms::EncryptionAlgorithms::encryptionAlgorithmsMap.end()
         ) {
+            using namespace SupportedAlgorithms::EncryptionAlgorithms;
+            switch (search->second) {
+                case pbes2: {
+                    auto pbes2_parameters = out_ptr ? 
+                        std::make_shared<PBES2::Parameters>() : std::shared_ptr<PBES2::Parameters>(nullptr);
+                    if (int result = PBES2::extract_parameters(parameters, pbes2_parameters.get()); result != ERR_OK)
+                        return result;
 
+                    if (out_ptr) {
+                        *out_ptr = AlgorithmIdentifier{
+                            pbes2,
+                            pbes2_parameters
+                        };
+                    }
+                    return ERR_OK;
+                }
+                default:
+                    goto call_the_cops;
+            }
         }
 
         // KDFs
@@ -170,7 +264,25 @@ namespace CBZ::PKCS {
             auto search = SupportedAlgorithms::KDFs::kdfsMap.find(algorithm_oid);
             search != SupportedAlgorithms::KDFs::kdfsMap.end()
         ) {
-
+            using namespace SupportedAlgorithms::KDFs;
+            switch (search->second) {
+                case pbkdf2: {
+                    auto pbkdf2_parameters = out_ptr ?
+                        std::make_shared<PBKDF2::Parameters>() : std::shared_ptr<PBKDF2::Parameters>(nullptr);
+                    if (int result = PBKDF2::extract_parameters(parameters, pbkdf2_parameters.get()); result != ERR_OK)
+                        return result;
+                    
+                    if (out_ptr) {
+                        *out_ptr = AlgorithmIdentifier{
+                            pbkdf2,
+                            pbkdf2_parameters
+                        };
+                    }
+                    return ERR_OK;
+                }
+                default:
+                    goto call_the_cops;
+            }
         }
 
         // HMACFunctions
@@ -178,7 +290,24 @@ namespace CBZ::PKCS {
             auto search = SupportedAlgorithms::HMACFunctions::hmacFunctionsMap.find(algorithm_oid);
             search != SupportedAlgorithms::HMACFunctions::hmacFunctionsMap.end()
         ) {
+            using namespace SupportedAlgorithms::HMACFunctions;
+            switch (search->second) {
+                case hmacWithSHA1:
+                case hmacWithSHA256: {
+                    if (int result = _generic_validate_parameters(parameters); result != ERR_OK)
+                        return result;
 
+                    if (out_ptr) {
+                        *out_ptr = AlgorithmIdentifier{
+                            search->second,
+                            std::shared_ptr<void>(nullptr)
+                        };
+                    }
+                    return ERR_OK;
+                }
+                default:
+                    goto call_the_cops;
+            }
         }
 
         // EncryptionSchemes
@@ -186,9 +315,30 @@ namespace CBZ::PKCS {
             auto search = SupportedAlgorithms::EncryptionSchemes::encryptionSchemesMap.find(algorithm_oid);
             search != SupportedAlgorithms::EncryptionSchemes::encryptionSchemesMap.end()
         ) {
-
+            using namespace SupportedAlgorithms::EncryptionSchemes;
+            switch (search->second) {
+                case aes_128_CBC: {
+                    auto aes_parameters = out_ptr ?
+                        std::make_shared<AES_128_CBC::Parameters>() : std::shared_ptr<AES_128_CBC::Parameters>(nullptr);
+                    if (int result = AES_128_CBC::extract_parameters(parameters, aes_parameters.get()); result != ERR_OK)
+                        return result;
+                    
+                    if (out_ptr) {
+                        *out_ptr = AlgorithmIdentifier{
+                            aes_128_CBC,
+                            aes_parameters
+                        };
+                    }
+                    return ERR_OK;
+                }
+                default:
+                    goto call_the_cops;
+            }
         }
 
         return ERR_ALGORITHM_UNSUPPORTED;
+
+        call_the_cops:
+        throw std::runtime_error("[PKCS::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
     }
 }

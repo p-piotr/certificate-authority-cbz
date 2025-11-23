@@ -46,6 +46,17 @@ namespace CBZ {
         //               be able to contain at least DIGEST_SIZE bytes
         void _SHA_digest_generic(EVP_MD *md, char const *class_name, uint8_t const *m, size_t s, uint8_t *od);
 
+        // SHA1 class
+        class SHA1 {
+        public:
+            static const constexpr size_t BLOCK_SIZE = 64;
+            static const constexpr size_t DIGEST_SIZE = 20;
+
+            SHA1() = delete;
+            ~SHA1() = delete;
+            static void digest(uint8_t const *m, size_t s, uint8_t *od);
+        };
+
         // SHA224 class
         class SHA224 {
         public:

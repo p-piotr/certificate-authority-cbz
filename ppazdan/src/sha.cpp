@@ -57,6 +57,11 @@ namespace CBZ::SHA {
 
     // See "sha.h" for further documentation, if needed
 
+    void SHA1::digest(uint8_t const *m, size_t s, uint8_t *od) {
+        static _EVP_MD_wrapper sha1(nullptr, "SHA1", nullptr);
+        _SHA_digest_generic(sha1.md(), "SHA1", m, s, od);
+    }
+
     void SHA224::digest(uint8_t const *m, size_t s, uint8_t *od) {
         static _EVP_MD_wrapper sha224(nullptr, "SHA224", nullptr);
         _SHA_digest_generic(sha224.md(), "SHA224", m, s, od);

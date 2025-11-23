@@ -98,8 +98,9 @@ void SHA_test(int argc, char **argv) {
         std::cerr << "Usage: " << argv[0] << " MESSAGE" << std::endl;
         return;
     }
-    uint8_t digest[CBZ::SHA::SHA256::DIGEST_SIZE];
-    CBZ::SHA::SHA256::digest(reinterpret_cast<uint8_t*>(argv[1]), strlen(argv[1]), digest);
+    typedef CBZ::SHA::SHA1 HF;
+    uint8_t digest[HF::DIGEST_SIZE];
+    HF::digest(reinterpret_cast<uint8_t*>(argv[1]), strlen(argv[1]), digest);
     for (uint8_t b : digest)
         std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
     std::cout << std::endl;
@@ -165,6 +166,6 @@ void KDF_test(int argc, char **argv) {
 
 int main(int argc, char **argv) {
     mpz_initialize_secure();
-    KDF_test(argc, argv);
+    SHA_test(argc, argv);
     return 0;
 }
