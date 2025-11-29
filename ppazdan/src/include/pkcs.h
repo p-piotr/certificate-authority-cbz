@@ -189,9 +189,7 @@ namespace CBZ::PKCS {
                 std::string const &oid = ""
             );
 
-            namespace AES_128_CBC {
-                extern const OID oid;
-
+            namespace AES {
                 struct Parameters {
                     uint8_t iv[16];
                 };
@@ -200,10 +198,18 @@ namespace CBZ::PKCS {
                     std::shared_ptr<ASN1Object const> parameters_object,
                     struct Parameters *out_ptr
                 );
+
+                namespace AES_128_CBC {
+                    extern const OID oid;
+                }
+                namespace AES_256_CBC {
+                    extern const OID oid;
+                }
             }
 
             enum EncryptionSchemesEnum : uint32_t {
-                aes_128_CBC = 0x4001
+                aes_128_CBC = 0x4001,
+                aes_256_CBC
             };
             extern const std::unordered_map<OID, EncryptionSchemesEnum> encryptionSchemesMap;
         }

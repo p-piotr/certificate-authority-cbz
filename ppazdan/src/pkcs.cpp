@@ -23,7 +23,8 @@ namespace CBZ::PKCS {
         const OID PBES2::oid = "1.2.840.113549.1.5.13";
         const OID PBKDF2::oid = "1.2.840.113549.1.5.12";
         const OID HMACWithSHA256::oid = "1.2.840.113549.2.9";
-        const OID AES_128_CBC::oid = "2.16.840.1.101.3.4.1.2";
+        const OID AES::AES_128_CBC::oid = "2.16.840.1.101.3.4.1.2";
+        const OID AES::AES_256_CBC::oid = "2.16.840.1.101.3.4.1.42";
 
         const std::unordered_map<OID, PrivateKeyAlgorithmsEnum> PrivateKeyAlgorithms::privateKeyAlgorithmsMap = {
             { RSAEncryption::oid, PrivateKeyAlgorithmsEnum::rsaEncryption }
@@ -38,7 +39,8 @@ namespace CBZ::PKCS {
             { HMACWithSHA256::oid, HMACFunctionsEnum::hmacWithSHA256 }
         };
         const std::unordered_map<OID, EncryptionSchemesEnum> EncryptionSchemes::encryptionSchemesMap = {
-            { AES_128_CBC::oid, EncryptionSchemesEnum::aes_128_CBC }
+            { AES::AES_128_CBC::oid, EncryptionSchemesEnum::aes_128_CBC },
+            { AES::AES_256_CBC::oid, EncryptionSchemesEnum::aes_256_CBC }
         };
 
         int RSAEncryption::validate_parameters(
@@ -97,6 +99,9 @@ namespace CBZ::PKCS {
                 case EncryptionSchemes::aes_128_CBC:
                     key_length = 16;
                     break;
+                case EncryptionSchemes::aes_256_CBC:
+                    key_length = 32;
+                    break;
                 default:
                     return ERR_ALGORITHM_UNSUPPORTED;
             }
@@ -121,11 +126,24 @@ namespace CBZ::PKCS {
 
             switch (params->enc.algorithm) {
                 case EncryptionSchemes::aes_128_CBC: {
-                    EncryptionSchemes::AES_128_CBC::Parameters *es_params =
+                    EncryptionSchemes::AES::Parameters *es_params =
                         std::static_pointer_cast
-                        <EncryptionSchemes::AES_128_CBC::Parameters>
+                        <EncryptionSchemes::AES::Parameters>
                         (params->enc.params).get();
                     CBZ::AES::AES_128_CBC::decrypt(
+                        in,
+                        ok.data(),
+                        es_params->iv,
+                        out
+                    );
+                    return ERR_OK;
+                }
+                case EncryptionSchemes::aes_256_CBC: {
+                    EncryptionSchemes::AES::Parameters *es_params =
+                        std::static_pointer_cast
+                        <EncryptionSchemes::AES::Parameters>
+                        (params->enc.params).get();
+                    CBZ::AES::AES_256_CBC::decrypt(
                         in,
                         ok.data(),
                         es_params->iv,
@@ -262,7 +280,7 @@ namespace CBZ::PKCS {
             return ERR_OK;
         }
 
-        int AES_128_CBC::extract_parameters(
+        int EncryptionSchemes::AES::extract_parameters(
             std::shared_ptr<ASN1Object const> parameters_object,
             struct Parameters *out_ptr
         ) {
@@ -463,15 +481,21 @@ namespace CBZ::PKCS {
             ) {
                 using namespace SupportedAlgorithms::EncryptionSchemes;
                 switch (search->second) {
-                    case aes_128_CBC: {
+                    case aes_128_CBC: 
+                    case aes_256_CBC: {
                         auto aes_parameters = out_ptr ?
-                            std::make_shared<AES_128_CBC::Parameters>() : std::shared_ptr<AES_128_CBC::Parameters>(nullptr);
-                        if (int result = AES_128_CBC::extract_parameters(parameters, aes_parameters.get()); result != ERR_OK)
+                            std::make_shared<EncryptionSchemes::AES::Parameters>()
+                            : std::shared_ptr<EncryptionSchemes::AES::Parameters>(nullptr);
+                        if (
+                            int result = EncryptionSchemes::AES
+                            ::extract_parameters(parameters, aes_parameters.get());
+                            result != ERR_OK
+                        )
                             return result;
                         
                         if (out_ptr) {
                             *out_ptr = AlgorithmIdentifier{
-                                aes_128_CBC,
+                                search->second,
                                 aes_parameters
                             };
                         }
