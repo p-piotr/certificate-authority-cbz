@@ -2,6 +2,7 @@
 #include <fstream>
 #include <vector>
 #include <iomanip>
+#include <span>
 #include "include/base64.h"
 #include "include/asn1.h"
 #include "include/private_key.h"
@@ -75,9 +76,10 @@ void RSA_ASN1_test(int argc, char **argv) {
 }
 
 void AES_test(int argc, char **argv) {
-    AES::KEY128 key = { 0x30, 0x30, 0x31, 0x31, 0x32, 0x32, 0x33, 0x33, 0x34, 0x34, 0x35, 0x35, 0x36, 0x36, 0x37, 0x37 };
-    AES::IV iv = { 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30 };
-    std::vector<uint8_t> enc = AES::AES_128_CBC::encrypt(const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>("hello")), 5, key, iv);
+    std::array<uint8_t, 16> key = { 0x30, 0x30, 0x31, 0x31, 0x32, 0x32, 0x33, 0x33, 0x34, 0x34, 0x35, 0x35, 0x36, 0x36, 0x37, 0x37 };
+    std::array<uint8_t, 16> iv = { 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30 };
+    std::string message = "hello";
+    std::vector<uint8_t> enc = AES::AES_128_CBC::encrypt({ reinterpret_cast<uint8_t*>(message.data()), message.size() }, key.data(), iv.data());
     for (uint8_t b : enc)
         std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
 
@@ -91,7 +93,7 @@ void SHA_test(int argc, char **argv) {
     }
     typedef CBZ::SHA::SHA1 HF;
     uint8_t digest[HF::DIGEST_SIZE];
-    HF::digest(reinterpret_cast<uint8_t*>(argv[1]), strlen(argv[1]), digest);
+    HF::digest(std::span{reinterpret_cast<uint8_t*>(argv[1]), strlen(argv[1])}, digest);
     for (uint8_t b : digest)
         std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
     std::cout << std::endl;
@@ -110,7 +112,7 @@ void HMAC_test(int argc, char **argv) {
     };
     auto test = [&](std::vector<uint8_t> const &key) {
         uint8_t derived_key[HMAC<SHA::SHA256>::KEY_SIZE];
-        HMAC<SHA::SHA256>::derive_blocksized_key(key.data(), key.size(), derived_key);
+        HMAC<SHA::SHA256>::derive_blocksized_key(std::span{key}, derived_key);
         print_array(derived_key);
     };
 
@@ -126,10 +128,8 @@ void HMAC_test(int argc, char **argv) {
     std::string message = "hello";
     uint8_t hmac[HMAC<SHA::SHA256>::DIGEST_SIZE]; 
     HMAC<SHA::SHA256>::digest(
-        reinterpret_cast<uint8_t*>(message.data()),
-        message.size(),
-        key1.data(),
-        key1.size(),
+        std::span{reinterpret_cast<uint8_t*>(message.data()), message.size()},
+        std::span{key1},
         hmac
     );   
     print_array(hmac);
@@ -141,10 +141,8 @@ void KDF_test(int argc, char **argv) {
     std::string salt = "mysuperduperhipersalt88274648";
     uint8_t derived_key[KEY_SIZE];
     CBZ::KDF::PBKDF2<CBZ::HMAC<CBZ::SHA::SHA256>>::derive_key(
-        reinterpret_cast<uint8_t*>(password.data()),
-        password.size(),
-        reinterpret_cast<uint8_t*>(salt.data()),
-        salt.size(),
+        { reinterpret_cast<uint8_t*>(password.data()), password.size() },
+        { reinterpret_cast<uint8_t*>(salt.data()), salt.size() },
         1024,
         KEY_SIZE,
         derived_key

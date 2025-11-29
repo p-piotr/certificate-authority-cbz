@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <span>
 #include <cstddef>
 #include <cstdint>
 #include <concepts>
@@ -17,8 +18,7 @@ namespace CBZ {
     // (used by HMAC, for instance - see "hmac.h")
     template<typename _H>
     concept HashFunction = requires(
-        const uint8_t *m,
-        size_t s,
+        std::span<uint8_t const> m,
         uint8_t *od
     ) {
         { _H::DIGEST_SIZE } -> std::convertible_to<size_t>; // Size of a hashing function's digest, in bytes
@@ -26,7 +26,7 @@ namespace CBZ {
         // Check if the MD (Message Digest) type has been defined as a size variation
         // of type std::array<uint8_t, S> and if S > 0
 
-        { _H::digest(m, s, od) } -> std::same_as<void>; // Main functionality of a hash function - digest
+        { _H::digest(m, od) } -> std::same_as<void>; // Main functionality of a hash function - digest
     };
 
     // This namespace contains everything related to SHAs
@@ -44,7 +44,12 @@ namespace CBZ {
         // @s - size of the message to digest
         // @od - pointer to the buffer storing digest; it MUST
         //               be able to contain at least DIGEST_SIZE bytes
-        void _SHA_digest_generic(EVP_MD *md, char const *class_name, uint8_t const *m, size_t s, uint8_t *od);
+        void _SHA_digest_generic(
+            EVP_MD *md,
+            char const *class_name,
+            std::span<uint8_t const> m,
+            uint8_t *od
+        );
 
         // SHA1 class
         class SHA1 {
@@ -54,7 +59,7 @@ namespace CBZ {
 
             SHA1() = delete;
             ~SHA1() = delete;
-            static void digest(uint8_t const *m, size_t s, uint8_t *od);
+            static void digest(std::span<uint8_t const> m, uint8_t *od);
         };
 
         // SHA224 class
@@ -65,7 +70,7 @@ namespace CBZ {
 
             SHA224() = delete;
             ~SHA224() = delete;
-            static void digest(uint8_t const *m, size_t s, uint8_t *od);
+            static void digest(std::span<uint8_t const> m, uint8_t *od);
         };
 
         // SHA256 class
@@ -76,7 +81,7 @@ namespace CBZ {
 
             SHA256() = delete;
             ~SHA256() = delete;
-            static void digest(uint8_t const *m, size_t s, uint8_t *od);
+            static void digest(std::span<uint8_t const> m, uint8_t *od);
         };
 
         // Wrapper class for EVP_MD* object, since it's declared as 'static' in every

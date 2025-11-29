@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <memory>
+#include <span>
 #include <gmpxx.h>
 #include "include/debug.h"
 #include "include/security.hpp"
@@ -181,7 +182,7 @@ namespace CBZ {
             }
 
             ~ASN1Object() {
-                secure_zero_memory(_value.data(), _value.size()); // don't forget to zero data as it may be critical
+                secure_zero_memory(std::span{_value}); // don't forget to zero data as it may be critical
                 #ifdef ASN1_DEBUG
                 std::cerr << "[ASN1Object] ASN1Object destroyed: tag=" << tag_to_string(_tag) 
                     << ", value_size=" << _value.size() << std::endl;

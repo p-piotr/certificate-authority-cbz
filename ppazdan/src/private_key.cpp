@@ -3,8 +3,9 @@
 #include <cstddef>
 #include <vector>
 #include <fstream>
-#include <gmpxx.h>
 #include <sstream>
+#include <span>
+#include <gmpxx.h>
 #include "include/security.hpp"
 #include "include/debug.h"
 #include "include/private_key.h"
@@ -29,8 +30,8 @@ PrivateKeyInfo ::= SEQUENCE {
 // Contains all functionality related to RSA
 namespace CBZ::RSA {
 
-    using namespace ASN1;
-    using namespace PKCS;
+    using namespace CBZ::ASN1;
+    using namespace CBZ::PKCS;
 
     // Checks if the ASN.1 structure of the RSA private key is correct
     // Additionally expands the key by decoding the RSAPrivateKey structure
@@ -79,7 +80,7 @@ namespace CBZ::RSA {
                 if (private_key->children().size() == 0) {
                     // Decode the private_key according to the PKCS#1 structure, since
                     // the ASN.1 parser didn't do it (it's a Primitive OCTET STRING after all)
-                    pk_sequence = ASN1Parser::decode_all(std::move(private_key->value()), 0);
+                    pk_sequence = ASN1Parser::decode_all(std::move(private_key->value()));
                     if (pk_sequence->children().size() != 9)
                         return ERR_SEMANTIC_CHECK_FAILED;
 
@@ -98,7 +99,12 @@ namespace CBZ::RSA {
     //
     // Input:
     // @root_object - root ASN1Object representing the whole key
-    int _EncryptedRSAPrivateKey_check(std::shared_ptr<ASN1Object const> root_object) {
+    // @out_ptr - optional pointer to the AlgorithmIdentifier structure
+    //            to store the extracted algorithm
+    int _EncryptedRSAPrivateKey_check(
+        std::shared_ptr<ASN1Object const> root_object,
+        struct AlgorithmIdentifier *out_ptr
+    ) {
         using namespace SupportedAlgorithms;
 
         if (root_object->tag() != ASN1Tag::SEQUENCE || root_object->children().size() != 2)
@@ -107,13 +113,63 @@ namespace CBZ::RSA {
         auto encryption_algorithm = root_object->children()[0];
         auto encrypted_data = root_object->children()[1];
         
-        if (int result = EncryptionAlgorithms::extract_algorithm(encryption_algorithm, nullptr); result != ERR_OK)
+        if (int result = EncryptionAlgorithms::extract_algorithm(encryption_algorithm, out_ptr); result != ERR_OK)
             return result;
         if (encrypted_data->tag() != ASN1Tag::OCTET_STRING)
             return ERR_SEMANTIC_CHECK_FAILED;
 
         return ERR_OK;
     }
+
+    RSAPrivateKey _Decrypt_key(
+        std::shared_ptr<ASN1Object> encrypted_data,
+        struct AlgorithmIdentifier const *alg_id,
+        std::string &&passphrase
+    ) {
+        using namespace SupportedAlgorithms;
+
+        std::shared_ptr<std::string> passphrase_sp(
+            new std::string(std::move(passphrase)),
+            secure_delete<std::string>
+        );
+        std::vector<uint8_t> decrypted_data;
+
+        auto params = std::static_pointer_cast<EncryptionAlgorithms::PBES2::Parameters>
+            (alg_id->params);
+        switch (alg_id->algorithm) {
+            case EncryptionAlgorithms::pbes2: {
+                if (
+                    int result = EncryptionAlgorithms::PBES2::decrypt_data(
+                        params.get(),
+                        passphrase_sp,
+                        std::span{encrypted_data->value()},
+                        decrypted_data
+                    ); result != ERR_OK
+                ) {
+                    switch (result) {
+                        case ERR_SEMANTIC_CHECK_FAILED:
+                            throw SemanticCheckException("Semantic check in RSA private key failed");
+                        case ERR_ALGORITHM_UNSUPPORTED:
+                            throw AlgorithmUnsupportedException("Algorithm used in RSA private key is unsupported");
+                        case ERR_FEATURE_UNSUPPORTED:
+                            throw FeatureUnsupportedException("Feature used inside RSA private key is unsupported");
+                        default:
+                            throw std::runtime_error("Unspecified exception was thrown while decrypting RSA private key");
+                    }
+                }
+                break;
+            }
+            default:
+                throw AlgorithmUnsupportedException("Algorithm used in RSA private key is unsupported");
+        }
+
+        auto root_object = ASN1Parser::decode_all(
+            std::shared_ptr<std::vector<uint8_t>>(new std::vector<uint8_t>(std::move(decrypted_data)))
+        );
+        root_object->print();
+        throw std::runtime_error("empty return");
+    }
+
 
     // Prints the private key (use only for debugging purposes)
     void RSAPrivateKey::print() {
@@ -163,7 +219,7 @@ namespace CBZ::RSA {
             throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key footer doesn't match the standard");
 
         std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
-        std::shared_ptr<ASN1Object> asn1_root = ASN1Parser::decode_all(std::move(key_asn1), 0);
+        std::shared_ptr<ASN1Object> asn1_root = ASN1Parser::decode_all(std::move(key_asn1));
 
         // validate the overall key ASN.1 structure and expand it, if needed
         if (int result = _RSAPrivateKey_check_and_expand(asn1_root); result != 0) {
@@ -241,9 +297,10 @@ namespace CBZ::RSA {
             throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key footer doesn't match the standard");
 
         std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
-        std::shared_ptr<ASN1Object> asn1_root = ASN1Parser::decode_all(std::move(key_asn1), 0);
+        std::shared_ptr<ASN1Object> asn1_root = ASN1Parser::decode_all(std::move(key_asn1));
+        struct AlgorithmIdentifier alg_id;
 
-        if (int result = _EncryptedRSAPrivateKey_check(asn1_root); result != ERR_OK) {
+        if (int result = _EncryptedRSAPrivateKey_check(asn1_root, &alg_id); result != ERR_OK) {
             switch (result) {
                 case ERR_SEMANTIC_CHECK_FAILED:
                     throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key semantic check failed");

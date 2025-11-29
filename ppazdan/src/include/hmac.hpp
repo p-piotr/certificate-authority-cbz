@@ -4,6 +4,7 @@
 #include <concepts>
 #include <cstddef>
 #include <vector>
+#include <span>
 #include "include/sha.h"
 #include "include/security.hpp"
 
@@ -11,16 +12,14 @@ namespace CBZ {
 
     template <typename _PRF>
     concept PseudoRandomFunction = requires(
-        uint8_t const *m,
-        size_t msize,
-        uint8_t const *k,
-        size_t ksize,
+        std::span<uint8_t const> m,
+        std::span<uint8_t const> k,
         uint8_t *od
     ) {
         { _PRF::KEY_SIZE } -> std::convertible_to<size_t>;
         { _PRF::DIGEST_SIZE } -> std::convertible_to<size_t>;
 
-        { _PRF::digest(m, msize, k, ksize, od) } -> std::same_as<void>;
+        { _PRF::digest(m, k, od) } -> std::same_as<void>;
     };
 
     // Class describing a HMAC function template, based on given HashFunction object (interface implementation)
@@ -36,43 +35,43 @@ namespace CBZ {
 
         // Derive key to use with the HMAC, based on provided key
         // Essentially this comes down to 3 cases:
-        //     1) If key.size() == derived_key.size(), derived_key := key
-        //     2) If key.size() < derived_key.size(), derived_key := key || 0_padding
-        //     3) If key.size() > derived_key.size(), derived_key := H(key) || 0_padding (since DIGEST_SIZE < BLOCK_SIZE)
+        //     1) If key.size() == dk.size(), dk := key
+        //     2) If key.size() < dk.size(), dk := key || 0_padding
+        //     3) If key.size() > dk.size(), dk := H(key) || 0_padding (since DIGEST_SIZE < BLOCK_SIZE)
         //
         // Input:
-        // @key: Key to derive from, as a byte vector
+        // @ik - key to derive from
+        // @dk - pointer to the output derived key
         static void derive_blocksized_key(
-            uint8_t const *input_key,
-            size_t input_key_size,
-            uint8_t *derived_key
+            std::span<uint8_t const> ik,
+            uint8_t *dk
         ) {
-            if (input_key_size == KEY_SIZE) {
+            if (ik.size() == KEY_SIZE) {
                 std::memcpy(
-                    derived_key,
-                    const_cast<uint8_t*>(input_key),
+                    dk,
+                    ik.data(),
                     KEY_SIZE
                 );
                 return;
             }
 
-            if (input_key_size < KEY_SIZE) {
+            if (ik.size() < KEY_SIZE) {
                 std::memcpy(
-                    derived_key,
-                    const_cast<uint8_t*>(input_key),
-                    input_key_size
+                    dk,
+                    ik.data(),
+                    ik.size()
                 );
                 std::memset(
-                    derived_key + input_key_size,
+                    dk + ik.size(),
                     0,
-                    KEY_SIZE - input_key_size
+                    KEY_SIZE - ik.size()
                 );
                 return;
             }
 
-            _H::digest(input_key, input_key_size, derived_key);
+            _H::digest(ik, dk);
             std::memset(
-                const_cast<uint8_t*>(derived_key + DIGEST_SIZE),
+                dk + DIGEST_SIZE,
                 0,
                 KEY_SIZE - DIGEST_SIZE
             );
@@ -82,16 +81,12 @@ namespace CBZ {
         //
         // Input:
         // @m - message
-        // @msize - message size (in bytes)
         // @k - key
-        // @ksize - key size (in bytes)
         // @od - out pointer to buffer storing the calculated HMAC
         //       this buffer MUST be of size at least DIGEST_SIZE
         static void digest(
-            uint8_t const *m,
-            size_t msize,
-            uint8_t const *k,
-            size_t ksize,
+            std::span<uint8_t const> m,
+            std::span<uint8_t const> k,
             uint8_t *od
         ) {
             // small lambda function to perform XOR of every byte of arbitralily large array against a given value 'v'
@@ -101,24 +96,24 @@ namespace CBZ {
             };
 
             uint8_t 
-                derived_key[KEY_SIZE],
-                derived_key_opad[KEY_SIZE],
-                derived_key_ipad[KEY_SIZE],
-                inner_hash[DIGEST_SIZE];
+                dk[KEY_SIZE],
+                dk_opad[KEY_SIZE],
+                dk_ipad[KEY_SIZE],
+                ihash[DIGEST_SIZE];
 
-            derive_blocksized_key(k, ksize, derived_key);
+            derive_blocksized_key(k, dk);
             std::memcpy(
-                derived_key_opad,
-                derived_key,
+                dk_opad,
+                dk,
                 KEY_SIZE
             );
-            _xor_v(derived_key_opad, KEY_SIZE, 0x5C);
+            _xor_v(dk_opad, KEY_SIZE, 0x5C);
             std::memcpy(
-                derived_key_ipad,
-                derived_key,
+                dk_ipad,
+                dk,
                 KEY_SIZE
             );
-            _xor_v(derived_key_ipad, KEY_SIZE, 0x36);
+            _xor_v(dk_ipad, KEY_SIZE, 0x36);
 
             std::vector<uint8_t> concat_message;
             // in concat_message we will store:
@@ -126,42 +121,42 @@ namespace CBZ {
             // (K' ^ opad) || H((K' ^ ipad) || m))        - KEY_SIZE + DIGEST_SIZE
             // so we can reserve the bigger size
             concat_message.reserve(
-                msize > DIGEST_SIZE ? 
-                KEY_SIZE + msize 
+                m.size() > DIGEST_SIZE ?
+                KEY_SIZE + m.size()
                 : KEY_SIZE + DIGEST_SIZE
             );
 
-            concat_message.resize(KEY_SIZE + msize);
+            concat_message.resize(KEY_SIZE + m.size());
             std::memcpy(
                 concat_message.data(),
-                derived_key_ipad,
+                dk_ipad,
                 KEY_SIZE
             );
             std::memcpy(
                 concat_message.data() + KEY_SIZE,
-                m,
-                msize
+                m.data(),
+                m.size()
             );
-            _H::digest(concat_message.data(), concat_message.size(), inner_hash);
+            _H::digest(concat_message, ihash);
             
-            secure_zero_memory(derived_key, KEY_SIZE);
-            secure_zero_memory(derived_key_ipad, KEY_SIZE);
+            secure_zero_memory(dk, KEY_SIZE);
+            secure_zero_memory(dk_ipad, KEY_SIZE);
 
             concat_message.resize(KEY_SIZE + DIGEST_SIZE);
             std::memcpy(
                 concat_message.data(),
-                derived_key_opad,
+                dk_opad,
                 KEY_SIZE
             );
             std::memcpy(
                 concat_message.data() + KEY_SIZE,
-                inner_hash,
+                ihash,
                 DIGEST_SIZE
             );
-            _H::digest(concat_message.data(), concat_message.size(), od);
+            _H::digest(std::span{concat_message}, od);
 
-            secure_zero_memory(derived_key_opad, KEY_SIZE);
-            secure_zero_memory(inner_hash, DIGEST_SIZE);
+            secure_zero_memory(dk_opad, KEY_SIZE);
+            secure_zero_memory(ihash, DIGEST_SIZE);
             secure_zero_memory(concat_message.data(), concat_message.size());
         }
     };

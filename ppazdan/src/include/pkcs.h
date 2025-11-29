@@ -4,13 +4,14 @@
 #include <cstdint>
 #include <vector>
 #include <memory>
+#include <span>
 #include <unordered_map>
 #include "include/asn1.h"
 
 // Namespace containing PKCS-related operations
 namespace CBZ::PKCS {
 
-    using namespace ASN1;
+    using namespace CBZ::ASN1;
 
     // Return values for functions operating on PKCS data
     #define ERR_OK 0
@@ -18,7 +19,6 @@ namespace CBZ::PKCS {
     #define ERR_FEATURE_UNSUPPORTED 2
     #define ERR_SEMANTIC_CHECK_FAILED 3
 
-    // Common OIDs found inside PKCS objects; this is not a complete list
     typedef std::string OID;
     struct AlgorithmIdentifier {
         uint32_t algorithm;
@@ -82,6 +82,22 @@ namespace CBZ::PKCS {
                     std::shared_ptr<ASN1Object const> parameters_object,
                     struct Parameters *out_ptr
                 );
+
+                // Decrypts data using given passphrase, according
+                // to the KDF and encryption scheme specified in parameters
+                //
+                // Input:
+                // @params - Parameters struct specifying underlying algorithms
+                // @passphrase - passphrase to be used with the KDF, passed as an rvalue
+                //               (contents of the passphrase will be securely deleted afterwards)
+                // @in - buffer with encrypted data
+                // @out - vector to store decrypted data
+                int decrypt_data(
+                    struct Parameters *params,
+                    std::shared_ptr<std::string> passphrase,
+                    std::span<uint8_t const> in,
+                    std::vector<uint8_t> &out
+                );
             }
 
             enum EncryptionAlgorithmsEnum : uint32_t {
@@ -112,6 +128,23 @@ namespace CBZ::PKCS {
                 int extract_parameters(
                     std::shared_ptr<ASN1Object const> parameters_object,
                     struct Parameters *out_ptr
+                );
+
+                // Derive key according to given KDF parameters structure
+                // and a passphrase
+                //
+                // Input:
+                // @params - pointer to the Parameters structure, storing KDF options
+                // @passphrase - passphrase to derive key from passed as an rvalue
+                //               this value will be securely deleted when deriving process
+                //               completes
+                // @key_length - desired key length
+                // @out_key - reference to a vector storing the output key
+                int derive_key(
+                    struct Parameters *params,
+                    std::shared_ptr<std::string> passphrase,
+                    size_t key_length,
+                    std::vector<uint8_t> &out_key
                 );
             }
 

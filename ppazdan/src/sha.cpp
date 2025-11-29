@@ -1,7 +1,8 @@
-#include <openssl/evp.h>
 #include <array>
 #include <stdexcept>
 #include <sstream>
+#include <span>
+#include <openssl/evp.h>
 #include "include/sha.h"
 
 namespace CBZ::SHA {
@@ -15,14 +16,12 @@ namespace CBZ::SHA {
     // @class_name - name of the class implementing this template - used
     //               only to print clear error debug logs
     // @m - message to digest
-    // @s - size of the message to digest
     // @od - pointer to the buffer storing digest; it MUST
     //               be able to contain at least DIGEST_SIZE bytes
     void _SHA_digest_generic(
         EVP_MD *md,
         char const *class_name,
-        uint8_t const *m,
-        size_t s,
+        std::span<uint8_t const> m,
         uint8_t *od
     ) {
         EVP_MD_CTX *ctx = nullptr;
@@ -38,7 +37,7 @@ namespace CBZ::SHA {
         if (!EVP_DigestInit_ex(ctx, md, nullptr))
             goto err;
 
-        if (!EVP_DigestUpdate(ctx, m, s))
+        if (!EVP_DigestUpdate(ctx, m.data(), m.size()))
             goto err;
 
         if (!EVP_DigestFinal_ex(ctx, od, nullptr))
@@ -57,18 +56,18 @@ namespace CBZ::SHA {
 
     // See "sha.h" for further documentation, if needed
 
-    void SHA1::digest(uint8_t const *m, size_t s, uint8_t *od) {
+    void SHA1::digest(std::span<uint8_t const> m, uint8_t *od) {
         static _EVP_MD_wrapper sha1(nullptr, "SHA1", nullptr);
-        _SHA_digest_generic(sha1.md(), "SHA1", m, s, od);
+        _SHA_digest_generic(sha1.md(), "SHA1", m, od);
     }
 
-    void SHA224::digest(uint8_t const *m, size_t s, uint8_t *od) {
+    void SHA224::digest(std::span<uint8_t const> m, uint8_t *od) {
         static _EVP_MD_wrapper sha224(nullptr, "SHA224", nullptr);
-        _SHA_digest_generic(sha224.md(), "SHA224", m, s, od);
+        _SHA_digest_generic(sha224.md(), "SHA224", m, od);
     }
 
-    void SHA256::digest(uint8_t const *m, size_t s, uint8_t *od) {
+    void SHA256::digest(std::span<uint8_t const> m, uint8_t *od) {
         static _EVP_MD_wrapper sha256(nullptr, "SHA256", nullptr);
-        _SHA_digest_generic(sha256.md(), "SHA256", m, s, od);
+        _SHA_digest_generic(sha256.md(), "SHA256", m, od);
     }
 }

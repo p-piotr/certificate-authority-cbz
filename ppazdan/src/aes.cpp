@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <cstddef>
+#include <span>
 #include <stdexcept>
 #include <sstream>
 #include "include/aes.h"
@@ -19,20 +20,18 @@ namespace CBZ::AES {
     // @class_name - name of the class implementing this template - used
     //               only to print clear error debug logs
     // @data - buffer to encrypt
-    // @size - size of the buffer to encrypt
-    // @key - template key object, can be chosen from the keys defined in the AES namespace (see "aes.h")
+    // @key - key to use in the encryption process
     // @iv - initialization vector for encryption to use
-    template<typename _KEY>
+    template <typename _KEY>
     std::vector<uint8_t> _AES_encrypt_generic(
-        EVP_CIPHER *cipher, 
-        const char *class_name, 
-        uint8_t *data, 
-        size_t size, 
-        _KEY &key, 
-        IV &iv
+        EVP_CIPHER *cipher,
+        const char *class_name,
+        std::span<uint8_t const> data,
+        _KEY key,
+        IV iv
     ) {
         EVP_CIPHER_CTX *ctx;
-        std::vector<uint8_t> ciphertext(size + AES_BLOCK_SIZE);
+        std::vector<uint8_t> ciphertext(data.size() + AES_BLOCK_SIZE);
         int ciphertext_len, len = 0, ret = 1;
 
         ctx = EVP_CIPHER_CTX_new();
@@ -42,10 +41,10 @@ namespace CBZ::AES {
         if (cipher == nullptr)
             goto err;
 
-        if (EVP_EncryptInit_ex(ctx, cipher, nullptr, key.begin(), iv.begin()) != 1)
+        if (EVP_EncryptInit_ex(ctx, cipher, nullptr, key, iv) != 1)
             goto err;
 
-        if (EVP_EncryptUpdate(ctx, ciphertext.data(), &len, const_cast<const uint8_t*>(data), static_cast<int>(size)) != 1)
+        if (EVP_EncryptUpdate(ctx, ciphertext.data(), &len, data.data(), static_cast<int>(data.size())) != 1)
             goto err;
         
         ciphertext_len = len;
@@ -70,24 +69,23 @@ namespace CBZ::AES {
     // Same as above, but for decrypting
     //
     // Input:
+    // Input:
     // @cipher - EVP_CIPHER* cipher object used internally by OpenSSL
     // @class_name - name of the class implementing this template - used
     //               only to print clear error debug logs
     // @data - buffer to decrypt
-    // @size - size of the buffer to decrypt
-    // @key - template key object, can be chosen from { KEY128, KEY192, KEY256 }
+    // @key - key to use in the decryption process
     // @iv - initialization vector for decryption to use
     template<typename _KEY>
     std::vector<uint8_t> _AES_decrypt_generic(
         EVP_CIPHER *cipher, 
         const char *class_name, 
-        uint8_t *data, 
-        size_t size, 
-        _KEY &key, 
-        IV &iv
+        std::span<uint8_t const> data,
+        _KEY key, 
+        IV iv
     ) {
         EVP_CIPHER_CTX *ctx;
-        std::vector<uint8_t> plaintext(size);
+        std::vector<uint8_t> plaintext(data.size());
         int plaintext_len, len = 0, ret = 1;
 
         ctx = EVP_CIPHER_CTX_new();
@@ -97,10 +95,10 @@ namespace CBZ::AES {
         if (cipher == nullptr)
             goto err;
 
-        if (EVP_DecryptInit_ex(ctx, cipher, nullptr, key.begin(), iv.begin()) != 1)
+        if (EVP_DecryptInit_ex(ctx, cipher, nullptr, key, iv) != 1)
             goto err;
 
-        if (EVP_DecryptUpdate(ctx, plaintext.data(), &len, const_cast<const uint8_t*>(data), static_cast<int>(size)) != 1)
+        if (EVP_DecryptUpdate(ctx, plaintext.data(), &len, data.data(), static_cast<int>(data.size())) != 1)
             goto err;
 
         plaintext_len = len;
@@ -124,33 +122,33 @@ namespace CBZ::AES {
 
     // For further documentation, see "aes.h"
 
-    std::vector<uint8_t> AES_128_CBC::encrypt(uint8_t *data, size_t size, KEY128 &key, IV &iv) {
+    std::vector<uint8_t> AES_128_CBC::encrypt(std::span<uint8_t const> data, KEY128 key, IV iv) {
         static _EVP_CIPHER_wrapper aes128cbc(nullptr, "AES-128-CBC", nullptr);
-        return _AES_encrypt_generic<KEY128>(aes128cbc.cipher(), "AES_128_CBC", data, size, key, iv);
+        return _AES_encrypt_generic<KEY128>(aes128cbc.cipher(), "AES_128_CBC", data, key, iv);
     }
 
-    std::vector<uint8_t> AES_192_CBC::encrypt(uint8_t *data, size_t size, KEY192 &key, IV &iv) {
+    std::vector<uint8_t> AES_192_CBC::encrypt(std::span<uint8_t const> data, KEY192 key, IV iv) {
         static _EVP_CIPHER_wrapper aes192cbc(nullptr, "AES-192-CBC", nullptr);
-        return _AES_encrypt_generic<KEY192>(aes192cbc.cipher(), "AES_192_CBC", data, size, key, iv);
+        return _AES_encrypt_generic<KEY192>(aes192cbc.cipher(), "AES_192_CBC", data, key, iv);
     }
 
-    std::vector<uint8_t> AES_256_CBC::encrypt(uint8_t *data, size_t size, KEY256 &key, IV &iv) {
+    std::vector<uint8_t> AES_256_CBC::encrypt(std::span<uint8_t const> data, KEY256 key, IV iv) {
         static _EVP_CIPHER_wrapper aes256cbc(nullptr, "AES-256-CBC", nullptr);
-        return _AES_encrypt_generic<KEY256>(aes256cbc.cipher(), "AES_256_CBC", data, size, key, iv);
+        return _AES_encrypt_generic<KEY256>(aes256cbc.cipher(), "AES_256_CBC", data, key, iv);
     }
 
-    std::vector<uint8_t> AES_128_CBC::decrypt(uint8_t *data, size_t size, KEY128 &key, IV &iv) {
+    std::vector<uint8_t> AES_128_CBC::decrypt(std::span<uint8_t const> data, KEY128 key, IV iv) {
         static _EVP_CIPHER_wrapper aes128cbc(nullptr, "AES-128-CBC", nullptr);
-        return _AES_decrypt_generic<KEY128>(aes128cbc.cipher(), "AES_128_CBC", data, size, key, iv);
+        return _AES_decrypt_generic<KEY128>(aes128cbc.cipher(), "AES_128_CBC", data, key, iv);
     }
 
-    std::vector<uint8_t> AES_192_CBC::decrypt(uint8_t *data, size_t size, KEY192 &key, IV &iv) {
+    std::vector<uint8_t> AES_192_CBC::decrypt(std::span<uint8_t const> data, KEY192 key, IV iv) {
         static _EVP_CIPHER_wrapper aes192cbc(nullptr, "AES-192-CBC", nullptr);
-        return _AES_decrypt_generic<KEY192>(aes192cbc.cipher(), "AES_192_CBC", data, size, key, iv);
+        return _AES_decrypt_generic<KEY192>(aes192cbc.cipher(), "AES_192_CBC", data, key, iv);
     }
 
-    std::vector<uint8_t> AES_256_CBC::decrypt(uint8_t *data, size_t size, KEY256 &key, IV &iv) {
+    std::vector<uint8_t> AES_256_CBC::decrypt(std::span<uint8_t const> data, KEY256 key, IV iv) {
         static _EVP_CIPHER_wrapper aes256cbc(nullptr, "AES-256-CBC", nullptr);
-        return _AES_decrypt_generic<KEY256>(aes256cbc.cipher(), "AES_256_CBC", data, size, key, iv);
+        return _AES_decrypt_generic<KEY256>(aes256cbc.cipher(), "AES_256_CBC", data, key, iv);
     }
 }

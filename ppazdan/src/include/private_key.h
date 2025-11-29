@@ -4,22 +4,25 @@
 #include <cstdint>
 #include <gmpxx.h>
 #include <stdexcept>
+#include "include/pkcs.h"
+#include "include/asn1.h"
 
 namespace CBZ {
 
-    namespace ASN1 {
-        class ASN1Object;
-    }
-
     // Namespace containing RSA functionality
     namespace RSA {
+
+        using namespace CBZ::ASN1;
+        using namespace CBZ::PKCS;
+
+        class RSAPrivateKey;
 
         // Checks if the ASN.1 structure of the RSA private key is correct
         // Additionally decodes the RSAPrivateKey structure inside the OCTET STRING, if hasn't been done yet
         //
         // Input:
         // @root_object - root ASN1Object representing the whole key
-        int _RSAPrivateKey_check_and_expand(std::shared_ptr<ASN1::ASN1Object> root_object);
+        int _RSAPrivateKey_check_and_expand(std::shared_ptr<ASN1Object> root_object);
 
         // Checks if the ASN.1 structure of the encrypted RSA private key is correct
         // This function only checks the first two levels deep in the ASN.1 structure,
@@ -33,7 +36,27 @@ namespace CBZ {
         //
         // Input:
         // @root_object - root ASN1Object representing the whole key
-        int _EncryptedRSAPrivateKey_check(std::shared_ptr<ASN1::ASN1Object const> root_object);
+        // @out_ptr - optional AlgorithmIdentifier pointer 
+        //            to store the algorithm options
+        int _EncryptedRSAPrivateKey_check(
+            std::shared_ptr<ASN1Object const> root_object,
+            struct AlgorithmIdentifier *out_ptr
+        );
+
+        // Decrypts private key using given algorithm
+        //
+        // Input:
+        // @encrypted_data - encrypted data of the private key
+        // @alg_id - pointer to the AlgorithmIdentifier structure
+        //           specyfing algorithm to use 
+        //           (most usually PKCS#5 PBES2) together with parameters
+        // @passphrase - passphrase for decryption process to use, as an rvalue
+        //               this value will be disposed securely after the function completes
+        RSAPrivateKey _Decrypt_key(
+            std::shared_ptr<ASN1Object> encrypted_data,
+            struct AlgorithmIdentifier const *alg_id,
+            std::string &&passphrase
+        );
 
         // Object representing an RSA private key (PKCS#1 compatibile)
         class RSAPrivateKey {

@@ -1,6 +1,7 @@
 #include <vector>
 #include <cstdint>
 #include <cstddef>
+#include <span>
 #include "include/base64.h"
 
 // Maybe a little bit shamefully stolen from https://stackoverflow.com/questions/180947/base64-decode-snippet-in-c
@@ -19,15 +20,17 @@ namespace CBZ {
     }
 
     // Encodes a buffer into a Base64 string
-    std::string Base64::encode(char* buffer, size_t size) {
+    std::string Base64::encode(std::span<char> buffer) {
         std::string ret;
         int i = 0;
         int j = 0;
         uint8_t char_array_3[3];
         uint8_t char_array_4[4];
+        char *ptr = buffer.data();
+        size_t size = buffer.size();
 
         while (size--) {
-            char_array_3[i++] = *(buffer++);
+            char_array_3[i++] = *(ptr++);
             if (i == 3) {
                 char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
                 char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);

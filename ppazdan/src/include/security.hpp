@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <concepts>
+#include <span>
 #include <iostream>
 #include <gmpxx.h>
 #include <termios.h>
@@ -45,18 +46,27 @@ namespace CBZ {
     // Beware! this function does NOT free the memory after zeroing!
     //
     // Input:
-    // @ptr - pointer to memory of given type
-    // @no_elements - number of contiguous elements to zero-out (size() for containers)
-    template <typename _T>
-    inline void secure_zero_memory(_T *ptr, size_t no_elements) {
-        constexpr size_t t_s = _sizeof_helper<_T>();
-        size_t total_size = no_elements * t_s;
-        if (ptr != nullptr) {
+    // @ptr - span of memory of type _T
+    template <typename _T, std::size_t _Extent = std::dynamic_extent>
+    inline void secure_zero_memory(std::span<_T, _Extent> sp) {
+        if (sp.data() != nullptr) {
             // zero the memory before freeing
-            volatile uint8_t *vptr = reinterpret_cast<volatile uint8_t*>(ptr);
-            for (size_t i = 0; i < total_size; i++) {
+            volatile uint8_t *vptr = reinterpret_cast<volatile uint8_t*>(sp.data());
+            for (size_t i = 0; i < sp.size_bytes(); i++)
                 vptr[i] = 0;
-            }
+
+            #ifdef SECURE_FREE_DEBUG
+            std::cerr << "[secure_free] Cleared " << total_size << " bytes at " << reinterpret_cast<void*>(ptr) << std::endl;
+            #endif // SECURE_FREE_DEBUG
+        }
+    }
+
+    template <typename _T>
+    inline void secure_zero_memory(_T *ptr, size_t size) {
+        if (ptr != nullptr) {
+            volatile uint8_t *vptr = reinterpret_cast<volatile uint8_t*>(ptr);
+            for (size_t i = 0; i < size; i++)
+                vptr[i] = 0;
 
             #ifdef SECURE_FREE_DEBUG
             std::cerr << "[secure_free] Cleared " << total_size << " bytes at " << reinterpret_cast<void*>(ptr) << std::endl;
@@ -79,8 +89,7 @@ namespace CBZ {
     // @ptr - raw pointer to the container object
     template <SecureDeleteContainer _Container>
     inline void secure_delete(_Container *ptr) {
-        constexpr size_t v_s = _sizeof_helper<typename _Container::value_type>();
-        secure_zero_memory(ptr->data(), ptr->size() * v_s);
+        secure_zero_memory(std::span{*ptr});
         delete ptr;
     }
 

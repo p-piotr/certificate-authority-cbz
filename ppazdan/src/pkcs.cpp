@@ -3,8 +3,11 @@
 #include <vector>
 #include <memory>
 #include <stdexcept>
+#include <span>
 #include "include/pkcs.h"
 #include "include/asn1.h"
+#include "include/kdf.hpp"
+#include "include/aes.h"
 
 namespace CBZ::PKCS {
 
@@ -51,7 +54,7 @@ namespace CBZ::PKCS {
             std::shared_ptr<ASN1Object const> parameters_object,
             struct Parameters *out_ptr
         ) {
-            using namespace PKCS::SupportedAlgorithms;
+            using namespace SupportedAlgorithms;
 
             if (parameters_object->tag() != ASN1Tag::SEQUENCE)
                 return ERR_SEMANTIC_CHECK_FAILED;
@@ -77,6 +80,30 @@ namespace CBZ::PKCS {
             }
 
             return ERR_OK;
+        }
+
+        int PBES2::decrypt_data(
+            struct Parameters *params,
+            std::shared_ptr<std::string> passphrase,
+            std::span<uint8_t const> in,
+            std::vector<uint8_t> &out
+        ) {
+            using namespace SupportedAlgorithms;
+
+            size_t key_length;
+            switch (params->enc.algorithm) {
+                case EncryptionSchemes::aes_128_CBC:
+                    key_length = 128;
+                    break;
+                default:
+                    return ERR_ALGORITHM_UNSUPPORTED;
+            }
+
+            switch (params->kdf.algorithm) {
+                case KDFs::pbkdf2: {
+
+                }
+            }
         }
 
         int PBKDF2::extract_parameters(
@@ -160,6 +187,40 @@ namespace CBZ::PKCS {
             return ERR_OK;
         }
 
+        int PBKDF2::derive_key(
+            struct Parameters *params,
+            std::shared_ptr<std::string> passphrase,
+            size_t key_length,
+            std::vector<uint8_t> &out_key
+        ) {
+            switch (params->prf.algorithm) {
+                case HMACFunctions::hmacWithSHA1: {
+                    out_key.resize(key_length);
+                    CBZ::KDF::PBKDF2<HMAC<SHA::SHA1>>::derive_key(
+                        std::span{reinterpret_cast<uint8_t*>(passphrase->data()), passphrase->size()},
+                        std::span{*params->salt},
+                        params->iterationCount,
+                        key_length,
+                        out_key.data()
+                    );
+                    return ERR_OK;
+                }
+                case HMACFunctions::hmacWithSHA256: {
+                    out_key.resize(key_length);
+                    CBZ::KDF::PBKDF2<HMAC<SHA::SHA256>>::derive_key(
+                        std::span{reinterpret_cast<uint8_t*>(passphrase->data()), passphrase->size()},
+                        std::span{*params->salt},
+                        params->iterationCount,
+                        key_length,
+                        out_key.data()
+                    );
+                    return ERR_OK;
+                }
+                default:
+                    return ERR_ALGORITHM_UNSUPPORTED;
+            }
+        }
+
         int HMACFunctions::_generic_validate_parameters(
             std::shared_ptr<ASN1Object const> parameters_object
         ) {
@@ -222,7 +283,7 @@ namespace CBZ::PKCS {
                         return ERR_OK;
                     }
                     default:
-                        throw std::runtime_error("[PKCS::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                        throw std::runtime_error("[PKCS::PrivateKeyAlgorithms::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
                 }
             }
 
@@ -263,7 +324,7 @@ namespace CBZ::PKCS {
                         return ERR_OK;
                     }
                     default:
-                        throw std::runtime_error("[PKCS::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                        throw std::runtime_error("[PKCS::EncryptionAlgorithms::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
                 }
             }
 
@@ -304,7 +365,7 @@ namespace CBZ::PKCS {
                         return ERR_OK;
                     }
                     default:
-                        throw std::runtime_error("[PKCS::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                        throw std::runtime_error("[PKCS::KDFs::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
                 }
             }
 
@@ -344,7 +405,7 @@ namespace CBZ::PKCS {
                         return ERR_OK;
                     }
                     default:
-                        throw std::runtime_error("[PKCS::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                        throw std::runtime_error("[PKCS::HMACFunctions::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
                 }
             }
 
@@ -385,7 +446,7 @@ namespace CBZ::PKCS {
                         return ERR_OK;
                     }
                     default:
-                        throw std::runtime_error("[PKCS::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                        throw std::runtime_error("[PKCS::EncryptionSchemes::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
                 }
             }
 

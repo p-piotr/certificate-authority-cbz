@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstdint>
 #include <string>
+#include <span>
 
 namespace CBZ {
 
@@ -10,7 +11,7 @@ namespace CBZ {
     class Base64 {
     public:
         // obvious functions
-        static std::string encode(char* buffer, size_t size);
+        static std::string encode(std::span<char> buffer);
         static std::vector<uint8_t> decode(std::string const& encoded_string);
 
         // helper to check if a character is valid in base64 encoding
