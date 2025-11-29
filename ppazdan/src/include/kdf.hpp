@@ -3,9 +3,12 @@
 #include <array>
 #include <cstdint>
 #include <span>
+#include <iostream>
+#include <iomanip>
 #include "include/hmac.hpp"
 #include "include/security.hpp"
 #include "include/endianness.hpp"
+#include "include/debug.h"
 
 namespace CBZ::KDF {
 
@@ -33,6 +36,19 @@ namespace CBZ::KDF {
             uint32_t dl,
             uint8_t *ok
         ) {
+            #ifdef KDF_DEBUG
+            auto _dprint = [&](std::span<uint8_t const> s) {
+                for (auto b : s)
+                    std::cerr << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b) << ' ';
+                std::cerr << std::endl;
+            };
+            std::cerr << std::endl << "[CBZ::KDF::derive_key]" << std::endl << "password: ";
+            _dprint(p);
+            std::cerr << "salt: ";
+            _dprint(s);
+            std::cerr << std::dec << std::endl;
+            #endif // KDF_DEBUG
+
             uint32_t num_blocks = static_cast<uint32_t>((dl + hLen - 1) / hLen);
             uint8_t t[hLen];
 

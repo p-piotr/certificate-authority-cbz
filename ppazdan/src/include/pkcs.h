@@ -94,7 +94,7 @@ namespace CBZ::PKCS {
                 // @out - vector to store decrypted data
                 int decrypt_data(
                     struct Parameters *params,
-                    std::shared_ptr<std::string> passphrase,
+                    std::shared_ptr<std::string const> passphrase,
                     std::span<uint8_t const> in,
                     std::vector<uint8_t> &out
                 );
@@ -138,11 +138,11 @@ namespace CBZ::PKCS {
                 // @passphrase - passphrase to derive key from passed as an rvalue
                 //               this value will be securely deleted when deriving process
                 //               completes
-                // @key_length - desired key length
+                // @key_length - desired key length, in bytes
                 // @out_key - reference to a vector storing the output key
                 int derive_key(
                     struct Parameters *params,
-                    std::shared_ptr<std::string> passphrase,
+                    std::shared_ptr<std::string const> passphrase,
                     size_t key_length,
                     std::vector<uint8_t> &out_key
                 );

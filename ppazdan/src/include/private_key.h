@@ -43,6 +43,12 @@ namespace CBZ {
             struct AlgorithmIdentifier *out_ptr
         );
 
+        // Decodes the key according to the algorithm inside
+        //
+        // Input:
+        // @asn1_root - root ASN1Object representing the key
+        RSAPrivateKey _Decode_key(std::shared_ptr<ASN1Object> asn1_root);
+
         // Decrypts private key using given algorithm
         //
         // Input:

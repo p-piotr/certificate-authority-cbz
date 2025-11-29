@@ -27,16 +27,18 @@ namespace CBZ {
         // @cipher - EVP_CIPHER* cipher object used internally by OpenSSL
         // @class_name - name of the class implementing this template - used
         //               only to print clear error debug logs
-        // @data - buffer to encrypt
+        // @plaintext - buffer to encrypt
         // @key - key to use in encryption process
         // @iv - initialization vector for encryption to use
+        // @ciphertext - vector to store output ciphertext
         template<typename _KEY>
-        std::vector<uint8_t> _AES_encrypt_generic(
+        void _AES_encrypt_generic(
             EVP_CIPHER *cipher, 
             char const *class_name, 
-            std::span<uint8_t const> data,
+            std::span<uint8_t const> plaintext,
             _KEY key,
-            IV iv
+            IV iv,
+            std::vector<uint8_t> &ciphertext
         );
 
         // Same as above, but for decrypting
@@ -45,16 +47,18 @@ namespace CBZ {
         // @cipher - EVP_CIPHER* cipher object used internally by OpenSSL
         // @class_name - name of the class implementing this template - used
         //               only to print clear error debug logs
-        // @data - buffer to decrypt
+        // @ciphertext - buffer to decrypt
         // @key - key to use in encryption process
         // @iv - initialization vector for decryption to use
+        // @plaintext - vector to store output plaintext
         template<typename _KEY>
-        std::vector<uint8_t> _AES_decrypt_generic(
+        void _AES_decrypt_generic(
             EVP_CIPHER *cipher,
             char const *class_name,
-            std::span<uint8_t const> data,
+            std::span<uint8_t const> ciphertext,
             _KEY key,
-            IV iv
+            IV iv,
+            std::vector<uint8_t> &plaintext
         );
 
         // AES-128-CBC class
@@ -64,25 +68,29 @@ namespace CBZ {
             // Encrypts data using AES-128-CBC
             //
             // Input:
-            // @data - buffer to encrypt
+            // @plaintext - buffer to encrypt
             // @key - 128bit key to use
             // @iv - initialization vector for encryption to use
-            static std::vector<uint8_t> encrypt(
-                std::span<uint8_t const> data,
+            // @ciphertext - vector to store output ciphertext
+            static void encrypt(
+                std::span<uint8_t const> plaintext,
                 KEY128 key,
-                IV iv
+                IV iv,
+                std::vector<uint8_t> &ciphertext
             );
 
             // Decrypts data using AES-128-CBC
             //
             // Input:
-            // @data - buffer to decrypt
+            // @ciphertext - buffer to decrypt
             // @key - 128bit key to use
             // @iv - initialization vector for decryption to use
-            static std::vector<uint8_t> decrypt(
-                std::span<uint8_t const> data,
+            // @plaintext - vector to store output plaintext
+            static void decrypt(
+                std::span<uint8_t const> ciphertext,
                 KEY128 key,
-                IV iv
+                IV iv,
+                std::vector<uint8_t> &plaintext
             );
         };
 
@@ -93,25 +101,29 @@ namespace CBZ {
             // Encrypts data using AES-192-CBC
             //
             // Input:
-            // @data - buffer to encrypt
+            // @plaintext - buffer to encrypt
             // @key - 192bit key to use
             // @iv - initialization vector for encryption to use
-            static std::vector<uint8_t> encrypt(
-                std::span<uint8_t const> data,
+            // @ciphertext - vector to store output ciphertext
+            static void encrypt(
+                std::span<uint8_t const> plaintext,
                 KEY192 key,
-                IV iv
+                IV iv,
+                std::vector<uint8_t> &ciphertext
             );
 
             // Decrypts data using AES-192-CBC
             //
             // Input:
-            // @data - buffer to decrypt
+            // @ciphertext - buffer to decrypt
             // @key - 192bit key to use
             // @iv - initialization vector for decryption to use
-            static std::vector<uint8_t> decrypt(
-                std::span<uint8_t const> data,
+            // @plaintext - vector to store output plaintext
+            static void decrypt(
+                std::span<uint8_t const> ciphertext,
                 KEY192 key,
-                IV iv
+                IV iv,
+                std::vector<uint8_t> &plaintext
             );
         };
 
@@ -122,25 +134,29 @@ namespace CBZ {
             // Encrypts data using AES-256-CBC
             //
             // Input:
-            // @data - buffer to encrypt
+            // @plaintext - buffer to encrypt
             // @key - 256bit key to use
             // @iv - initialization vector for encryption to use
-            static std::vector<uint8_t> encrypt(
-                std::span<uint8_t const> data,
+            // @ciphertext - vector to store output ciphertext
+            static void encrypt(
+                std::span<uint8_t const> plaintext,
                 KEY256 key,
-                IV iv
+                IV iv,
+                std::vector<uint8_t> &ciphertext
             );
 
             // Decrypts data using AES-256-CBC
             //
             // Input:
-            // @data - buffer to decrypt
+            // @ciphertext - buffer to decrypt
             // @key - 256bit key to use
             // @iv - initialization vector for decryption to use
-            static std::vector<uint8_t> decrypt(
-                std::span<uint8_t const> data,
+            // @plaintext - vector to store output plaintext
+            static void decrypt(
+                std::span<uint8_t const> ciphertext,
                 KEY256 key,
-                IV iv
+                IV iv,
+                std::vector<uint8_t> &plaintext
             );
         };
 

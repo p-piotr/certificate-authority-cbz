@@ -166,8 +166,9 @@ namespace CBZ::RSA {
         auto root_object = ASN1Parser::decode_all(
             std::shared_ptr<std::vector<uint8_t>>(new std::vector<uint8_t>(std::move(decrypted_data)))
         );
-        root_object->print();
-        throw std::runtime_error("empty return");
+
+        // finally, decode the decrypted key and return it
+        return _Decode_key(root_object);
     }
 
 
@@ -184,43 +185,7 @@ namespace CBZ::RSA {
         std::cout << "Coefficient (q^-1 mod p): " << coefficient() << std::endl;
     }
 
-    // Loads a private key from file
-    // This variant may only parse unencryptd keys
-    //
-    // Input:
-    // @filepath - path to the file containing the private key in PKCS#8
-    RSAPrivateKey RSAPrivateKey::from_file(std::string const &filepath) {
-        std::ifstream keyfile(filepath);
-        std::string line1, line2, key_asn1_b64 = "";
-
-        // read the key file and complain if needed
-        std::getline(keyfile, line1);
-        if (line1 == PKCS::Labels::encryptedPrivateKeyHeader) {
-            // the header says it's encrypted, so let's try to parse it accordingly
-            std::string passphrase;
-            std::cout << "Enter passphrase: ";
-            set_stdin_echo(false);
-            std::cin >> passphrase;
-            set_stdin_echo(true);
-            std::cout << std::endl;
-            return from_file(filepath, std::move(passphrase));
-        }
-        if (line1 != PKCS::Labels::privateKeyHeader)
-            throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key header doesn't match the standard");
-
-        // read all lines till the end and append to key_asn1_b64, except the footer
-        std::getline(keyfile, line1);
-        while (std::getline(keyfile, line2)) { // read next line and append the previous one
-            key_asn1_b64 += line1;
-            line1 = line2;
-        }
-
-        if (line1 != PKCS::Labels::privateKeyFooter)
-            throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key footer doesn't match the standard");
-
-        std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
-        std::shared_ptr<ASN1Object> asn1_root = ASN1Parser::decode_all(std::move(key_asn1));
-
+    RSAPrivateKey _Decode_key(std::shared_ptr<ASN1Object> asn1_root) {
         // validate the overall key ASN.1 structure and expand it, if needed
         if (int result = _RSAPrivateKey_check_and_expand(asn1_root); result != 0) {
             switch (result) {
@@ -270,6 +235,47 @@ namespace CBZ::RSA {
             std::move(rsa_params[8])
         );
     }
+
+    // Loads a private key from file
+    // This variant may only parse unencryptd keys
+    //
+    // Input:
+    // @filepath - path to the file containing the private key in PKCS#8
+    RSAPrivateKey RSAPrivateKey::from_file(std::string const &filepath) {
+        std::ifstream keyfile(filepath);
+        std::string line1, line2, key_asn1_b64 = "";
+
+        // read the key file and complain if needed
+        std::getline(keyfile, line1);
+        if (line1 == PKCS::Labels::encryptedPrivateKeyHeader) {
+            // the header says it's encrypted, so let's try to parse it accordingly
+            std::string passphrase;
+            std::cout << "Enter passphrase: ";
+            set_stdin_echo(false);
+            std::cin >> passphrase;
+            set_stdin_echo(true);
+            std::cout << std::endl;
+            return from_file(filepath, std::move(passphrase));
+        }
+        if (line1 != PKCS::Labels::privateKeyHeader)
+            throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key header doesn't match the standard");
+
+        // read all lines till the end and append to key_asn1_b64, except the footer
+        std::getline(keyfile, line1);
+        while (std::getline(keyfile, line2)) { // read next line and append the previous one
+            key_asn1_b64 += line1;
+            line1 = line2;
+        }
+
+        if (line1 != PKCS::Labels::privateKeyFooter)
+            throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key footer doesn't match the standard");
+
+        std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
+        std::shared_ptr<ASN1Object> asn1_root = ASN1Parser::decode_all(std::move(key_asn1));
+
+        // decode the final expanded structure into 9 integers
+        return _Decode_key(asn1_root);
+    }
     
     RSAPrivateKey RSAPrivateKey::from_file(std::string const &filepath, std::string &&passphrase) {
         std::ifstream keyfile(filepath);
@@ -280,7 +286,7 @@ namespace CBZ::RSA {
             // i don't know why, but it seems this key is unencrypted, although we received a password for it
             // assume this key is unencrypted and it was a mistake - discard the password and proceed with the
             // unencrypted procedure
-            secure_zero_memory(passphrase.data(), passphrase.size());
+            secure_zero_memory(std::span{passphrase});
             return from_file(filepath);
         }
         if (line1 != PKCS::Labels::encryptedPrivateKeyHeader)
@@ -313,7 +319,10 @@ namespace CBZ::RSA {
             }
         }
 
-        std::cout << "oai m8 that's bloody lovely" << std::endl;
-        return RSAPrivateKey();
+        return _Decrypt_key(
+            asn1_root->children()[1],
+            &alg_id,
+            std::move(passphrase)
+        );
     }
 }

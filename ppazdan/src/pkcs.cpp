@@ -84,16 +84,18 @@ namespace CBZ::PKCS {
 
         int PBES2::decrypt_data(
             struct Parameters *params,
-            std::shared_ptr<std::string> passphrase,
+            std::shared_ptr<std::string const> passphrase,
             std::span<uint8_t const> in,
             std::vector<uint8_t> &out
         ) {
             using namespace SupportedAlgorithms;
 
             size_t key_length;
+            std::vector<uint8_t> ok;
+
             switch (params->enc.algorithm) {
                 case EncryptionSchemes::aes_128_CBC:
-                    key_length = 128;
+                    key_length = 16;
                     break;
                 default:
                     return ERR_ALGORITHM_UNSUPPORTED;
@@ -101,8 +103,38 @@ namespace CBZ::PKCS {
 
             switch (params->kdf.algorithm) {
                 case KDFs::pbkdf2: {
-
+                    int result = PBKDF2::derive_key(
+                        std::static_pointer_cast<PBKDF2::Parameters>(params->kdf.params).get(),
+                        passphrase,
+                        key_length,
+                        ok
+                    );
+                    if (result != ERR_OK)
+                        return result;
+                    if (ok.size() != key_length)
+                        throw std::runtime_error("[PBKDF2::derive_key] Declared key length was ignored");
+                    break;
                 }
+                default:
+                    return ERR_ALGORITHM_UNSUPPORTED;
+            }
+
+            switch (params->enc.algorithm) {
+                case EncryptionSchemes::aes_128_CBC: {
+                    EncryptionSchemes::AES_128_CBC::Parameters *es_params =
+                        std::static_pointer_cast
+                        <EncryptionSchemes::AES_128_CBC::Parameters>
+                        (params->enc.params).get();
+                    CBZ::AES::AES_128_CBC::decrypt(
+                        in,
+                        ok.data(),
+                        es_params->iv,
+                        out
+                    );
+                    return ERR_OK;
+                }
+                default:
+                    return ERR_ALGORITHM_UNSUPPORTED;
             }
         }
 
@@ -189,7 +221,7 @@ namespace CBZ::PKCS {
 
         int PBKDF2::derive_key(
             struct Parameters *params,
-            std::shared_ptr<std::string> passphrase,
+            std::shared_ptr<std::string const> passphrase,
             size_t key_length,
             std::vector<uint8_t> &out_key
         ) {
@@ -197,7 +229,7 @@ namespace CBZ::PKCS {
                 case HMACFunctions::hmacWithSHA1: {
                     out_key.resize(key_length);
                     CBZ::KDF::PBKDF2<HMAC<SHA::SHA1>>::derive_key(
-                        std::span{reinterpret_cast<uint8_t*>(passphrase->data()), passphrase->size()},
+                        std::span{reinterpret_cast<uint8_t const*>(passphrase->data()), passphrase->size()},
                         std::span{*params->salt},
                         params->iterationCount,
                         key_length,
@@ -208,7 +240,7 @@ namespace CBZ::PKCS {
                 case HMACFunctions::hmacWithSHA256: {
                     out_key.resize(key_length);
                     CBZ::KDF::PBKDF2<HMAC<SHA::SHA256>>::derive_key(
-                        std::span{reinterpret_cast<uint8_t*>(passphrase->data()), passphrase->size()},
+                        std::span{reinterpret_cast<uint8_t const*>(passphrase->data()), passphrase->size()},
                         std::span{*params->salt},
                         params->iterationCount,
                         key_length,
