@@ -28,10 +28,9 @@ PrivateKeyInfo ::= SEQUENCE {
 */
 
 // Contains all functionality related to RSA
-namespace CBZ::RSA {
+namespace CBZ::PKCS {
 
     using namespace CBZ::ASN1;
-    using namespace CBZ::PKCS;
 
     // Checks if the ASN.1 structure of the RSA private key is correct
     // Additionally expands the key by decoding the RSAPrivateKey structure

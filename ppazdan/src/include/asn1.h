@@ -15,13 +15,13 @@ namespace CBZ {
     // Answer: https://en.wikipedia.org/wiki/Circular_dependency
 
     // This namespace is defined in fully defined later on - forward declaration of ASN1Object for the function down below in the RSA namespace
-    namespace ASN1 {
-        class ASN1Object;
-    }
+    namespace ASN1 { class ASN1Object; }
 
-    // This namespace is defined in "private_key.h" - forward declaration of a function used as a friend in ASN1Object
-    namespace RSA {
-        int _RSAPrivateKey_check_and_expand(std::shared_ptr<ASN1::ASN1Object> root_object);
+    // This namespace is defined in "private_key.h" and "pkcs.h" - forward declaration of a function used as a friend in ASN1Object
+    namespace PKCS {
+        int _RSAPrivateKey_check_and_expand(
+            std::shared_ptr<ASN1::ASN1Object> root_object
+        );
     }
 
     namespace ASN1 {
@@ -239,7 +239,7 @@ namespace CBZ {
             // those friends need to be able to change the internal state of ASN1Object
 
             friend class ASN1Parser;
-            friend int RSA::_RSAPrivateKey_check_and_expand(
+            friend int PKCS::_RSAPrivateKey_check_and_expand(
                 std::shared_ptr<ASN1Object> root_object
             );
         };

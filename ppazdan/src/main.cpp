@@ -20,12 +20,12 @@ void RSA_ASN1_test(int argc, char **argv) {
         return;
     }
 
-    CBZ::RSA::RSAPrivateKey rsa_private_key;
+    CBZ::PKCS::RSAPrivateKey rsa_private_key;
     std::cout << "DECODING TEST" << std::endl << std::endl;
 
     try {
         std::string key_file_path = argv[1];
-        rsa_private_key = CBZ::RSA::RSAPrivateKey(key_file_path);
+        rsa_private_key = CBZ::PKCS::RSAPrivateKey(key_file_path);
         rsa_private_key.print();
 
         std::vector<uint8_t> data = { 0x12, 0x34, 0x56 };
@@ -184,7 +184,7 @@ void RSA_encrypted_test(int argc, char **argv) {
     }
     try {
         std::string encrypted_key_filepath = argv[1];
-        CBZ::RSA::RSAPrivateKey rsa_private_key(encrypted_key_filepath);
+        CBZ::PKCS::RSAPrivateKey rsa_private_key(encrypted_key_filepath);
         rsa_private_key.print();
     } catch (const std::exception &e) {
         std::cerr << "Error: " << e.what() << std::endl;
