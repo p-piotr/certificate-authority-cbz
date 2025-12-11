@@ -49,22 +49,22 @@ namespace CBZ {
         // Look for definition below
         class ASN1Object;
 
-        class _ASN1Parser_helpers {
-        public:
+        namespace _ASN1_helpers {
             // Calculates the size of 'length' field based on provided size
             //
             // Input:
             // @size - size of object's data, in bytes
-            static size_t calculate_length_field_size(size_t size);
+            static size_t _ASN1Object_calculate_length_field_size(size_t size);
 
             // This function takes size of object's data and returns an encoded length field
             //
             // Input:
             // @size - size of object's data, in bytes
-            static std::vector<uint8_t> encode_length_field(size_t size);
+            static std::vector<uint8_t> _ASN1Object_encode_length_field(size_t size);
 
-            _ASN1Parser_helpers() = delete;
-            ~_ASN1Parser_helpers() = delete;
+            // // ASN1ObjectIdentifier helper functions
+            std::vector<uint8_t> _ASN1ObjectIdentifier_encode_single_integer(mpz_class integer);
+            mpz_class _ASN1ObjectIdentifier_decode_single_integer(std::vector<uint8_t>::reverse_iterator rb, std::vector<uint8_t>::reverse_iterator re);
         };
 
         // Responsible for parsing ASN.1
@@ -201,12 +201,12 @@ namespace CBZ {
 
             // Returns object's encoded 'length' field
             inline std::vector<uint8_t> encode_length() const {
-                return _ASN1Parser_helpers::encode_length_field(_length);
+                return _ASN1_helpers::_ASN1Object_encode_length_field(_length);
             }
 
             // Returns object's encoded 'length' field size, in bytes (without encoding it)
             inline size_t length_size() const {
-                return _ASN1Parser_helpers::calculate_length_field_size(_length);
+                return _ASN1_helpers::_ASN1Object_calculate_length_field_size(_length);
             }
 
             // Returns object's total size (in bytes) - that sums up the 'tag' field size, 
@@ -287,9 +287,5 @@ namespace CBZ {
             // @data - ASN1ObjectData containing the integer
             static mpz_class decode(std::vector<uint8_t> const &data);
         };
-
-        // // ASN1ObjectIdentifier helper functions
-        std::vector<uint8_t> _ASN1ObjectIdentifier_encode_single_integer(mpz_class integer);
-        mpz_class _ASN1ObjectIdentifier_decode_single_integer(std::vector<uint8_t>::reverse_iterator rb, std::vector<uint8_t>::reverse_iterator re);
     }
 }

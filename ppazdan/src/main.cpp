@@ -397,9 +397,35 @@ void PBKDF2_SHA256_unittests() {
     PBKDF2_SHA256_test3();
 }
 
+void ASN1_test(int argc, char ** argv) {
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " PEM_FILE" << std::endl;
+        return;
+    }
+
+    std::string line1, line2, file_asn1_b64 = "";
+    std::ifstream file(argv[1]);
+    std::cout << "DECODING TEST" << std::endl << std::endl;
+
+    try {
+        std::getline(file, line1);
+        line1 = "";
+        while (std::getline(file, line2)) { // read next line and append the previous one
+            file_asn1_b64 += line1;
+            line1 = line2;
+        }
+        std::vector<uint8_t> file_asn1 = Base64::decode(file_asn1_b64);
+        auto root_object = ASN1::ASN1Parser::decode_all(std::move(file_asn1));
+        root_object->print();
+    } catch (const std::exception &e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return;
+    }
+
+}
+
 int main(int argc, char **argv) {
     mpz_initialize_secure();
-    RSA_ASN1_test(argc, argv);
-    //RSA_encrypted_test(argc, argv);
+    ASN1_test(argc, argv);
     return 0;
 }
