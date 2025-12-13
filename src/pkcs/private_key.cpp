@@ -39,7 +39,7 @@ namespace CBZ::PKCS {
     // Input:
     // @root_object - root ASN1Object representing the whole key
     int _RSAPrivateKey_check_and_expand(std::shared_ptr<ASN1Object> root_object) {
-        using namespace SupportedAlgorithms;
+        using namespace PrivateKeySupportedAlgorithms;
 
         // Root object should contain 3 or 4 children (attributies field is optional)
         if (
@@ -104,7 +104,7 @@ namespace CBZ::PKCS {
         std::shared_ptr<ASN1Object const> root_object,
         struct AlgorithmIdentifier* out_ptr
     ) {
-        using namespace SupportedAlgorithms;
+        using namespace PrivateKeySupportedAlgorithms;
 
         if (root_object->tag() != ASN1Tag::SEQUENCE || root_object->children().size() != 2)
             return ERR_SEMANTIC_CHECK_FAILED;
@@ -125,7 +125,7 @@ namespace CBZ::PKCS {
         struct AlgorithmIdentifier const* alg_id,
         std::string&& passphrase
     ) {
-        using namespace SupportedAlgorithms;
+        using namespace PrivateKeySupportedAlgorithms;
 
         std::shared_ptr<std::string> passphrase_sp(
             new std::string(std::move(passphrase)),

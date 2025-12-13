@@ -53,33 +53,6 @@ std::ostream& operator<<(std::ostream& os, const RDNSequence& rdnS) {
 }
 
 
-// Example: AlgorithmIdentifier = {algorithm: 1.2.840.113549.1.1.1, parameters: 0x05 0x00}
-std::ostream& operator<<(std::ostream& os, const PKCS::AlgorithmIdentifier& AI) {
-    os  << "AlgorithmIdentifier = {algorithm: "
-        << AI.algorithm
-        << ", parameters:";
-
-    const auto& param = AI.parameters;
-
-    // print parameters as hex
-    // setfill('0') setw(2) to print values under 16 as 2 chars
-    // I think it should be cast to it to print as integer
-    os << std::hex << std::setfill('0');
-    for(uint8_t byte : param){
-        os << " 0x" << std::setw(2) << std::setfill ('0') << static_cast<int>(byte);
-    }
-
-    // change back from std::hex to std::dec
-    os << std::dec << "}";
-    return os;
-}
-
-// Example: RSAPublicKey: = {n: 1234123412341234123412341234123413241234134, e: 12384123841239412342314823041234218}
-std::ostream& operator<<(std::ostream& os, const PKCS::RSAPublicKey& PK){
-    os << "RSAPublicKey: = {n: " << PK.n << ", e: " << PK.e << "}";
-    return os;
-}
-
 // Example: SubjectPublicKeyInfo = { AlgorithmIdentifier = {algorithm: 1.2.840.113549.1.1.1, parameters: 0x05 0x00} RSAPublicKey: = {n: 1234, e: 1234}}
 std::ostream& operator<<(std::ostream& os, const PKCS::SubjectPublicKeyInfo& SPKI){
     os << "SubjectPublicKeyInfo = { "
@@ -87,86 +60,6 @@ std::ostream& operator<<(std::ostream& os, const PKCS::SubjectPublicKeyInfo& SPK
         << " "
         << SPKI.subjectPublicKey
         << "}";
-    return os;
-}
-
-// Example: Attribute = { Type: 2.2.2.1, values = [ (tag: 22 "test"), (tag: 12 "meow"), (tag: 19 "TEST") ] }
-std::ostream& operator<<(std::ostream& os, const PKCS::Attribute& ATTR){
-    using variant_object = 
-    variant<
-    string,
-    vector<uint8_t> 
-    >;
-
-    os  << "Attribute = {"
-        << " Type: "
-        << ATTR.type
-        << ", values = [ ";
-
-    bool first = true; 
-    // used in second method of avoding danling commas
- 
-    // iterate thorugh the vector of pairs
-    // adding each value to the stream
-    for(const auto& PAIR : ATTR.values){
-        // first values is is the varaiant second the tag
-        const variant_object& val = PAIR.first;
-        const ASN1_tag& tag = PAIR.second;
-
-        // dangling commas avoidance
-        if(!first) { os << ", "; }
-        first = false;
-
-        os << "(tag: " << tag << " ";
-
-        // Detailed explaination of the std::visit code:
-        //
-        // std::visit([&tag,& val,& os](auto &&arg) { ... }, val);
-        // "visit takes a variant and a set of functions, and calls the correct function based on the type the variant is holding at the time."
-        // https://www.reddit.com/r/cpp_questions/comments/12ur4wv/what_exactly_are_stdvisit_and_stdvariant/
-        //
-        // It is usually done with lambda function as we don't want to name the function
-        // in lambda:
-        // [] = which values from local scope we should allow lambda to access
-        // () = parameters
-        // {} = body
-        // val = variant - second argument to the std::visit function
-        // auto&& arg = will know if arg is lvalue or rvalue and will deduce type based on that
-        // https://stackoverflow.com/questions/13230480/what-is-the-meaning-of-a-variable-with-type-auto
-        //
-        // using T = std::decay_t<decltype(arg)>; 
-        // decltype(arg) - detects type of arg at compile-time
-        // std::decay_t - removes qualifiers and references such as const or &&
-        // It's done because we will compare type of arg to some type like std::string
-        // we want this compare to also work for const& string etc. so we just strip those
-        //
-        // if constexpr (std::is_same_v<T, std::string>) { ... }
-        // if constexpr - we want to compare times at compile-time and constexpr will be evaluated at compile-time if used in a constant expression
-        // std::is_same<T, U>::value = a class that compares type of T and U; and stores the result into value member 
-        // note that std::is_same_v<T, U> can also be used
-        //
-        std::visit([&val,& os,& first](auto&& arg) { 
-            // this is just used for convinence 
-            using T = std::decay_t<decltype(arg)>; 
-
-            // string
-            if constexpr (std::is_same<T, std::string>::value) {
-                os << "\"" << arg << "\"";
-            } 
-            // byte vector
-            else if constexpr (std::is_same<T, vector<uint8_t>>::value){
-                os << "bytes[ " << std::hex << std::setfill('0');
-                // print each byte
-                for(uint8_t byte : arg){
-                    os << " 0x" << std::setw(2) << std::setfill ('0') << static_cast<int>(byte);
-                }
-
-                os << std::dec << " ]";
-            }
-        }, val);
-        os << ")";
-    }
-    os << " ] }";
     return os;
 }
 
@@ -276,14 +169,6 @@ vector<uint8_t> RDNSequence::encode() const {
 }
 
 
-vector<uint8_t> AlgorithmIdentifier::encode() const {
-    return encode_der_sequence({        // AlgorithmIdentifier is a SEQUENCE
-        encode_der_oid(algorithm),      // OID
-        parameters                      // parameters are already stored as raw bytes as we don't use them
-    });
-}
-
-
 vector<uint8_t> RSAPublicKey::encode() const {
     return encode_der_bitstring(    // both OCTET STRING
         encode_der_sequence({       // and a SEQUENCE
@@ -294,7 +179,7 @@ vector<uint8_t> RSAPublicKey::encode() const {
 }
 
 
-vector<uint8_t> SubjectPublicKeyInfo::encode() const {
+std::shared_ptr<std::vector<uint8_t>> SubjectPublicKeyInfo::encode() const {
     return encode_der_sequence({    //SubjectPublicKeyInfo is a SEQUENCE
         algorithm.encode(),        
         subjectPublicKey.encode()

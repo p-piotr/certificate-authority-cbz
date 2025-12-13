@@ -6,6 +6,8 @@
 #include <memory>
 #include <span>
 #include <unordered_map>
+#include <variant>
+#include <utility>
 #include "asn1/asn1.h"
 
 // Namespace containing PKCS-related operations
@@ -23,9 +25,24 @@ namespace CBZ::PKCS {
     struct AlgorithmIdentifier {
         uint32_t algorithm;
         std::shared_ptr<void> params;
+
+        AlgorithmIdentifier() {}
+
+        AlgorithmIdentifier(uint32_t algorithm_, std::shared_ptr<void> params_ = std::shared_ptr<void>(nullptr))
+            : algorithm(algorithm_), params(params_) {}
+
+        // Those functions only exists for MaksymilianOliwaCode™ compatibility reasons
+        // They don't take into consideration any parameters, always return a NULL_TYPE
+        // Also, they only check the CSRSupportedAlgorithms for a matching OID
+        //
+        // Shouldn't be used except a carefully created legacy sandbox where MaksymilianOliwaCode wants to use them
+        ASN1Object to_asn1() const;
+        std::shared_ptr<std::vector<uint8_t>> encode() const;
+
+        friend std::ostream& operator<<(std::ostream& os, const PKCS::AlgorithmIdentifier& ai);
     };
 
-    namespace SupportedAlgorithms {
+    namespace PrivateKeySupportedAlgorithms {
 
         // Extracts the PKCS AlgorithmIdentifier structure found at @algorithm
         // If out_ptr != nullptr, extracted data is moved to the buffer. Otherwise,
@@ -227,5 +244,5 @@ namespace CBZ::PKCS {
     // I just based this on what openssl uses, but here's more offical documentation
     // https://www.itu.int/rec/T-REC-X.520-201910-I/en
     // https://datatracker.ietf.org/doc/html/rfc2985
-    extern const std::unordered_map<std::string, ASN1Tag> AttributeStringType;
+    extern const std::unordered_map<std::string, ASN1Tag> attributeStringTypeMap;
 }

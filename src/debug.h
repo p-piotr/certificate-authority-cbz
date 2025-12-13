@@ -9,3 +9,4 @@
 #define RSA_DEBUG // print debugging information while parsing RSA keys
 #define SECURE_FREE_DEBUG // print debugging information when secure_free is called
 #define OPENSSL_DEBUG // print debugging information when fetching/clearing OpenSSL algorithms
+#define GMP_DEBUG // print debugging information on total GMP memory allocation

@@ -75,7 +75,9 @@ namespace CBZ::Utils {
 
 
     // dispatcher function that calls appropriate validating function based on tag (only 2 functions as of now)
-    inline bool validate_string_type(string const& s, CBZ::ASN1::ASN1Tag type){
+    inline bool validate_string_type(std::string const& s, CBZ::ASN1::ASN1Tag type){
+        using namespace ASN1;
+
         switch(type){
             case IA5_STRING:
                 return ia5string_validate(s);

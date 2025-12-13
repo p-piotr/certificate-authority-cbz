@@ -4,14 +4,19 @@
 #include <memory>
 #include <stdexcept>
 #include <span>
+#include <variant>
+#include <utility>
 #include "pkcs/pkcs.h"
+#include "pkcs/csr.h"
+#include "pkcs/public_key.h"
 #include "asn1/asn1.h"
 #include "encryption/kdf.hpp"
 #include "encryption/aes.h"
+#include "utils/utils.hpp"
 
 namespace CBZ::PKCS {
 
-    const std::unordered_map<std::string, ASN1Tag> AttributeStringType = {
+    const std::unordered_map<std::string, ASN1Tag> attributeStringTypeMap = {
         {"2.5.4.6",                PRINTABLE_STRING},   // countryName
         {"2.5.4.8",                UTF8_STRING},        // stateOrProvinceName
         {"2.5.4.7",                UTF8_STRING},        // localityName
@@ -23,7 +28,209 @@ namespace CBZ::PKCS {
         {"1.2.840.113549.1.9.7",   UTF8_STRING}         // challengePassword
     };
 
-    namespace SupportedAlgorithms {
+    ASN1Object AlgorithmIdentifier::to_asn1() const {
+        auto find = CSRSupportedAlgorithms::algorithmMap.find(algorithm);
+        if (find == CSRSupportedAlgorithms::algorithmMap.end())
+            throw std::runtime_error("[AlgorithmIdentifier::encode] Unsupported algorithm");
+
+        return ASN1Sequence({
+            ASN1ObjectIdentifier(find->second),
+            ASN1Null()
+        });
+    }
+
+    std::shared_ptr<std::vector<uint8_t>> AlgorithmIdentifier::encode() const {
+        return to_asn1().encode();
+    }
+
+    // Example: AlgorithmIdentifier = {algorithm: 1.2.840.113549.1.1.1, parameters:?}
+    // I removed the parameters handling since their structure is dependent on the algorithm itself and there's no use in going into this rabbit hole
+    std::ostream& operator<<(std::ostream& os, const PKCS::AlgorithmIdentifier& ai) {
+        os  << "AlgorithmIdentifier = {algorithm: "
+            << ai.algorithm
+            << ", parameters:?}";
+        return os;
+    }
+
+    Attribute::Attribute(
+        std::string type,
+        std::string value,
+        ASN1Tag tag
+    ) : _type(std::move(type)) {
+        if(tag != UTF8_STRING && tag != IA5_STRING && tag != PRINTABLE_STRING){
+            throw std::runtime_error("[Attribute::Attribute(std::string, std::string, ASN1Tag)] Tag doesn't match the string type");
+        }
+        if(CBZ::Utils::validate_string_type(value, tag) == false){
+            throw std::runtime_error("[Attribute::Attribute(std::string, std::string, ASN1Tag)] attempt to create object with value that contains illegal characters");
+        }
+        _values.emplace_back(std::move(value), tag);
+    }
+
+    Attribute::Attribute(
+        std::string type,
+        std::string value
+    ) {
+        ASN1Tag tag;
+        try {
+            tag = attributeStringTypeMap.at(type);
+            if(CBZ::Utils::validate_string_type(value, tag) == false){
+                throw std::runtime_error("[Attribute::Attribute(std::string, std::string)] value_ contains illegal chars");
+            }
+        } catch (const std::out_of_range& e) { 
+            tag = UTF8_STRING;
+        }
+        _type = std::move(type);
+        _values.emplace_back(std::move(value), tag);
+    }
+
+    Attribute::Attribute(
+        std::string type,
+        std::initializer_list<std::pair<std::string, ASN1Tag>> list
+    ) : _type(std::move(type)) {
+        _values.reserve(list.size());
+        for (auto& v : list){
+            if(v.second != UTF8_STRING && v.second != IA5_STRING && v.second != PRINTABLE_STRING){
+                throw std::runtime_error("[Attribute::Attribute(std::string, std::initializer_list<std::pair<std::string, ASN1Tag>>)] Tag doesn't match string type");
+            }
+            if(CBZ::Utils::validate_string_type(v.first,v.second) == false){
+                throw std::runtime_error("[Attribute::Attribute(std::string, std::initializer_list<std::pair<std::string, ASN1Tag>>)] Attempt to create object with value that contains illegal characters");
+            }
+            _values.emplace_back(std::move(v.first), v.second);
+        }
+    }
+
+    Attribute::Attribute(
+        std::string type,
+        std::initializer_list<std::string> list
+    ) : _type(std::move(type)) {
+        _values.reserve(list.size());
+        for (auto& v : list){
+            ASN1Tag tag;
+            try {
+                tag = attributeStringTypeMap.at(type);
+                if(CBZ::Utils::validate_string_type(v, tag) == false){
+                    throw std::runtime_error("[Attribute::Attribute(std::string, std::initializer_list<std::string>)] Attempt to create object with value that contains illegal characters");
+                }
+            } catch (const std::out_of_range& e) { 
+                tag = UTF8_STRING;
+            }
+            _values.emplace_back(std::move(v), tag);
+        }
+    }
+
+    Attribute::Attribute(
+        std::string type,
+        std::vector<uint8_t> value,
+        ASN1Tag tag
+    ) : _type(std::move(type)) {
+        _values.emplace_back(std::move(value), tag);
+    }
+
+    Attribute::Attribute(
+        std::string type,
+        std::vector<std::pair<std::vector<uint8_t>, ASN1Tag>> list
+    ) : _type(std::move(type)) {
+        for (auto& v : list){
+            _values.emplace_back(std::move(v.first), v.second);
+        }
+    }
+
+    // Example: Attribute = { Type: 2.2.2.1, values = [ (tag: 22 "test"), (tag: 12 "meow"), (tag: 19 "TEST") ] }
+    std::ostream& operator<<(std::ostream& os, const PKCS::Attribute& ATTR){
+        using variant_object = 
+        std::variant<
+        std::string,
+        std::vector<uint8_t> 
+        >;
+
+        os  << "Attribute = {"
+            << " Type: "
+            << ATTR._type
+            << ", values = [ ";
+
+        bool first = true; 
+        // used in second method of avoding danling commas
+    
+        // iterate thorugh the vector of pairs
+        // adding each value to the stream
+        for(const auto& PAIR : ATTR._values){
+            // first values is is the varaiant second the tag
+            const variant_object& val = PAIR.first;
+            const ASN1Tag& tag = PAIR.second;
+
+            // dangling commas avoidance
+            if(!first) { os << ", "; }
+            first = false;
+
+            os << "(tag: " << tag << " ";
+
+            // Detailed explaination of the std::visit code:
+            //
+            // std::visit([&tag,& val,& os](auto &&arg) { ... }, val);
+            // "visit takes a variant and a set of functions, and calls the correct function based on the type the variant is holding at the time."
+            // https://www.reddit.com/r/cpp_questions/comments/12ur4wv/what_exactly_are_stdvisit_and_stdvariant/
+            //
+            // It is usually done with lambda function as we don't want to name the function
+            // in lambda:
+            // [] = which values from local scope we should allow lambda to access
+            // () = parameters
+            // {} = body
+            // val = variant - second argument to the std::visit function
+            // auto&& arg = will know if arg is lvalue or rvalue and will deduce type based on that
+            // https://stackoverflow.com/questions/13230480/what-is-the-meaning-of-a-variable-with-type-auto
+            //
+            // using T = std::decay_t<decltype(arg)>; 
+            // decltype(arg) - detects type of arg at compile-time
+            // std::decay_t - removes qualifiers and references such as const or &&
+            // It's done because we will compare type of arg to some type like std::string
+            // we want this compare to also work for const& string etc. so we just strip those
+            //
+            // if constexpr (std::is_same_v<T, std::string>) { ... }
+            // if constexpr - we want to compare times at compile-time and constexpr will be evaluated at compile-time if used in a constant expression
+            // std::is_same<T, U>::value = a class that compares type of T and U; and stores the result into value member 
+            // note that std::is_same_v<T, U> can also be used
+            //
+            std::visit([&val,& os,& first](auto&& arg) { 
+                // this is just used for convinence 
+                using T = std::decay_t<decltype(arg)>; 
+
+                // string
+                if constexpr (std::is_same<T, std::string>::value) {
+                    os << "\"" << arg << "\"";
+                } 
+                // byte vector
+                else if constexpr (std::is_same<T, std::vector<uint8_t>>::value){
+                    os << "bytes[ " << std::hex << std::setfill('0');
+                    // print each byte
+                    for(uint8_t byte : arg){
+                        os << " 0x" << std::setw(2) << std::setfill ('0') << static_cast<int>(byte);
+                    }
+
+                    os << std::dec << " ]";
+                }
+            }, val);
+            os << ")";
+        }
+        os << " ] }";
+        return os;
+    }
+
+    ASN1Object SubjectPublicKeyInfo::to_asn1() const {
+        return ASN1Sequence({
+            _algorithm.to_asn1(),
+            _subject_public_key.to_asn1()
+        });
+    }
+
+    namespace CSRSupportedAlgorithms {
+
+        const std::unordered_map<uint32_t, std::string> algorithmMap = {
+            {sha256WithRSAEncryption,   "1.2.840.113549.1.1.11" },
+            {sha256,                    "2.16.840.1.101.3.4.2.1"}
+        };
+    }
+
+    namespace PrivateKeySupportedAlgorithms {
 
         using namespace PrivateKeyAlgorithms;
         using namespace EncryptionAlgorithms;
@@ -68,7 +275,7 @@ namespace CBZ::PKCS {
             std::shared_ptr<ASN1Object const> parameters_object,
             struct Parameters* out_ptr
         ) {
-            using namespace SupportedAlgorithms;
+            using namespace PrivateKeySupportedAlgorithms;
 
             if (parameters_object->tag() != ASN1Tag::SEQUENCE)
                 return ERR_SEMANTIC_CHECK_FAILED;
@@ -103,7 +310,7 @@ namespace CBZ::PKCS {
             std::span<uint8_t const> in,
             std::vector<uint8_t>& out
         ) {
-            using namespace SupportedAlgorithms;
+            using namespace PrivateKeySupportedAlgorithms;
 
             size_t key_length;
             std::vector<uint8_t> ok;
@@ -226,7 +433,7 @@ namespace CBZ::PKCS {
 
                         // Try to extract the algorithm
                         AlgorithmIdentifier _prf;
-                        if (int result = SupportedAlgorithms::extract_algorithm(next_field, &_prf); result != 0)
+                        if (int result = PrivateKeySupportedAlgorithms::extract_algorithm(next_field, &_prf); result != 0)
                             return result;
 
                         prf = _prf;
@@ -329,10 +536,10 @@ namespace CBZ::PKCS {
 
             // PrivateKeyAlgorithms
             if (
-                auto search = SupportedAlgorithms::PrivateKeyAlgorithms::privateKeyAlgorithmsMap.find(algorithm_oid);
-                search != SupportedAlgorithms::PrivateKeyAlgorithms::privateKeyAlgorithmsMap.end()
+                auto search = PrivateKeySupportedAlgorithms::PrivateKeyAlgorithms::privateKeyAlgorithmsMap.find(algorithm_oid);
+                search != PrivateKeySupportedAlgorithms::PrivateKeyAlgorithms::privateKeyAlgorithmsMap.end()
             ) {
-                using namespace SupportedAlgorithms::PrivateKeyAlgorithms;
+                using namespace PrivateKeySupportedAlgorithms::PrivateKeyAlgorithms;
                 switch (search->second) {
                     case rsaEncryption: {
                         if (int result = RSAEncryption::validate_parameters(parameters); result != ERR_OK)
@@ -368,10 +575,10 @@ namespace CBZ::PKCS {
 
             // EncryptionAlgorithms
             if (
-                auto search = SupportedAlgorithms::EncryptionAlgorithms::encryptionAlgorithmsMap.find(algorithm_oid);
-                search != SupportedAlgorithms::EncryptionAlgorithms::encryptionAlgorithmsMap.end()
+                auto search = PrivateKeySupportedAlgorithms::EncryptionAlgorithms::encryptionAlgorithmsMap.find(algorithm_oid);
+                search != PrivateKeySupportedAlgorithms::EncryptionAlgorithms::encryptionAlgorithmsMap.end()
             ) {
-                using namespace SupportedAlgorithms::EncryptionAlgorithms;
+                using namespace PrivateKeySupportedAlgorithms::EncryptionAlgorithms;
                 switch (search->second) {
                     case pbes2: {
                         auto pbes2_parameters = out_ptr ? 
@@ -409,10 +616,10 @@ namespace CBZ::PKCS {
 
             // KDFs
             if (
-                auto search = SupportedAlgorithms::KDFs::kdfsMap.find(algorithm_oid);
-                search != SupportedAlgorithms::KDFs::kdfsMap.end()
+                auto search = PrivateKeySupportedAlgorithms::KDFs::kdfsMap.find(algorithm_oid);
+                search != PrivateKeySupportedAlgorithms::KDFs::kdfsMap.end()
             ) {
-                using namespace SupportedAlgorithms::KDFs;
+                using namespace PrivateKeySupportedAlgorithms::KDFs;
                 switch (search->second) {
                     case pbkdf2: {
                         auto pbkdf2_parameters = out_ptr ?
@@ -450,10 +657,10 @@ namespace CBZ::PKCS {
 
             // HMACFunctions
             if (
-                auto search = SupportedAlgorithms::HMACFunctions::hmacFunctionsMap.find(algorithm_oid);
-                search != SupportedAlgorithms::HMACFunctions::hmacFunctionsMap.end()
+                auto search = PrivateKeySupportedAlgorithms::HMACFunctions::hmacFunctionsMap.find(algorithm_oid);
+                search != PrivateKeySupportedAlgorithms::HMACFunctions::hmacFunctionsMap.end()
             ) {
-                using namespace SupportedAlgorithms::HMACFunctions;
+                using namespace PrivateKeySupportedAlgorithms::HMACFunctions;
                 switch (search->second) {
                     case hmacWithSHA1:
                     case hmacWithSHA256: {
@@ -490,10 +697,10 @@ namespace CBZ::PKCS {
 
             // EncryptionSchemes
             if (
-                auto search = SupportedAlgorithms::EncryptionSchemes::encryptionSchemesMap.find(algorithm_oid);
-                search != SupportedAlgorithms::EncryptionSchemes::encryptionSchemesMap.end()
+                auto search = PrivateKeySupportedAlgorithms::EncryptionSchemes::encryptionSchemesMap.find(algorithm_oid);
+                search != PrivateKeySupportedAlgorithms::EncryptionSchemes::encryptionSchemesMap.end()
             ) {
-                using namespace SupportedAlgorithms::EncryptionSchemes;
+                using namespace PrivateKeySupportedAlgorithms::EncryptionSchemes;
                 switch (search->second) {
                     case aes_128_CBC: 
                     case aes_256_CBC: {
@@ -531,7 +738,7 @@ namespace CBZ::PKCS {
         const std::string encryptedPrivateKeyFooter = "-----END ENCRYPTED PRIVATE KEY-----";
     }
 
-    int SupportedAlgorithms::extract_algorithm(
+    int PrivateKeySupportedAlgorithms::extract_algorithm(
         std::shared_ptr<ASN1Object const> algorithm,
         struct AlgorithmIdentifier* out_ptr
     ) {

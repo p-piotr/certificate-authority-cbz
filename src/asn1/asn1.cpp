@@ -16,7 +16,7 @@ namespace CBZ::ASN1 {
     using namespace CBZ::Security;
 
     // Converts an ASN.1 tag (enum) to string
-    constexpr const char* tag_to_string(ASN1Tag tag) {
+    const char* tag_to_string(ASN1Tag tag) {
         switch (tag) {
             case (INTEGER): return "INTEGER";
             case (BIT_STRING): return "BIT_STRING";
@@ -208,6 +208,57 @@ namespace CBZ::ASN1 {
             output.push_back(std::make_shared<ASN1Object>(std::move(item)));
         return output;
     }
+
+    ASN1Object::ASN1Object(ASN1Tag tag) :
+        _tag(tag),
+        _length(0) {
+        #ifdef ASN1_DEBUG
+        std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
+            << std::dec << ", value_size=" << _value.size() << std::endl;
+        #endif // ASN1_DEBUG
+    }
+
+    ASN1Object::ASN1Object(ASN1Tag tag, size_t length) :
+        _tag(tag),
+        _length(length) {
+        #ifdef ASN1_DEBUG
+        std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
+            << std::dec << ", value_size=" << _value.size() << std::endl;
+        #endif // ASN1_DEBUG
+    }
+
+    // take value by const-reference to avoid overload ambiguity with the rvalue overload
+    // NOT RELEVANT ANYMORE I GUESS THAT'S MORE UNIVERSAL
+    ASN1Object::ASN1Object(ASN1Tag tag, std::vector<uint8_t> value) :
+        _tag(tag),
+        _length(value.size()),
+        _value(std::move(value)) {
+        #ifdef ASN1_DEBUG
+        std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
+            << std::dec << ", value_size=" << _value.size() << std::endl;
+        #endif // ASN1_DEBUG
+    }
+
+    ASN1Object::ASN1Object(ASN1Tag tag, std::vector<ASN1Object>&& children)
+        : ASN1Object(tag, convert_to_shared(std::move(children))) {}
+
+    ASN1Object::ASN1Object(ASN1Tag tag, std::vector<std::shared_ptr<ASN1Object>>&& children) :
+        _tag(tag), 
+        _children(std::move(children)) {
+        #ifdef ASN1_DEBUG
+        std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
+            << std::dec << ", value_size=" << _value.size() << std::endl;
+        #endif // ASN1_DEBUG
+    }
+
+    ASN1Object::~ASN1Object() {
+        CBZ::Security::secure_zero_memory(_value); // don't forget to zero data as it may be critical
+        #ifdef ASN1_DEBUG
+        std::cerr << "[ASN1Object] ASN1Object destroyed: tag=" << tag_to_string(_tag) 
+            << ", value_size=" << _value.size() << std::endl;
+        #endif // ASN1_DEBUG
+    }
+
 
     // Converts an ASN.1 tag (enum) to string
     void ASN1Object::print(int indent) {
@@ -433,6 +484,14 @@ namespace CBZ::ASN1 {
         );
 
         return num;
+    }
+
+    ASN1BitString::ASN1BitString(std::vector<uint8_t> const& s, int unused) : ASN1Object(BIT_STRING, std::move(s)) {
+        if (unused > 7)
+            throw std::runtime_error("[ASN1BitString::ASN1BitString] cannot exceed 7 unused bytes");
+
+        _value.insert(_value.begin(), static_cast<uint8_t>(unused));
+        _length += 1;
     }
 
 }

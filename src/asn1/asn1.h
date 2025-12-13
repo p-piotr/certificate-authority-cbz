@@ -44,7 +44,7 @@ namespace CBZ {
         };
 
         // Converts an ASN.1 tag (enum) to string
-        constexpr const char* tag_to_string(ASN1Tag tag);
+        const char* tag_to_string(ASN1Tag tag);
 
         // Look for definition below
         class ASN1Object;
@@ -127,63 +127,34 @@ namespace CBZ {
             std::vector<std::shared_ptr<ASN1Object>> _children; // Set of child objects (1 level deep); empty if there're no children
 
         public:
-            explicit ASN1Object(ASN1Tag tag) :
-                _tag(tag),
-                _length(0) {
-                #ifdef ASN1_DEBUG
-                std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
-                    << std::dec << ", value_size=" << _value.size() << std::endl;
-                #endif // ASN1_DEBUG
-            }
-
-            explicit ASN1Object(ASN1Tag tag, size_t length) :
-                _tag(tag),
-                _length(length) {
-                #ifdef ASN1_DEBUG
-                std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
-                    << std::dec << ", value_size=" << _value.size() << std::endl;
-                #endif // ASN1_DEBUG
-            }
-
-            // take value by const-reference to avoid overload ambiguity with the rvalue overload
-            // NOT RELEVANT ANYMORE I GUESS THAT'S MORE UNIVERSAL
-            explicit ASN1Object(ASN1Tag tag, std::vector<uint8_t> value) :
-                _tag(tag),
-                _length(value.size()),
-                _value(std::move(value)) {
-                #ifdef ASN1_DEBUG
-                std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
-                    << std::dec << ", value_size=" << _value.size() << std::endl;
-                #endif // ASN1_DEBUG
-            }
-
-            explicit ASN1Object(ASN1Tag tag, std::vector<ASN1Object>&& children) :
-                ASN1Object(tag, convert_to_shared(std::move(children))) {}
-
-            explicit ASN1Object(ASN1Tag tag, std::vector<std::shared_ptr<ASN1Object>>&& children) :
-                _tag(tag), 
-                _children(std::move(children)) {
-                #ifdef ASN1_DEBUG
-                std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
-                    << std::dec << ", value_size=" << _value.size() << std::endl;
-                #endif // ASN1_DEBUG
-            }
-
-            virtual ~ASN1Object() {
-                CBZ::Security::secure_zero_memory(_value); // don't forget to zero data as it may be critical
-                #ifdef ASN1_DEBUG
-                std::cerr << "[ASN1Object] ASN1Object destroyed: tag=" << tag_to_string(_tag) 
-                    << ", value_size=" << _value.size() << std::endl;
-                #endif // ASN1_DEBUG
-            }
+            explicit ASN1Object(
+                ASN1Tag tag
+            );
+            explicit ASN1Object(
+                ASN1Tag tag,
+                size_t length
+            );
+            explicit ASN1Object(
+                ASN1Tag tag,
+                std::vector<uint8_t> value
+            );
+            explicit ASN1Object(
+                ASN1Tag tag,
+                std::vector<ASN1Object>&& children
+            );
+            explicit ASN1Object(
+                ASN1Tag tag,
+                std::vector<std::shared_ptr<ASN1Object>>&& children
+            );
+            virtual ~ASN1Object();
 
             // Returns object's tag
-            constexpr ASN1Tag tag() const {
+            inline ASN1Tag tag() const {
                 return _tag;
             }
 
             // Returns object's length (value in 'length' field)
-            constexpr size_t length() const {
+            inline size_t length() const {
                 return _length;
             }
 
@@ -204,17 +175,17 @@ namespace CBZ {
             }
 
             // Returns object's value vector (immutable reference)
-            constexpr std::vector<uint8_t> const& value() const {
+            inline std::vector<uint8_t> const& value() const {
                 return _value;
             }
 
             // Returns object's value vector (modifiable reference)
-            constexpr std::vector<uint8_t>& value() {
+            inline std::vector<uint8_t>& value() {
                 return _value;
             }
 
             // returns object's children (read-only)
-            constexpr std::vector<std::shared_ptr<ASN1Object>> const& children() const {
+            inline std::vector<std::shared_ptr<ASN1Object>> const& children() const {
                 return _children;
             }
 
@@ -222,11 +193,11 @@ namespace CBZ {
             // won't be used so I don't really care about it
             void print(int = 0);
 
-            virtual std::shared_ptr<std::vector<uint8_t>> encode() const {
+            inline std::shared_ptr<std::vector<uint8_t>> encode() const {
                 return ASN1Parser::encode_all(*this);
             }
 
-            static std::shared_ptr<ASN1Object> decode(std::vector<uint8_t> const& data, size_t offset = 0) {
+            static inline std::shared_ptr<ASN1Object> decode(std::vector<uint8_t> const& data, size_t offset = 0) {
                 return ASN1Parser::decode_all(data, offset);
             }
 
@@ -299,6 +270,11 @@ namespace CBZ {
         public:
             explicit ASN1Null()
                 : ASN1Object(NULL_TYPE) {}
+        };
+
+        class ASN1BitString : public ASN1Object {
+        public:
+            explicit ASN1BitString(std::vector<uint8_t> const& s, int unused = 0);
         };
     }
 }

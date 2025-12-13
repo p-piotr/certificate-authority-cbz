@@ -97,12 +97,30 @@ namespace CBZ::Security {
         free(ptr);
     }
 
+    inline void* mem_alloc_debug(size_t s) {
+        static size_t total_memory = 0;
+
+        total_memory += s;
+        std::cerr << "[mem_alloc_cbz] Total memory allocated so far: " << total_memory << " bytes" << std::endl;
+        return malloc(s);
+    }
+
+    inline void* mem_realloc_debug(void* p, size_t o, size_t n) {
+        std::cerr << "[mem_realloc_cbz] Reallocating " << o << " bytes to " << n << " under " << p << std::endl;
+        return realloc(p, n);
+    }
+
     // Initializes GMP to use secure memory deallocation
     inline void mpz_initialize_secure_free_policy() {
         // Set custom memory deallocation function for GMP to ensure sensitive data is cleared from memory
         mp_set_memory_functions(
+            #ifndef GMP_DEBUG
             nullptr, 
-            nullptr, 
+            nullptr,
+            #else
+            mem_alloc_debug,
+            mem_realloc_debug,
+            #endif // GMP_DEBUG
             secure_free_memory
         );
     }

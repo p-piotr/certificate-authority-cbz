@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <vector>
 #include <string>
+#include "asn1/asn1.h"
 #include "pkcs/private_key.h"
 
 namespace CBZ::PKCS {
@@ -29,6 +30,8 @@ namespace CBZ::PKCS {
         RSAPublicKey(RSAPrivateKey const& private_key)
             : _n(private_key.n()), _e(private_key.e()) {}
 
+        ASN1::ASN1Object to_asn1() const;
+
         // returns RSAPublicKey as DER encoded bytes
         std::vector<uint8_t> encode() const;
 
@@ -37,6 +40,6 @@ namespace CBZ::PKCS {
         inline mpz_class const& e() const { return _e; }
 
         // << operator
-        friend std::ostream& operator<<(std::ostream& os, const PKCS::RSAPublicKey& PK);
+        friend std::ostream& operator<<(std::ostream& os, const RSAPublicKey& PK);
     };
 }

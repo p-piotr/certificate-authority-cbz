@@ -1,11 +1,12 @@
 #ifndef PKCSOBJECTS_H
 #define PKCSOBJECTS_H
 
-#include "utils.h"
+#include <variant>
 #include "encoding.h"
 #include "decoding.h"
 #include "asn1/asn1.h"
 #include "pkcs/public_key.h"
+#include "pkcs/pkcs.h"
 #include "utils/utils.hpp"
 
 
@@ -40,6 +41,8 @@
 
 namespace CBZ::PKCS {
 
+    using namespace CSRSupportedAlgorithms;
+
     // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1.indicates what kind of value is stored in this SEQUENCE
     //     type     AttributeType,
     //     value    AttributeValue }
@@ -70,12 +73,12 @@ namespace CBZ::PKCS {
         // Example: PKCS::AttributeTypeAndValue ATAV2{"2.5.4.6", "PL"};
         AttributeTypeAndValue(string type, string value) {
             // if we have to construct the class using the OID and value
-            // if we don't give it explicit ASN1_tag it will check the in AttributeStringType map which ASN1_tag should be used for this type
+            // if we don't give it explicit ASN1_tag it will check the in attributeStringTypeMap map which ASN1_tag should be used for this type
             // if OID is not found, it will assume UTF8_STRING
             // it also calls validate_string_type to check if it doesn't contain any illegal chars
             // I think this code fragment appears some time later but I haven't made an inline for it yet
             try {
-                _value_type = AttributeStringType.at(type);
+                _value_type = attributeStringTypeMap.at(type);
             } catch (const std::out_of_range& e) { 
                 _value_type = UTF8_STRING;
             }
@@ -225,218 +228,8 @@ namespace CBZ::PKCS {
     //  PKCS1Algorithms    ALGORITHM-IDENTIFIER ::= {
     //  { OID sha256WithRSAEncryption    PARAMETERS NULL } |
     //  { OID rsaEncryption              PARAMETERS NULL }
-    class AlgorithmIdentifier {
-    private:
-        // OID incdicating used algorithm
-        string algorithm; 
-
-        // This defines parameters used in the algorithm
-        // they aren't even needed as the algorithm we doesn't require parameters
-        vector<uint8_t> parameters;
-
-    public:
-        // I believe that using different algorithm might require total refactor of this class as I don't know how other algorithms handle parameters
-
-        //Example: AlgorithmIdentifier();
-        AlgorithmIdentifier() {}
-
-        // Example: AlgorithmIdentifier("1.2.840.113549.1.1.1")
-        AlgorithmIdentifier(string algorithm_, vector<uint8_t> parameters_ = der_null) : algorithm(std::move(algorithm_)), parameters(std::move(parameters_)) {
-        }
-
-        // Example: AlgorithmIdentifier(rsaEncryption)
-        AlgorithmIdentifier(algorithm_t algorithm_, vector<uint8_t> parameters_ = der_null) : algorithm((AlgorithmsToOIDs.at(algorithm_))), parameters(std::move(parameters_)) {
-        }
-
-        // creates AlgorithmIdentifier object from DER bytes
-        static AlgorithmIdentifier decode(const vector<uint8_t>& der_buffer, size_t& offset);
-
-        // returns AlgorithmIdentifier as DER encoded Bytes
-        vector<uint8_t> encode() const;
-
-        // getters 
-        const string& getAlgorithmReference() const { return algorithm; }
-        const vector<uint8_t>& getParametersReference() const { return parameters; }
-
-        // << operator
-        friend std::ostream& operator<<(std::ostream& os, const PKCS::AlgorithmIdentifier& AI);
-
-    };
-
-
-
 
     // ----------------------------------------------------------------------------------------------------
-
-    
-
-    // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1
-    //    SubjectPublicKeyInfo  ::=  SEQUENCE  {
-    //      algorithm            AlgorithmIdentifier,
-    //      subjectPublicKey     BIT STRING  }
-    class SubjectPublicKeyInfo{
-    private:
-        AlgorithmIdentifier algorithm;
-        RSAPublicKey subjectPublicKey;
-    public:
-        // Example: SubjectPublicKeyInfo SPKI1;
-        SubjectPublicKeyInfo() {}
-
-        // Example: SubjectPublicKeyInfo SPKI2(AlgorithmIdentifier("1.2.840.113549.1.1.1"), RSAPublicKey("1234", "1234"));
-        SubjectPublicKeyInfo(AlgorithmIdentifier algorithm_, RSAPublicKey subjectPublicKey_) : algorithm(std::move(algorithm_)), subjectPublicKey(std::move(subjectPublicKey_)) {}
-
-        // Example: SubjectPublicKeyInfo SPKI3("1.2.840.113549.1.1.1", "1234", "1234");
-        SubjectPublicKeyInfo(string algorithm_, string n_, string e_) : algorithm(std::move(algorithm_)), subjectPublicKey(std::move(n_), std::move(e_)) {}
-
-        // Example: SubjectPublicKeyInfo SPKI3("1.2.840.113549.1.1.1", mpz_class("1234"), mpz_class("1234"));
-        SubjectPublicKeyInfo(string algorithm_, mpz_class n_, mpz_class e_) : algorithm(std::move(algorithm_)),  subjectPublicKey(std::move(n_), std::move(e_)) {}
-
-        // Example SubjectPublicKeyInfo SPKI5(rsaEncryption, "1234", "1234");
-        SubjectPublicKeyInfo(algorithm_t algorithm_, string n_, string e_) : algorithm(std::move(algorithm_)), subjectPublicKey(std::move(n_), std::move(e_)) {}
-
-        // Example: SubjectPublicKeyInfo SPKI3("1.2.840.113549.1.1.1", mpz_class("1234"), mpz_class("1234"));
-        SubjectPublicKeyInfo(algorithm_t algorithm_, mpz_class n_, mpz_class e_) : algorithm(std::move(algorithm_)),  subjectPublicKey(std::move(n_), std::move(e_)) {}
-
-        // encode to DER
-        vector<uint8_t> encode() const;
-
-        // << operator
-        friend std::ostream& operator<<(std::ostream& os, const PKCS::SubjectPublicKeyInfo& SPKI);
-
-        // getters
-        const PKCS::AlgorithmIdentifier& getAlgorithmReference() const { return algorithm; }
-        const PKCS::RSAPublicKey& getPublicKeyReference() const { return subjectPublicKey; }
-
-    };
-
-
-
-    // ----------------------------------------------------------------------------------------------------
-
-
-
-    //https://www.rfc-editor.org/rfc/rfc2986.html#section-4.1
-    //   Attributes { ATTRIBUTE:IOSet } ::= SET OF Attribute{{ IOSet }}
-    //   Attribute { ATTRIBUTE:IOSet } ::= SEQUENCE {
-    //        type   ATTRIBUTE.&id({IOSet}),
-    //        values SET SIZE(1..MAX) OF ATTRIBUTE.&Type({IOSet}{@type})
-    //   }
-    class Attribute{
-        // OID that indicate what type it is
-        string type; 
-
-        // technically there is no limit to what it can store so it's impossible to handle all possible nested types
-        // Here maybe are all attributes:
-        // https://www.itu.int/ITU-T/formal-language/itu-t/x/x520/2012/SelectedAttributeTypes.html
-        
-
-        // modify this if additional types are to be allowed in variant_object
-        using variant_object = 
-        variant<
-        string,
-        vector<uint8_t> 
-        >;
-
-        vector<pair<variant_object,ASN1_tag>> values;             
-
-    public:
-        Attribute() {}
-        Attribute(
-        string type_,
-        vector<pair<variant_object,ASN1_tag>> values_) : type(std::move(type_)), values(std::move(values_)) {}
-        
-        // Single string constructor with tag
-        // Example: Attribute Attr1("1.1.1.1", "test", IA5_STRING);
-        Attribute(string type_, string value_,  ASN1_tag tag_) {
-            if(tag_ != UTF8_STRING && tag_ != IA5_STRING && tag_ != PRINTABLE_STRING){
-                throw MyError("Attribute(string, tag): Tag doesn't match string type");
-            }
-            if(validate_string_type(value_,tag_) == false){
-                throw MyError("Attribute(string, tag): attempt to create object with value that contains illegal characters");
-            }
-            values.emplace_back(std::move(value_), tag_);
-            type = std::move(type_);
-        }
-
-
-        // Single string constructor
-        // Example: Attribute Attr2("2.2.2.2", "test");
-        Attribute(string type_, string value_) {
-            ASN1_tag tag_;
-            try {
-                tag_ = AttributeStringType.at(type);
-                if(validate_string_type(value_, tag_) == false){
-                    throw MyError("Attribute(string): value_ contains illegal chars");
-                }
-            } catch (const std::out_of_range& e) { 
-                tag_ = UTF8_STRING;
-            }
-            values.emplace_back(std::move(value_), tag_);
-            type = std::move(type_);
-        }
-
-        // Multiple string constructor with explicit tags
-        // Example Attribute Attr3("3.3.3.3", {std::make_pair("test", IA5_STRING), {"meow",UTF8_STRING}, {"TEST",PRINTABLE_STRING}});
-        // Note the make pair, without it constructor call might become ambigious
-        Attribute(string type_, std::initializer_list<pair<string,ASN1_tag>> list ) {
-            values.reserve(list.size());
-            for (auto& v : list){
-                if(v.second != UTF8_STRING && v.second != IA5_STRING && v.second != PRINTABLE_STRING){
-                    throw MyError("Attribute({string, tag}): Tag doesn't match string type");
-                }
-                if(validate_string_type(v.first,v.second) == false){
-                    throw MyError("Attribute({string, tag}): attempt to create object with value that contains illegal characters");
-                }
-                values.emplace_back(std::move(v.first), v.second);
-                type = std::move(type_);
-            }
-        }
-
-        // Multiple string constructor
-        // Exmaple Attribute Attr4("4.4.4.4", {"test", "TEST"});
-        Attribute(string type_, std::initializer_list<string> list ) {
-            values.reserve(list.size());
-            for (auto& v : list){
-                ASN1_tag tag_;
-                try {
-                    tag_ = AttributeStringType.at(type);
-                    if(validate_string_type(v,tag_) == false){
-                        throw MyError("Attribute(string): attempt to create object with value that contains illegal characters");
-                    }
-                } catch (const std::out_of_range& e) { 
-                    tag_ = UTF8_STRING;
-                }
-                values.emplace_back(std::move(v), tag_);
-            }
-            type = std::move(type_);
-        }
-
-        // single byte array constructor
-        // Example Attribute Attr5("5.5.5.5", vector<uint8_t>{1,2,3,4,5}, OCTET_STRING);
-        Attribute(string type_, vector<uint8_t> value_, ASN1_tag tag) : type(std::move(type_)) {
-            values.emplace_back(std::move(value_), tag);
-        }
-
-        // multiple byte array constructor
-        // Example: Attribute Attr6("6.6.6.6", {{std::move(vec1),OCTET_STRING}, {std::move(vec2), OCTET_STRING}, {std::move(vec3),OCTET_STRING}});
-        Attribute(string type_, vector<pair<vector<uint8_t>,ASN1_tag>> list ) : type(std::move(type_)) {
-            for (auto& v : list){
-                values.emplace_back(std::move(v.first), v.second);
-            }
-        }
-
-        // returns encoded bytes
-        // It assumes that tag stores sensible information
-        vector<uint8_t> encode() const; 
-
-        // << operator
-        friend std::ostream& operator<<(std::ostream& os, const PKCS::Attribute& ATTR);
-
-        // getters
-        const string& getTypeReference() const { return type; }
-        const vector<pair<variant_object,ASN1_tag>>& getValuesReference() const { return values; }
-    };
-
 
 
     // ----------------------------------------------------------------------------------------------------
