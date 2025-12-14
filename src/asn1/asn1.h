@@ -20,7 +20,7 @@ namespace CBZ {
     // This namespace is defined in "private_key.h" and "pkcs.h" - forward declaration of a function used as a friend in ASN1Object
     namespace PKCS {
         int _RSAPrivateKey_check_and_expand(
-            std::shared_ptr<ASN1::ASN1Object> root_object
+            ASN1::ASN1Object& root_object
         );
     }
 
@@ -96,7 +96,7 @@ namespace CBZ {
             // @copy_value - boolean specifying if data is to be copied to the returned 
             //               object - set to "true" only if you know the object has 
             //               no children (for performance)
-            static std::shared_ptr<ASN1Object> decode(
+            static ASN1Object decode(
                 std::vector<uint8_t> const& data, 
                 size_t offset, 
                 bool copy_value
@@ -109,7 +109,7 @@ namespace CBZ {
             // as an rvalue - this buffer will be managed by ASN1Object instances 
             // and safely destroyed when no longer needed (memory zeroed before deallocation)
             // @offset - offset in @data to start from
-            static std::shared_ptr<ASN1Object> decode_all(std::vector<uint8_t> const& data, size_t offset=0);
+            static ASN1Object decode_all(std::vector<uint8_t> const& data, size_t offset=0);
 
             ASN1Parser() = delete;
             ~ASN1Parser() = delete;
@@ -118,13 +118,13 @@ namespace CBZ {
         // Class representing an ASN.1 object - contains a tag (see ASN1Tag above),
         // raw value and children, if parsed recursively
         class ASN1Object {
-        private:
-            static std::vector<std::shared_ptr<ASN1Object>> convert_to_shared(std::vector<ASN1Object>&& input);
+        // private:
+        //     static std::vector<std::shared_ptr<ASN1Object>> convert_to_shared(std::vector<ASN1Object>&& input);
         protected:
             ASN1Tag _tag; // ASN.1 tag
             size_t _length; // ASN.1 length
             std::vector<uint8_t> _value; // ASN.1 value
-            std::vector<std::shared_ptr<ASN1Object>> _children; // Set of child objects (1 level deep); empty if there're no children
+            std::vector<ASN1Object> _children; // Set of child objects (1 level deep); empty if there're no children
 
         public:
             explicit ASN1Object(
@@ -142,10 +142,11 @@ namespace CBZ {
                 ASN1Tag tag,
                 std::vector<ASN1Object>&& children
             );
-            explicit ASN1Object(
-                ASN1Tag tag,
-                std::vector<std::shared_ptr<ASN1Object>>&& children
-            );
+            ASN1Object(
+                ASN1Object&& r
+            ) noexcept;
+            ASN1Object(const ASN1Object& r) = default;
+
             virtual ~ASN1Object();
 
             // Returns object's tag
@@ -185,19 +186,19 @@ namespace CBZ {
             }
 
             // returns object's children (read-only)
-            inline std::vector<std::shared_ptr<ASN1Object>> const& children() const {
+            inline const std::vector<ASN1Object>& children() const {
                 return _children;
             }
 
             // Prints the ASN.1 tree in readable format - function prototype, most probably
             // won't be used so I don't really care about it
-            void print(int = 0);
+            void print(int = 0) const;
 
             inline std::shared_ptr<std::vector<uint8_t>> encode() const {
                 return ASN1Parser::encode_all(*this);
             }
 
-            static inline std::shared_ptr<ASN1Object> decode(std::vector<uint8_t> const& data, size_t offset = 0) {
+            static inline ASN1Object decode(std::vector<uint8_t> const& data, size_t offset = 0) {
                 return ASN1Parser::decode_all(data, offset);
             }
 
@@ -206,7 +207,7 @@ namespace CBZ {
 
             friend class ASN1Parser;
             friend int PKCS::_RSAPrivateKey_check_and_expand(
-                std::shared_ptr<ASN1Object> root_object
+                ASN1Object& root_object
             );
         };
 

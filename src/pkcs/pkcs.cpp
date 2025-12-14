@@ -263,27 +263,27 @@ namespace CBZ::PKCS {
         };
 
         int RSAEncryption::validate_parameters(
-            std::shared_ptr<ASN1Object const> parameters_object
+            const ASN1Object& parameters_object
         ) {
-            if (parameters_object->tag() != ASN1Tag::NULL_TYPE)
+            if (parameters_object.tag() != ASN1Tag::NULL_TYPE)
                 return ERR_SEMANTIC_CHECK_FAILED;
 
             return ERR_OK;
         }
 
         int PBES2::extract_parameters(
-            std::shared_ptr<ASN1Object const> parameters_object,
+            const ASN1Object& parameters_object,
             struct Parameters* out_ptr
         ) {
             using namespace PrivateKeySupportedAlgorithms;
 
-            if (parameters_object->tag() != ASN1Tag::SEQUENCE)
+            if (parameters_object.tag() != ASN1Tag::SEQUENCE)
                 return ERR_SEMANTIC_CHECK_FAILED;
-            if (parameters_object->children().size() != 2)
+            if (parameters_object.children().size() != 2)
                 return ERR_SEMANTIC_CHECK_FAILED;
 
-            auto kdf = parameters_object->children()[0];
-            auto enc = parameters_object->children()[1];
+            auto kdf = parameters_object.children()[0];
+            auto enc = parameters_object.children()[1];
             
             struct AlgorithmIdentifier kdf_ai;
             struct AlgorithmIdentifier enc_ai;
@@ -377,15 +377,14 @@ namespace CBZ::PKCS {
         }
 
         int PBKDF2::extract_parameters(
-            std::shared_ptr<ASN1Object const> parameters_object,
+            const ASN1Object& parameters_object,
             struct Parameters* out_ptr
         ) {
-            if (parameters_object->tag() != ASN1Tag::SEQUENCE)
+            if (parameters_object.tag() != ASN1Tag::SEQUENCE)
                 return ERR_SEMANTIC_CHECK_FAILED;
-            if (parameters_object->children().size() < 2)
+            if (parameters_object.children().size() < 2)
                 return ERR_SEMANTIC_CHECK_FAILED;
 
-            std::shared_ptr<ASN1Object> salt;
             uint32_t iteration_count = 0;
             uint32_t key_length = 0;
             AlgorithmIdentifier prf = {
@@ -393,11 +392,11 @@ namespace CBZ::PKCS {
                 std::shared_ptr<void>(nullptr)
             };
 
-            salt = parameters_object->children()[0];
-            if (salt->tag() != ASN1Tag::OCTET_STRING)
+            const ASN1Object& salt = parameters_object.children()[0];
+            if (salt.tag() != ASN1Tag::OCTET_STRING)
                 return ERR_SEMANTIC_CHECK_FAILED;
 
-            mpz_class _iteration_count_mpz = std::static_pointer_cast<ASN1Integer>(parameters_object->children()[1])->value();
+            mpz_class _iteration_count_mpz = static_cast<const ASN1Integer&>(parameters_object.children()[1]).value();
             if (_iteration_count_mpz > 0xFFFFFFFF) // This should never happen, but just in case
                 return ERR_FEATURE_UNSUPPORTED;
             
@@ -407,9 +406,9 @@ namespace CBZ::PKCS {
             // 1st LSB stands for the keyLength, while 2nd LSB stands for the prf
             uint8_t _bm = 0; 
 
-            for (size_t i = 2; i < parameters_object->children().size(); i++) {
-                auto next_field = parameters_object->children()[i];
-                switch (next_field->tag()) {
+            for (size_t i = 2; i < parameters_object.children().size(); i++) {
+                auto next_field = parameters_object.children()[i];
+                switch (next_field.tag()) {
                     case ASN1Tag::INTEGER: {
                         // Optional keyLength
                         if (_bm  & 0x01 || _bm  & 0x02)
@@ -417,7 +416,7 @@ namespace CBZ::PKCS {
                             // Either way, abort
                             return ERR_SEMANTIC_CHECK_FAILED;
 
-                        mpz_class _key_length = std::static_pointer_cast<ASN1Integer>(parameters_object->children()[2])->value();
+                        mpz_class _key_length = static_cast<const ASN1Integer&>(parameters_object.children()[2]).value();
                         if (_key_length > 0xFFFFFFFF) // This also should never happen, but again, just in case
                             return ERR_FEATURE_UNSUPPORTED;
                         
@@ -448,7 +447,7 @@ namespace CBZ::PKCS {
             // Finish up; copy data if needed and return
             if (out_ptr) {
                * out_ptr = PBKDF2::Parameters{
-                    std::make_shared<std::vector<uint8_t>>(salt->value()),
+                    std::make_shared<std::vector<uint8_t>>(salt.value()),
                     iteration_count,
                     key_length,
                     prf
@@ -493,29 +492,29 @@ namespace CBZ::PKCS {
         }
 
         int HMACFunctions::_generic_validate_parameters(
-            std::shared_ptr<ASN1Object const> parameters_object
+            const ASN1Object& parameters_object
         ) {
-            if (parameters_object->tag() != ASN1Tag::NULL_TYPE)
+            if (parameters_object.tag() != ASN1Tag::NULL_TYPE)
                 return ERR_SEMANTIC_CHECK_FAILED;
 
             return ERR_OK;
         }
 
         int EncryptionSchemes::AES::extract_parameters(
-            std::shared_ptr<ASN1Object const> parameters_object,
+            const ASN1Object& parameters_object,
             struct Parameters* out_ptr
         ) {
             constexpr const size_t IV_SIZE = 16;
 
-            if (parameters_object->tag() != ASN1Tag::OCTET_STRING)
+            if (parameters_object.tag() != ASN1Tag::OCTET_STRING)
                 return ERR_SEMANTIC_CHECK_FAILED;
-            if (parameters_object->value().size() != IV_SIZE)
+            if (parameters_object.value().size() != IV_SIZE)
                 return ERR_SEMANTIC_CHECK_FAILED;
             
             if (out_ptr != nullptr) {
                 std::memcpy(
                     out_ptr->iv,
-                    parameters_object->value().data(),
+                    parameters_object.value().data(),
                     IV_SIZE
                 );
             } 
@@ -523,16 +522,16 @@ namespace CBZ::PKCS {
         }
 
         int PrivateKeyAlgorithms::extract_algorithm(
-            std::shared_ptr<ASN1Object const> algorithm,
+            const ASN1Object& algorithm,
             struct AlgorithmIdentifier* out_ptr,
-            std::string const& oid
+            const std::string& oid
         ) {
-            if (algorithm->children().size() != 2)
+            if (algorithm.children().size() != 2)
                 return ERR_SEMANTIC_CHECK_FAILED;
 
             const std::string algorithm_oid = (oid.empty()) ? 
-                std::static_pointer_cast<ASN1ObjectIdentifier const>(algorithm->children()[0])->value() : oid;
-            auto parameters = algorithm->children()[1];
+                static_cast<const ASN1ObjectIdentifier&>(algorithm.children()[0]).value() : oid;
+            auto parameters = algorithm.children()[1];
 
             // PrivateKeyAlgorithms
             if (
@@ -562,16 +561,16 @@ namespace CBZ::PKCS {
         }
 
         int EncryptionAlgorithms::extract_algorithm(
-            std::shared_ptr<ASN1Object const> algorithm,
+            const ASN1Object& algorithm,
             struct AlgorithmIdentifier* out_ptr,
-            std::string const& oid
+            const std::string& oid
         ) {
-            if (algorithm->children().size() != 2)
+            if (algorithm.children().size() != 2)
                 return ERR_SEMANTIC_CHECK_FAILED;
 
             const std::string algorithm_oid = (oid.empty()) ? 
-                std::static_pointer_cast<ASN1ObjectIdentifier const>(algorithm->children()[0])->value() : oid;
-            auto parameters = algorithm->children()[1];
+                static_cast<const ASN1ObjectIdentifier&>(algorithm.children()[0]).value() : oid;
+            auto parameters = algorithm.children()[1];
 
             // EncryptionAlgorithms
             if (
@@ -603,16 +602,16 @@ namespace CBZ::PKCS {
         }
 
         int KDFs::extract_algorithm(
-            std::shared_ptr<ASN1Object const> algorithm,
+            const ASN1Object& algorithm,
             struct AlgorithmIdentifier* out_ptr,
-            std::string const& oid
+            const std::string& oid
         ) {
-            if (algorithm->children().size() != 2)
+            if (algorithm.children().size() != 2)
                 return ERR_SEMANTIC_CHECK_FAILED;
 
             const std::string algorithm_oid = (oid.empty()) ? 
-                std::static_pointer_cast<ASN1ObjectIdentifier const>(algorithm->children()[0])->value() : oid;
-            auto parameters = algorithm->children()[1];
+                static_cast<const ASN1ObjectIdentifier&>(algorithm.children()[0]).value() : oid;
+            auto parameters = algorithm.children()[1];
 
             // KDFs
             if (
@@ -644,16 +643,16 @@ namespace CBZ::PKCS {
         }
 
         int HMACFunctions::extract_algorithm(
-            std::shared_ptr<ASN1Object const> algorithm,
+            const ASN1Object& algorithm,
             struct AlgorithmIdentifier* out_ptr,
-            std::string const& oid
+            const std::string& oid
         ) {
-            if (algorithm->children().size() != 2)
+            if (algorithm.children().size() != 2)
                 return ERR_SEMANTIC_CHECK_FAILED;
 
             const std::string algorithm_oid = (oid.empty()) ? 
-                std::static_pointer_cast<ASN1ObjectIdentifier const>(algorithm->children()[0])->value() : oid;
-            auto parameters = algorithm->children()[1];
+                static_cast<const ASN1ObjectIdentifier&>(algorithm.children()[0]).value() : oid;
+            auto parameters = algorithm.children()[1];
 
             // HMACFunctions
             if (
@@ -684,16 +683,16 @@ namespace CBZ::PKCS {
         }
 
         int EncryptionSchemes::extract_algorithm(
-            std::shared_ptr<ASN1Object const> algorithm,
+            const ASN1Object& algorithm,
             struct AlgorithmIdentifier* out_ptr,
-            std::string const& oid
+            const std::string& oid
         ) {
-            if (algorithm->children().size() != 2)
+            if (algorithm.children().size() != 2)
                 return ERR_SEMANTIC_CHECK_FAILED;
 
             const std::string algorithm_oid = (oid.empty()) ? 
-                std::static_pointer_cast<ASN1ObjectIdentifier const>(algorithm->children()[0])->value() : oid;
-            auto parameters = algorithm->children()[1];
+                static_cast<const ASN1ObjectIdentifier&>(algorithm.children()[0]).value() : oid;
+            auto parameters = algorithm.children()[1];
 
             // EncryptionSchemes
             if (
@@ -739,14 +738,14 @@ namespace CBZ::PKCS {
     }
 
     int PrivateKeySupportedAlgorithms::extract_algorithm(
-        std::shared_ptr<ASN1Object const> algorithm,
+        const ASN1Object& algorithm,
         struct AlgorithmIdentifier* out_ptr
     ) {
-        if (algorithm->children().size() != 2)
+        if (algorithm.children().size() != 2)
             return ERR_SEMANTIC_CHECK_FAILED;
 
-        auto algorithm_oid = std::static_pointer_cast<ASN1ObjectIdentifier const>(algorithm->children()[0])->value();
-        auto parameters = algorithm->children()[1];
+        auto algorithm_oid = static_cast<const ASN1ObjectIdentifier&>(algorithm.children()[0]).value();
+        auto parameters = algorithm.children()[1];
 
         // Iterate through all supported algorithm categories
 

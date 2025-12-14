@@ -38,28 +38,28 @@ namespace CBZ::PKCS {
     //
     // Input:
     // @root_object - root ASN1Object representing the whole key
-    int _RSAPrivateKey_check_and_expand(std::shared_ptr<ASN1Object> root_object) {
+    int _RSAPrivateKey_check_and_expand(ASN1Object& root_object) {
         using namespace PrivateKeySupportedAlgorithms;
 
         // Root object should contain 3 or 4 children (attributies field is optional)
         if (
-            root_object->tag() != ASN1Tag::SEQUENCE
-            || root_object->children().size() < 3
-            || root_object->children().size() > 4
+            root_object.tag() != ASN1Tag::SEQUENCE
+            || root_object.children().size() < 3
+            || root_object.children().size() > 4
         )
             return ERR_SEMANTIC_CHECK_FAILED;
 
-        auto version = root_object->children()[0];
-        auto private_key_algorithm = root_object->children()[1];
-        auto private_key = root_object->children()[2];
+        const ASN1Object& version = root_object.children()[0];
+        const ASN1Object& private_key_algorithm = root_object.children()[1];
+        ASN1Object& private_key = root_object._children[2];
 
-        if (version->tag() != ASN1Tag::INTEGER) // 'version' must be of type INTEGER
+        if (version.tag() != ASN1Tag::INTEGER) // 'version' must be of type INTEGER
             return ERR_SEMANTIC_CHECK_FAILED;
-        if (std::static_pointer_cast<ASN1Integer>(version)->value() != 0) // 'version' must be equal to 0
+        if (static_cast<const ASN1Integer&>(version).value() != 0) // 'version' must be equal to 0
             return ERR_FEATURE_UNSUPPORTED;
-        if (private_key_algorithm->tag() != ASN1Tag::SEQUENCE) // 'private_key_algorithm' must be of type SEQUENCE
+        if (private_key_algorithm.tag() != ASN1Tag::SEQUENCE) // 'private_key_algorithm' must be of type SEQUENCE
             return ERR_SEMANTIC_CHECK_FAILED;
-        if (private_key->tag() != ASN1Tag::OCTET_STRING) // 'private_key' must be of type OCTET_STRING
+        if (private_key.tag() != ASN1Tag::OCTET_STRING) // 'private_key' must be of type OCTET_STRING
             return ERR_SEMANTIC_CHECK_FAILED;
 
         // Now proceed to the algorithm extraction
@@ -75,16 +75,15 @@ namespace CBZ::PKCS {
             case PrivateKeyAlgorithms::rsaEncryption: {
                 // According to the rsaEncryption PKCS specification, the private_key OCTET STRING
                 // is actually a SEQUENCE containing 9 INTEGERs
-                std::shared_ptr<ASN1Object> pk_sequence;
-                if (private_key->children().size() == 0) {
+                if (private_key.children().size() == 0) {
                     // Decode the private_key according to the PKCS#1 structure, since
                     // the ASN.1 parser didn't do it (it's a Primitive OCTET STRING after all)
-                    pk_sequence = ASN1Parser::decode_all(std::move(private_key->value()));
-                    if (pk_sequence->children().size() != 9)
+                    ASN1Object pk_sequence = ASN1Parser::decode_all(std::move(private_key.value()));
+                    if (pk_sequence.children().size() != 9)
                         return ERR_SEMANTIC_CHECK_FAILED;
 
-                    private_key->_children.push_back(pk_sequence);
-                } else if (private_key->children()[0]->children().size() != 9)
+                    private_key._children.push_back(pk_sequence);
+                } else if (private_key.children()[0].children().size() != 9)
                     return ERR_SEMANTIC_CHECK_FAILED;
 
                 return ERR_OK;
@@ -101,28 +100,28 @@ namespace CBZ::PKCS {
     // @out_ptr - optional pointer to the AlgorithmIdentifier structure
     //            to store the extracted algorithm
     int _EncryptedRSAPrivateKey_check(
-        std::shared_ptr<ASN1Object const> root_object,
+        const ASN1Object& root_object,
         struct AlgorithmIdentifier* out_ptr
     ) {
         using namespace PrivateKeySupportedAlgorithms;
 
-        if (root_object->tag() != ASN1Tag::SEQUENCE || root_object->children().size() != 2)
+        if (root_object.tag() != ASN1Tag::SEQUENCE || root_object.children().size() != 2)
             return ERR_SEMANTIC_CHECK_FAILED;
         
-        auto encryption_algorithm = root_object->children()[0];
-        auto encrypted_data = root_object->children()[1];
+        auto encryption_algorithm = root_object.children()[0];
+        auto encrypted_data = root_object.children()[1];
         
         if (int result = EncryptionAlgorithms::extract_algorithm(encryption_algorithm, out_ptr); result != ERR_OK)
             return result;
-        if (encrypted_data->tag() != ASN1Tag::OCTET_STRING)
+        if (encrypted_data.tag() != ASN1Tag::OCTET_STRING)
             return ERR_SEMANTIC_CHECK_FAILED;
 
         return ERR_OK;
     }
 
     RSAPrivateKey _Decrypt_key(
-        std::shared_ptr<ASN1Object> encrypted_data,
-        struct AlgorithmIdentifier const* alg_id,
+        const ASN1Object& encrypted_data,
+        const struct AlgorithmIdentifier* alg_id,
         std::string&& passphrase
     ) {
         using namespace PrivateKeySupportedAlgorithms;
@@ -144,7 +143,7 @@ namespace CBZ::PKCS {
                     int result = EncryptionAlgorithms::PBES2::decrypt_data(
                         params.get(),
                         passphrase_sp,
-                        std::span{encrypted_data->value()},
+                        std::span{encrypted_data.value()},
                         *decrypted_data
                     ); result != ERR_OK
                 ) {
@@ -171,7 +170,6 @@ namespace CBZ::PKCS {
         return _Decode_key(root_object);
     }
 
-
     // Prints the private key (use only for debugging purposes)
     void RSAPrivateKey::print() {
         std::cout << "Version: " << version() << std::endl;
@@ -185,7 +183,7 @@ namespace CBZ::PKCS {
         std::cout << "Coefficient (q^-1 mod p): " << coefficient() << std::endl;
     }
 
-    RSAPrivateKey _Decode_key(std::shared_ptr<ASN1Object> asn1_root) {
+    RSAPrivateKey _Decode_key(ASN1Object& asn1_root) {
         // validate the overall key ASN.1 structure and expand it, if needed
         if (int result = _RSAPrivateKey_check_and_expand(asn1_root); result != 0) {
             switch (result) {
@@ -201,12 +199,12 @@ namespace CBZ::PKCS {
         }
 
         // RSAPrivateKey sequence - https://www.rfc-editor.org/rfc/rfc8017.html#page-55
-        auto pk_sequence = asn1_root->children()[2]->children()[0];
+        auto pk_sequence = asn1_root.children()[2].children()[0];
         std::vector<mpz_class> rsa_params(9);
         // iterate through all 9 integers and save them
         for (size_t i = 0; i < 9; i++) {
-            auto integer_obj = std::static_pointer_cast<ASN1::ASN1Integer>(pk_sequence->children()[i]);
-            rsa_params[i] = integer_obj->value();
+            auto integer_obj = static_cast<const ASN1::ASN1Integer&>(pk_sequence.children()[i]);
+            rsa_params[i] = integer_obj.value();
         }
 
         #ifdef RSA_DEBUG
@@ -271,7 +269,8 @@ namespace CBZ::PKCS {
             throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key footer doesn't match the standard");
 
         std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
-        std::shared_ptr<ASN1Object> asn1_root = ASN1Parser::decode_all(std::move(key_asn1));
+        ASN1Object asn1_root = ASN1Object::decode(std::move(key_asn1));
+        std::cout << "------------------------ ASN1Object --------------------------------" << std::endl;
 
         // decode the final expanded structure into 9 integers
         return _Decode_key(asn1_root);
@@ -303,7 +302,7 @@ namespace CBZ::PKCS {
             throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key footer doesn't match the standard");
 
         std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
-        std::shared_ptr<ASN1Object> asn1_root = ASN1Parser::decode_all(std::move(key_asn1));
+        ASN1Object asn1_root = ASN1Parser::decode_all(std::move(key_asn1));
         struct AlgorithmIdentifier alg_id;
 
         if (int result = _EncryptedRSAPrivateKey_check(asn1_root, &alg_id); result != ERR_OK) {
@@ -320,7 +319,7 @@ namespace CBZ::PKCS {
         }
 
         return _Decrypt_key(
-            asn1_root->children()[1],
+            asn1_root.children()[1],
             &alg_id,
             std::move(passphrase)
         );

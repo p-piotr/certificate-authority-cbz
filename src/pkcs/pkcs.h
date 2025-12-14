@@ -52,16 +52,16 @@ namespace CBZ::PKCS {
         // @algorithm - ASN1Object representing the PKCS AlgorithmIdentifier type (algorithm + parameters)
         // @out_ptr - optional pointer to the AlgorithmIdentifier structure
         int extract_algorithm(
-            std::shared_ptr<ASN1Object const> algorithm,
+            const ASN1Object& algorithm,
             struct AlgorithmIdentifier* out_ptr
         );
 
         namespace PrivateKeyAlgorithms {
 
             int extract_algorithm(
-                std::shared_ptr<ASN1Object const> algorithm,
+                const ASN1Object& algorithm,
                 struct AlgorithmIdentifier* out_ptr,
-                std::string const& oid = ""
+                const std::string& oid = ""
             );
 
             namespace RSAEncryption {
@@ -69,7 +69,7 @@ namespace CBZ::PKCS {
 
                 // Parameters for this function should be NULL according to the PKCS
                 // https://datatracker.ietf.org/doc/html/rfc8017#appendix-A.1
-                int validate_parameters(std::shared_ptr<ASN1Object const> parameters_object);
+                int validate_parameters(const ASN1Object& parameters_object);
             }
 
             enum PrivateKeyAlgorithmsEnum : uint32_t {
@@ -81,9 +81,9 @@ namespace CBZ::PKCS {
         namespace EncryptionAlgorithms {
 
             int extract_algorithm(
-                std::shared_ptr<ASN1Object const> algorithm,
+                const ASN1Object& algorithm,
                 struct AlgorithmIdentifier* out_ptr,
-                std::string const& oid = ""
+                const std::string& oid = ""
             );
 
             namespace PBES2 {
@@ -96,7 +96,7 @@ namespace CBZ::PKCS {
                 };
 
                 int extract_parameters(
-                    std::shared_ptr<ASN1Object const> parameters_object,
+                    const ASN1Object& parameters_object,
                     struct Parameters* out_ptr
                 );
 
@@ -111,8 +111,8 @@ namespace CBZ::PKCS {
                 // @out - vector to store decrypted data
                 int decrypt_data(
                     struct Parameters* params,
-                    std::shared_ptr<std::string const> passphrase,
-                    std::span<uint8_t const> in,
+                    std::shared_ptr<const std::string> passphrase,
+                    std::span<const uint8_t> in,
                     std::vector<uint8_t>& out
                 );
             }
@@ -125,9 +125,9 @@ namespace CBZ::PKCS {
         namespace KDFs {
 
             int extract_algorithm(
-                std::shared_ptr<ASN1Object const> algorithm,
+                const ASN1Object& algorithm,
                 struct AlgorithmIdentifier* out_ptr,
-                std::string const& oid = ""
+                const std::string& oid = ""
             );
 
             namespace PBKDF2 {
@@ -143,7 +143,7 @@ namespace CBZ::PKCS {
                 };
 
                 int extract_parameters(
-                    std::shared_ptr<ASN1Object const> parameters_object,
+                    const ASN1Object& parameters_object,
                     struct Parameters* out_ptr
                 );
 
@@ -174,14 +174,14 @@ namespace CBZ::PKCS {
         namespace HMACFunctions {
 
             int extract_algorithm(
-                std::shared_ptr<ASN1Object const> algorithm,
+                const ASN1Object& algorithm,
                 struct AlgorithmIdentifier* out_ptr,
-                std::string const& oid = ""
+                const std::string& oid = ""
             );
 
             // This is a generic function for validating the HMACWithSHA* functions,
             // so there are no specific ones for each HMAC function declared
-            int _generic_validate_parameters(std::shared_ptr<ASN1Object const> parameters_object);
+            int _generic_validate_parameters(const ASN1Object& parameters_object);
 
             namespace HMACWithSHA1 {
                 extern const OID oid;
@@ -201,9 +201,9 @@ namespace CBZ::PKCS {
         namespace EncryptionSchemes {
 
             int extract_algorithm(
-                std::shared_ptr<ASN1Object const> algorithm,
+                const ASN1Object& algorithm,
                 struct AlgorithmIdentifier* out_ptr,
-                std::string const& oid = ""
+                const std::string& oid = ""
             );
 
             namespace AES {
@@ -212,7 +212,7 @@ namespace CBZ::PKCS {
                 };
 
                 int extract_parameters(
-                    std::shared_ptr<ASN1Object const> parameters_object,
+                    const ASN1Object& parameters_object,
                     struct Parameters* out_ptr
                 );
 

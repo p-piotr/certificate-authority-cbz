@@ -3,10 +3,10 @@
 // Here are going to be placed some macros allowing for more verbose (debug-like) output during execution
 // THIS FILE IS INTENDED TO BE DELETED AFTER I MOVE THOSE FLAGS TO MAKEFILE
 
-#define ASN1_DEBUG // print debugging information while parsing ASN1 objects
-#define KDF_DEBUG // print debugging information while deriving keys
-#define AES_DEBUG // print debugging information while performing AES encryption/decryption
-#define RSA_DEBUG // print debugging information while parsing RSA keys
-#define SECURE_FREE_DEBUG // print debugging information when secure_free is called
-#define OPENSSL_DEBUG // print debugging information when fetching/clearing OpenSSL algorithms
-#define GMP_DEBUG // print debugging information on total GMP memory allocation
+// #define ASN1_DEBUG // print debugging information while parsing ASN1 objects
+// #define KDF_DEBUG // print debugging information while deriving keys
+// #define AES_DEBUG // print debugging information while performing AES encryption/decryption
+// #define RSA_DEBUG // print debugging information while parsing RSA keys
+// #define SECURE_FREE_DEBUG // print debugging information when secure_free is called
+// #define OPENSSL_DEBUG // print debugging information when fetching/clearing OpenSSL algorithms
+// #define GMP_DEBUG // print debugging information on total GMP memory allocation

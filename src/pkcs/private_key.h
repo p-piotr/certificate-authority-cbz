@@ -49,39 +49,39 @@ namespace CBZ::PKCS {
         RSAPrivateKey(std::string const& filepath, std::string&& passphrase)
             : RSAPrivateKey(from_file(filepath, std::move(passphrase))) {}
 
-        inline mpz_class const& version() const {
+        inline const mpz_class& version() const {
             return _version;
         }
 
-        inline mpz_class const& n() const {
+        inline const mpz_class& n() const {
             return _n;
         }
 
-        inline mpz_class const& e() const {
+        inline const mpz_class& e() const {
             return _e;
         }
 
-        inline mpz_class const& d() const {
+        inline const mpz_class& d() const {
             return _d;
         }
 
-        inline mpz_class const& p() const {
+        inline const mpz_class& p() const {
             return _p;
         }
 
-        inline mpz_class const& q() const {
+        inline const mpz_class& q() const {
             return _q;
         }
 
-        inline mpz_class const& exponent1() const {
+        inline const mpz_class& exponent1() const {
             return _exponent1;
         }
 
-        inline mpz_class const& exponent2() const {
+        inline const mpz_class& exponent2() const {
             return _exponent2;
         }
 
-        inline mpz_class const& coefficient() const {
+        inline const mpz_class& coefficient() const {
             return _coefficient;
         }
 
@@ -93,7 +93,7 @@ namespace CBZ::PKCS {
         //
         // Input:
         // @filepath - path to the file containing the private key in PKCS#8
-        static RSAPrivateKey from_file(std::string const& filepath);
+        static RSAPrivateKey from_file(const std::string& filepath);
 
         // Loads a private key from file
         // This variant may parse either encrypted or unencrypted keys
@@ -103,7 +103,7 @@ namespace CBZ::PKCS {
         // @filepath - path to the file containing the private key in PKCS#8
         // @passphrase - passphrase used when the key turns out to be encrypted, as an rvalue
         //               - gets securely deleted when not needed anymore
-        static RSAPrivateKey from_file(std::string const& filepath, std::string&& passphrase);
+        static RSAPrivateKey from_file(const std::string& filepath, std::string&& passphrase);
     };
 
     // Checks if the ASN.1 structure of the RSA private key is correct
@@ -111,7 +111,7 @@ namespace CBZ::PKCS {
     //
     // Input:
     // @root_object - root ASN1Object representing the whole key
-    int _RSAPrivateKey_check_and_expand(std::shared_ptr<ASN1Object> root_object);
+    int _RSAPrivateKey_check_and_expand(ASN1Object& root_object);
 
     // Checks if the ASN.1 structure of the encrypted RSA private key is correct
     // This function only checks the first two levels deep in the ASN.1 structure,
@@ -128,7 +128,7 @@ namespace CBZ::PKCS {
     // @out_ptr - optional AlgorithmIdentifier pointer 
     //            to store the algorithm options
     int _EncryptedRSAPrivateKey_check(
-        std::shared_ptr<ASN1Object const> root_object,
+        const ASN1Object& root_object,
         struct AlgorithmIdentifier* out_ptr
     );
 
@@ -136,7 +136,7 @@ namespace CBZ::PKCS {
     //
     // Input:
     // @asn1_root - root ASN1Object representing the key
-    RSAPrivateKey _Decode_key(std::shared_ptr<ASN1Object> asn1_root);
+    RSAPrivateKey _Decode_key(ASN1Object& asn1_root);
 
     // Decrypts private key using given algorithm
     //
@@ -148,8 +148,8 @@ namespace CBZ::PKCS {
     // @passphrase - passphrase for decryption process to use, as an rvalue
     //               this value will be disposed securely after the function completes
     RSAPrivateKey _Decrypt_key(
-        std::shared_ptr<ASN1Object> encrypted_data,
-        struct AlgorithmIdentifier const* alg_id,
+        const ASN1Object& encrypted_data,
+        const struct AlgorithmIdentifier* alg_id,
         std::string&& passphrase
     );
 

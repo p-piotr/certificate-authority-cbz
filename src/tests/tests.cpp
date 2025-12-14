@@ -39,6 +39,7 @@ void RSA_ASN1_test(int argc, char** argv) {
         return;
     }
 
+    /*
     std::cout << std::endl << "----------------------------------------" << std::endl << std::endl;
     std::cout << "ENCODING TEST" << std::endl << std::endl;
 
@@ -69,6 +70,7 @@ void RSA_ASN1_test(int argc, char** argv) {
         std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte) << ' ';
     }
     std::cout << std::dec << std::endl;
+    */
 }
 
 void AES_test() {
@@ -414,7 +416,7 @@ void ASN1_test(int argc, char** argv) {
         }
         std::vector<uint8_t> file_asn1 = Base64::decode(file_asn1_b64);
         auto root_object = ASN1::ASN1Parser::decode_all(std::move(file_asn1));
-        root_object->print();
+        root_object.print();
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return;

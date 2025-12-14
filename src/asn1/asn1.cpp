@@ -79,8 +79,8 @@ namespace CBZ::ASN1 {
 
         // the object has children - encode them first
         std::vector<std::shared_ptr<std::vector<uint8_t>>> encoded_children;
-        for (std::shared_ptr<ASN1Object> child : root_object.children())
-            encoded_children.push_back(encode_all(*child));
+        for (ASN1Object const& child : root_object.children())
+            encoded_children.push_back(encode_all(child));
 
         // concatenate root object tag, length and encoded children
         std::vector<uint8_t> encoded_root_object;
@@ -125,7 +125,7 @@ namespace CBZ::ASN1 {
     // @copy_value - boolean specifying if data is to be copied to the returned 
     //               object - set to "true" only if you know the object has 
     //               no children for performance
-    std::shared_ptr<ASN1Object> ASN1Parser::decode(
+    ASN1Object ASN1Parser::decode(
         std::vector<uint8_t> const& data, 
         size_t offset,
         bool copy_value
@@ -155,19 +155,16 @@ namespace CBZ::ASN1 {
         if (offset + length > data.size())
             throw std::runtime_error("[ASN1Parser::decode] Incomplete ASN.1 data (out of bounds)");
 
-        std::shared_ptr<ASN1Object> obj;
-
         if (copy_value) {
             // Copy the value vector from data,
             std::vector<uint8_t> value(data.begin() + offset, data.begin() + offset + length);
             // and return it in the new object
-            obj = std::make_shared<ASN1Object>(tag, std::move(value));
+            return ASN1Object(tag, std::move(value));
         }
         else {
             // Only set the tag and length
-            obj = std::make_shared<ASN1Object>(tag, length);
+            return ASN1Object(tag, length);
         }
-        return obj;
     }
 
     // Parses ASN.1 binary data recursively to create a module tree, returning the root element
@@ -175,7 +172,7 @@ namespace CBZ::ASN1 {
     // Input:
     // @data - byte vector containing ASN.1 binary data
     // @offset - offset in @data to start from
-    std::shared_ptr<ASN1Object> ASN1Parser::decode_all(
+    ASN1Object ASN1Parser::decode_all(
         std::vector<uint8_t> const& data, 
         size_t offset
     ) {
@@ -185,71 +182,85 @@ namespace CBZ::ASN1 {
 
         // else, the object contains children - we must decode them
         auto root_object = decode(data, offset, false);
-        offset += (1 + root_object->length_size());
+        offset += (1 + root_object.length_size());
         size_t offset_t = offset;
-        while (offset_t < offset + root_object->length()) {
+        while (offset_t < offset + root_object.length()) {
             auto child_object = decode_all(data, offset_t);
-            root_object->_children.push_back(child_object);
-            offset_t += child_object->total_size();
+            offset_t += child_object.total_size();
+            root_object._children.push_back(std::move(child_object));
         }
         // check if final offset matches root object's length - if not,
         // something's wrong - buffer is probably corrupted
-        if (offset_t != offset + root_object->length())
+        if (offset_t != offset + root_object.length())
             throw std::runtime_error("[ASN1Parser::decode_all] final offset doesn't match calculated length - possible buffer corruption");
 
         return root_object;
     }
 
     // Converts a vector holding ASN1Object instances to a vector holding smart pointers holding those ASN1Object instances
-    std::vector<std::shared_ptr<ASN1Object>> ASN1Object::convert_to_shared(std::vector<ASN1Object>&& input) {
-        std::vector<std::shared_ptr<ASN1Object>> output;
-        output.reserve(input.size());
-        for (auto& item : input)
-            output.push_back(std::make_shared<ASN1Object>(std::move(item)));
-        return output;
-    }
+    // std::vector<std::shared_ptr<ASN1Object>> ASN1Object::convert_to_shared(std::vector<ASN1Object>&& input) {
+    //     std::vector<std::shared_ptr<ASN1Object>> output;
+    //     output.reserve(input.size());
+    //     for (auto& item : input)
+    //         output.push_back(std::make_shared<ASN1Object>(std::move(item)));
+    //     return output;
+    // }
 
     ASN1Object::ASN1Object(ASN1Tag tag) :
-        _tag(tag),
-        _length(0) {
+        _tag(tag), _length(0)
+    {
         #ifdef ASN1_DEBUG
         std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
-            << std::dec << ", value_size=" << _value.size() << std::endl;
+            << ", value_size=" << _value.size() << std::endl;
         #endif // ASN1_DEBUG
     }
 
     ASN1Object::ASN1Object(ASN1Tag tag, size_t length) :
-        _tag(tag),
-        _length(length) {
+        _tag(tag), _length(length)
+    {
         #ifdef ASN1_DEBUG
         std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
-            << std::dec << ", value_size=" << _value.size() << std::endl;
+            << ", value_size=" << _value.size() << std::endl;
         #endif // ASN1_DEBUG
     }
 
     // take value by const-reference to avoid overload ambiguity with the rvalue overload
     // NOT RELEVANT ANYMORE I GUESS THAT'S MORE UNIVERSAL
     ASN1Object::ASN1Object(ASN1Tag tag, std::vector<uint8_t> value) :
-        _tag(tag),
-        _length(value.size()),
-        _value(std::move(value)) {
+        _tag(tag), _length(value.size()), _value(std::move(value))
+    {
         #ifdef ASN1_DEBUG
         std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
-            << std::dec << ", value_size=" << _value.size() << std::endl;
+            << ", value_size=" << _value.size() << std::endl;
         #endif // ASN1_DEBUG
     }
 
     ASN1Object::ASN1Object(ASN1Tag tag, std::vector<ASN1Object>&& children)
-        : ASN1Object(tag, convert_to_shared(std::move(children))) {}
-
-    ASN1Object::ASN1Object(ASN1Tag tag, std::vector<std::shared_ptr<ASN1Object>>&& children) :
-        _tag(tag), 
-        _children(std::move(children)) {
+        : _tag(tag), _children(std::move(children))
+    {
         #ifdef ASN1_DEBUG
         std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
-            << std::dec << ", value_size=" << _value.size() << std::endl;
+            << ", value_size=" << _value.size() << std::endl;
         #endif // ASN1_DEBUG
     }
+
+    ASN1Object::ASN1Object(ASN1Object&& r) noexcept
+        : _tag(r._tag), _length(r._length), _value(std::move(r._value)), _children(std::move(r._children))
+    {
+        #ifdef ASN1_DEBUG
+        std::cerr << "[ASN1Object] ASN1Object moved: tag=" << tag_to_string(_tag)
+            << ", value_size=" << _value.size() << ", r.value_size=" << r._value.size() << std::endl;
+        #endif // ASN1_DEBUG
+    }
+
+    // ASN1Object::ASN1Object(ASN1Tag tag, std::vector<std::shared_ptr<ASN1Object>>&& children) :
+    //     _tag(tag), 
+    //     _children(std::move(children)) {
+    //     #ifdef ASN1_DEBUG
+    //     std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
+    //         << std::dec << ", value_size=" << _value.size() << std::endl;
+    //     #endif // ASN1_DEBUG
+    // }
 
     ASN1Object::~ASN1Object() {
         CBZ::Security::secure_zero_memory(_value); // don't forget to zero data as it may be critical
@@ -261,7 +272,7 @@ namespace CBZ::ASN1 {
 
 
     // Converts an ASN.1 tag (enum) to string
-    void ASN1Object::print(int indent) {
+    void ASN1Object::print(int indent) const {
         std::string output = "";
         for (int i = 0; i < indent; i++)
             output += '\t';
@@ -270,8 +281,8 @@ namespace CBZ::ASN1 {
         output += tag_to_string(_tag);
         // output value in format depending on the tag
         std::cout << output << std::endl;
-        for (auto child : _children)
-            child->print(indent+1);        
+        for (const auto& child : _children)
+            child.print(indent+1);
     }
 
     size_t _ASN1_helpers::_ASN1Object_calculate_length_field_size(size_t length) {
