@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <vector>
 #include <cstdint>
 #include <cstddef>
@@ -9,6 +10,7 @@
 #include <sstream>
 #include "asn1/asn1.h"
 #include "utils/security.hpp"
+#include "utils/utils.hpp"
 
 // This namespace contains all functionality related to ASN1
 namespace CBZ::ASN1 {
@@ -34,7 +36,7 @@ namespace CBZ::ASN1 {
         }
     }
 
-    std::shared_ptr<std::vector<uint8_t>> ASN1Parser::encode(ASN1Object const& object) {
+    std::vector<uint8_t> ASN1Parser::encode(ASN1Object const& object) {
         // first, check whether it's NULL if it doesn't have neither value nor children
         if (
             object.value().size() == 0 
@@ -60,13 +62,10 @@ namespace CBZ::ASN1 {
             object.value().end()
         );
 
-        return std::shared_ptr<std::vector<uint8_t>>(
-            new std::vector<uint8_t>(std::move(encoded_object)), 
-            secure_delete<std::vector<uint8_t>>
-        );
+        return encoded_object;
     }
 
-    std::shared_ptr<std::vector<uint8_t>> ASN1Parser::encode_all(ASN1Object const& root_object) {
+    std::vector<uint8_t> ASN1Parser::encode_all(ASN1Object const& root_object) {
         bool has_children = !root_object.children().empty();
         bool has_value = root_object.value().size() > 0;
         if (has_children && has_value)
@@ -78,8 +77,8 @@ namespace CBZ::ASN1 {
             return encode(root_object);
 
         // the object has children - encode them first
-        std::vector<std::shared_ptr<std::vector<uint8_t>>> encoded_children;
-        for (ASN1Object const& child : root_object.children())
+        std::vector<std::vector<uint8_t>> encoded_children;
+        for (const ASN1Object& child : root_object.children())
             encoded_children.push_back(encode_all(child));
 
         // concatenate root object tag, length and encoded children
@@ -87,8 +86,8 @@ namespace CBZ::ASN1 {
         encoded_root_object.push_back(static_cast<uint8_t>(root_object.tag()));
         // calculate total size of children
         size_t total_children_size = 0;
-        for (auto child_data : encoded_children)
-            total_children_size += child_data->size();
+        for (const auto& child_data : encoded_children)
+            total_children_size += child_data.size();
 
         // since the object has children, we need to encode the length field accordingly
         std::vector<uint8_t> length_field = _ASN1_helpers::_ASN1Object_encode_length_field(total_children_size);
@@ -99,19 +98,16 @@ namespace CBZ::ASN1 {
             length_field.cend()
         );
         // append encoded children
-        for (auto child_data : encoded_children) {
+        for (const auto& child_data : encoded_children) {
             size_t current_offset = encoded_root_object.size();
             encoded_root_object.insert(
                 encoded_root_object.end(),
-                child_data->cbegin(),
-                child_data->cend()
+                child_data.cbegin(),
+                child_data.cend()
             );
         }
 
-        return std::shared_ptr<std::vector<uint8_t>>(
-            new std::vector<uint8_t>(std::move(encoded_root_object)),
-            secure_delete<std::vector<uint8_t>>
-        );
+        return encoded_root_object;
     }
 
     // This function parses ASN.1 binary data and returns a parsed element 
@@ -206,8 +202,8 @@ namespace CBZ::ASN1 {
     //     return output;
     // }
 
-    ASN1Object::ASN1Object(ASN1Tag tag) :
-        _tag(tag), _length(0)
+    ASN1Object::ASN1Object(ASN1Tag tag)
+        : _tag(tag), _length(0)
     {
         #ifdef ASN1_DEBUG
         std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
@@ -215,8 +211,8 @@ namespace CBZ::ASN1 {
         #endif // ASN1_DEBUG
     }
 
-    ASN1Object::ASN1Object(ASN1Tag tag, size_t length) :
-        _tag(tag), _length(length)
+    ASN1Object::ASN1Object(ASN1Tag tag, size_t length)
+        : _tag(tag), _length(length)
     {
         #ifdef ASN1_DEBUG
         std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
@@ -226,13 +222,24 @@ namespace CBZ::ASN1 {
 
     // take value by const-reference to avoid overload ambiguity with the rvalue overload
     // NOT RELEVANT ANYMORE I GUESS THAT'S MORE UNIVERSAL
-    ASN1Object::ASN1Object(ASN1Tag tag, std::vector<uint8_t> value) :
-        _tag(tag), _length(value.size()), _value(std::move(value))
+    ASN1Object::ASN1Object(ASN1Tag tag, std::vector<uint8_t> value)
+        : _tag(tag), _length(value.size()), _value(std::move(value))
     {
         #ifdef ASN1_DEBUG
         std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
             << ", value_size=" << _value.size() << std::endl;
         #endif // ASN1_DEBUG
+    }
+
+    ASN1Object::ASN1Object(ASN1Tag tag, std::string value)
+        : _tag(tag), _length(value.size())
+    {
+        _value.reserve(value.size());
+        _value.insert(
+            _value.cbegin(),
+            value.begin(),
+            value.end()
+        );
     }
 
     ASN1Object::ASN1Object(ASN1Tag tag, std::vector<ASN1Object>&& children)
@@ -270,6 +277,20 @@ namespace CBZ::ASN1 {
         #endif // ASN1_DEBUG
     }
 
+    bool ASN1Object::operator<(ASN1Object& other) noexcept {
+        if (this->_encoded.empty())
+            this->_encoded = this->encode();
+        if (other._encoded.empty())
+            other._encoded = other.encode();
+
+        const std::vector<uint8_t>& mb = this->_encoded;
+        const std::vector<uint8_t>& ob = other._encoded;
+
+        return std::lexicographical_compare(
+            mb.begin(), mb.end(),
+            ob.begin(), ob.end()
+        );
+    }
 
     // Converts an ASN.1 tag (enum) to string
     void ASN1Object::print(int indent) const {
@@ -361,7 +382,7 @@ namespace CBZ::ASN1 {
     // The ASN.1 OBJECT IDENTIFIER encoder - returns a binary representation of OBJECT IDENTIFIER (as a buffer)
     // Input:
     // @obj_id_str - OBJECT IDENTIFIER as a string (eg. "1.23.4567.89.0")
-    std::vector<uint8_t> ASN1ObjectIdentifier::encode(std::string const& obj_id_str) {
+    std::vector<uint8_t> ASN1Parser::object_identifier_encode(std::string const& obj_id_str) {
         std::vector<mpz_class> integers; // holds the parsed integers from obj_id_str, eg. "1.23.4567.89.0" -> [1, 23, 4567, 89, 0]
         std::vector<uint8_t> result;
         std::string temp = ""; // temporary string holding digits of the current integer being parsed
@@ -403,7 +424,7 @@ namespace CBZ::ASN1 {
     // ASN.1 OBJECT IDENTIFIER decoder - outputs a string (eg. "1.23.4567.89.0")
     // Input:
     // @obj_id - vector containing binary representatoin of the OBJECT IDENTIFIER
-    std::string ASN1ObjectIdentifier::decode(std::vector<uint8_t> const& data) {
+    std::string ASN1Parser::object_identifier_decode(std::vector<uint8_t> const& data) {
         std::string integer_str;
         std::string result = "";
         auto rb = data.crbegin();
@@ -452,7 +473,7 @@ namespace CBZ::ASN1 {
     // Encodes a GMP integer to the binary form, big-endian (ANS.1 compatibile), returning a buffer
     // Input:
     // @num - GMP integer to encode
-    std::vector<uint8_t> ASN1Integer::encode(mpz_class const& num) {
+    std::vector<uint8_t> ASN1Parser::integer_encode(mpz_class const& num) {
         if (num == 0)
             return { 0 };
 
@@ -481,7 +502,7 @@ namespace CBZ::ASN1 {
     // Decodes a buffer holding binary data into a GMP integer and returns it
     // Input:
     // @buffer - buffer holding the integer in binary form (big-endian)
-    mpz_class ASN1Integer::decode(std::vector<uint8_t> const& data) {
+    mpz_class ASN1Parser::integer_decode(std::vector<uint8_t> const& data) {
         mpz_class num;
 
         mpz_import(
@@ -497,12 +518,20 @@ namespace CBZ::ASN1 {
         return num;
     }
 
-    ASN1BitString::ASN1BitString(std::vector<uint8_t> const& s, int unused) : ASN1Object(BIT_STRING, std::move(s)) {
+    ASN1BitString::ASN1BitString(std::vector<uint8_t> s, int unused)
+        : ASN1Object(BIT_STRING, std::move(s))
+    {
         if (unused > 7)
             throw std::runtime_error("[ASN1BitString::ASN1BitString] cannot exceed 7 unused bytes");
 
-        _value.insert(_value.begin(), static_cast<uint8_t>(unused));
+        _value.insert(_value.cbegin(), static_cast<uint8_t>(unused));
         _length += 1;
     }
 
+    ASN1String::ASN1String(ASN1Tag string_tag, std::string s)
+        : ASN1Object(string_tag, std::move(s))
+    {
+        if (!CBZ::Utils::validate_string_type(s, string_tag))
+            throw std::runtime_error("[ASN1String::ASN1String] invalid string encoding or tag");
+    }
 }

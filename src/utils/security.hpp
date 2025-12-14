@@ -6,25 +6,9 @@
 #include <iostream>
 #include <vector>
 #include <gmpxx.h>
-#include <termios.h>
-#include <unistd.h>
 #include "debug.h"
 
 namespace CBZ::Security {
-
-    // Enables (or disables) stdin echo
-    // Temporarily disable while prompting for a passphrase or other secrets
-    inline void set_stdin_echo(bool enable = true) {
-        struct termios tty;
-        tcgetattr(STDIN_FILENO,& tty);
-
-        if (!enable)
-            tty.c_lflag &= ~ECHO;
-        else
-            tty.c_lflag |= ECHO;
-
-        tcsetattr(STDIN_FILENO, TCSANOW, &tty);
-    }
 
     // Securely zeroes memory 
     // Beware! this function does NOT free the memory after zeroing!

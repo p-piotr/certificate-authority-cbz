@@ -1,13 +1,16 @@
 //TODO: should also compare it against some library
 
-#include "../encoding.h"
-#include "../decoding.h"
-#include "utils/utils.hpp"
 #include <utility>
+#include <vector>
+#include <iostream>
+#include "utils/utils.hpp"
 
 using std::cout;
 using std::cerr;
+using std::endl;
 using std::pair;
+using std::vector;
+using std::string;
 
 int main(){
     using namespace CBZ::Utils;
@@ -49,7 +52,8 @@ int main(){
 
         cout << "----------------------------------------" << endl;
         cout << "Testing " << val << endl << endl;
-        vector<uint8_t> der = encode_der_integer(val);
+        //vector<uint8_t> der = encode_der_integer(val);
+        vector<uint8_t> der = CBZ::ASN1::ASN1Integer(val).encode();
         if(der != check){
             cerr << "🟥 Encoding mismatch detected" << endl;
             cerr << "Encoded value: ";
@@ -62,7 +66,8 @@ int main(){
 
         cout << endl;
 
-        mpz_class decoded = decode_der_integer(der,offset);
+        //mpz_class decoded = decode_der_integer(der,offset);
+        mpz_class decoded = CBZ::ASN1::ASN1Integer::decode(der, offset).value();
         if (val != decoded){
             cerr << "🟥 Decoding mismatch detected";
             cerr << "Decoded value: " << decoded << endl;

@@ -35,12 +35,13 @@ namespace CBZ {
             NULL_TYPE = 0x05,
             OBJECT_IDENTIFIER = 0x06,
             UTF8_STRING = 0x0C,
-            SEQUENCE = 0x30,
-            SET = 0x31,
             PRINTABLE_STRING = 0x13,
             IA5_STRING = 0x16,
             UTC_TIME = 0x17,
             GENERALIZED_TIME = 0x18,
+            SEQUENCE = 0x30,
+            SET = 0x31,
+            CONSTRUCTED_TYPE = 0xA0,
         };
 
         // Converts an ASN.1 tag (enum) to string
@@ -76,14 +77,14 @@ namespace CBZ {
             //
             // Input:
             // @object - ASN1Object to encode
-            static std::shared_ptr<std::vector<uint8_t>> encode(ASN1Object const& object);
+            static std::vector<uint8_t> encode(ASN1Object const& object);
 
             // This function encodes an ASN.1 object (and its children recursively) into binary form
             // returning a byte vector
             //
             // Input:
             // @root_object - root ASN1Object to encode
-            static std::shared_ptr<std::vector<uint8_t>> encode_all(ASN1Object const& root_object);
+            static std::vector<uint8_t> encode_all(ASN1Object const& root_object);
 
             // This function parses ASN.1 binary data and returns a parsed element 
             // (does not parse recursively - see ASN1Parser::decode_all)
@@ -111,6 +112,31 @@ namespace CBZ {
             // @offset - offset in @data to start from
             static ASN1Object decode_all(std::vector<uint8_t> const& data, size_t offset=0);
 
+            // The ASN.1 OBJECT IDENTIFIER encoder - returns a binary representation
+            // of OBJECT IDENTIFIER (as a buffer)
+            //
+            // Input:
+            // @obj_id_str - OBJECT IDENTIFIER as a string (eg. "1.23.4567.89.0")
+            static std::vector<uint8_t> object_identifier_encode(const std::string& obj_id_str);
+
+            // ASN.1 OBJECT IDENTIFIER decoder - outputs a string (eg. "1.23.4567.89.0")
+            //
+            // Input:
+            // @obj_id_data - ASN1ObjectData containing the OBJECT IDENTIFIER
+            static std::string object_identifier_decode(const std::vector<uint8_t>& data);
+
+            // Encodes a GMP integer to the binary form, big-endian (ANS.1 compatibile), returning a buffer
+            //
+            // Input:
+            // @num - GMP integer to encode
+            static std::vector<uint8_t> integer_encode(const mpz_class& num);
+
+            // Decodes a buffer holding binary data into a GMP integer and returns it
+            //
+            // Input:
+            // @data - ASN1ObjectData containing the integer
+            static mpz_class integer_decode(const std::vector<uint8_t>& data);
+
             ASN1Parser() = delete;
             ~ASN1Parser() = delete;
         };
@@ -118,13 +144,13 @@ namespace CBZ {
         // Class representing an ASN.1 object - contains a tag (see ASN1Tag above),
         // raw value and children, if parsed recursively
         class ASN1Object {
-        // private:
-        //     static std::vector<std::shared_ptr<ASN1Object>> convert_to_shared(std::vector<ASN1Object>&& input);
         protected:
-            ASN1Tag _tag; // ASN.1 tag
-            size_t _length; // ASN.1 length
-            std::vector<uint8_t> _value; // ASN.1 value
-            std::vector<ASN1Object> _children; // Set of child objects (1 level deep); empty if there're no children
+            ASN1Tag _tag;                           // ASN.1 tag
+            size_t _length;                         // ASN.1 length
+            std::vector<uint8_t> _value;            // ASN.1 value
+            std::vector<ASN1Object> _children;      // Set of child objects (1 level deep); empty if there're no children
+            std::vector<uint8_t> _encoded;          // Buffer holding this object, ASN.1 encoded - used as a cache for multiple
+                                                    // comparisons during sorting process, e.g. while constructing an ASN.1 set
 
         public:
             explicit ASN1Object(
@@ -140,6 +166,10 @@ namespace CBZ {
             );
             explicit ASN1Object(
                 ASN1Tag tag,
+                std::string value
+            );
+            explicit ASN1Object(
+                ASN1Tag tag,
                 std::vector<ASN1Object>&& children
             );
             ASN1Object(
@@ -148,6 +178,16 @@ namespace CBZ {
             ASN1Object(const ASN1Object& r) = default;
 
             virtual ~ASN1Object();
+
+            // overloaded operators
+            // needed when sorting vectors consisting of ASN1Object instances,
+            // e.g. when forming an ASN.1 set
+
+            // the only reason this isn't marked as const is because
+            // the _encoded cache may be set if hadn't been set already
+            bool operator<(ASN1Object& other) noexcept;
+            ASN1Object& operator=(const ASN1Object& other) noexcept = default;
+            ASN1Object& operator=(ASN1Object&& other) noexcept = default;
 
             // Returns object's tag
             inline ASN1Tag tag() const {
@@ -176,7 +216,7 @@ namespace CBZ {
             }
 
             // Returns object's value vector (immutable reference)
-            inline std::vector<uint8_t> const& value() const {
+            inline const std::vector<uint8_t>& value() const {
                 return _value;
             }
 
@@ -194,11 +234,11 @@ namespace CBZ {
             // won't be used so I don't really care about it
             void print(int = 0) const;
 
-            inline std::shared_ptr<std::vector<uint8_t>> encode() const {
+            inline std::vector<uint8_t> encode() const {
                 return ASN1Parser::encode_all(*this);
             }
 
-            static inline ASN1Object decode(std::vector<uint8_t> const& data, size_t offset = 0) {
+            static inline ASN1Object decode(const std::vector<uint8_t>& data, size_t offset = 0) {
                 return ASN1Parser::decode_all(data, offset);
             }
 
@@ -215,55 +255,58 @@ namespace CBZ {
         // Responsible for encoding/decoding ASN.1 OBJECT IDENTIFIER objects
         class ASN1ObjectIdentifier : public ASN1Object{
         public:
-            explicit ASN1ObjectIdentifier(std::string const& oid)
-                : ASN1Object(OBJECT_IDENTIFIER, encode(oid)) {}
+            explicit ASN1ObjectIdentifier(const std::string& oid)
+                : ASN1Object(OBJECT_IDENTIFIER, ASN1Parser::object_identifier_encode(oid)) {}
+
+            explicit ASN1ObjectIdentifier(const ASN1Object& object)
+                : ASN1Object(std::move(object))
+            {
+                if (this->tag() != OBJECT_IDENTIFIER)
+                    throw std::runtime_error("[ASN1ObjectIdentifier::ASN1ObjectIdentifier] object does not have OBJECT_IDENTIFIER tag");
+            }
 
             // Returns the ASN.1 OBJECT IDENTIFIER object value as a readable string (instead of default buffer)
             inline std::string const value() const {
-                return decode(_value);
+                return ASN1Parser::object_identifier_decode(_value);
             }
 
-            // The ASN.1 OBJECT IDENTIFIER encoder - returns a binary representation
-            // of OBJECT IDENTIFIER (as a buffer)
-            //
-            // Input:
-            // @obj_id_str - OBJECT IDENTIFIER as a string (eg. "1.23.4567.89.0")
-            static std::vector<uint8_t> encode(std::string const& obj_id_str);
-
-            // ASN.1 OBJECT IDENTIFIER decoder - outputs a string (eg. "1.23.4567.89.0")
-            //
-            // Input:
-            // @obj_id_data - ASN1ObjectData containing the OBJECT IDENTIFIER
-            static std::string decode(std::vector<uint8_t> const& data);
+            static inline ASN1ObjectIdentifier decode(const std::vector<uint8_t>& data, size_t offset = 0) {
+                return ASN1ObjectIdentifier(ASN1Object::decode(std::move(data), offset));
+            }
         };
 
         // Responsible for encoding/decoding ASN.1 INTEGER objects
         class ASN1Integer : public ASN1Object {
         public:
-            explicit ASN1Integer(mpz_class const& num)
-                : ASN1Object(INTEGER, encode(num)) {}
+            explicit ASN1Integer(const mpz_class& num)
+                : ASN1Object(INTEGER, ASN1Parser::integer_encode(num)) {}
+
+            explicit ASN1Integer(int num)
+                : ASN1Integer(mpz_class(num)) {}
+            
+            explicit ASN1Integer(const std::string& num)
+                : ASN1Integer(mpz_class(std::move(num))) {}
+
+            explicit ASN1Integer(const ASN1Object& object)
+                : ASN1Object(std::move(object))
+            {
+                if (this->tag() != INTEGER)
+                    throw std::runtime_error("[ASN1Integer::ASN1Integer] object does not have INTEGER tag");
+            }
 
             // Returns the ASN.1 INTEGER object value as GMP integer (instead of default buffer)
             inline mpz_class const value() const {
-                return decode(_value);
+                return ASN1Parser::integer_decode(_value);
             }
 
-            // Encodes a GMP integer to the binary form, big-endian (ANS.1 compatibile), returning a buffer
-            //
-            // Input:
-            // @num - GMP integer to encode
-            static std::vector<uint8_t> encode(mpz_class const& num);
-
-            // Decodes a buffer holding binary data into a GMP integer and returns it
-            //
-            // Input:
-            // @data - ASN1ObjectData containing the integer
-            static mpz_class decode(std::vector<uint8_t> const& data);
+            static inline ASN1Integer decode(const std::vector<uint8_t>& data, size_t offset = 0) {
+                return ASN1Integer(ASN1Object::decode(std::move(data), offset));
+            }
         };
 
         class ASN1Sequence : public ASN1Object {
         public:
-            explicit ASN1Sequence(std::vector<ASN1Object> &&children)
+            explicit ASN1Sequence(std::vector<ASN1Object> children)
                 : ASN1Object(SEQUENCE, std::move(children)) {}
         };
 
@@ -275,7 +318,30 @@ namespace CBZ {
 
         class ASN1BitString : public ASN1Object {
         public:
-            explicit ASN1BitString(std::vector<uint8_t> const& s, int unused = 0);
+            explicit ASN1BitString(std::vector<uint8_t> s, int unused = 0);
+        };
+
+        class ASN1OctetString : public ASN1Object {
+        public:
+            explicit ASN1OctetString(std::vector<uint8_t> s)
+                : ASN1Object(OCTET_STRING, std::move(s)) {}
+        };
+
+        class ASN1String : public ASN1Object {
+        public:
+            explicit ASN1String(ASN1Tag string_tag, std::string s);
+        };
+
+        class ASN1Set : public ASN1Object {
+        private:
+            static inline std::vector<ASN1Object> set_sort(std::vector<ASN1Object> v) {
+                std::sort(v.begin(), v.end());
+                return v;
+            }
+
+        public:
+            explicit ASN1Set(std::vector<ASN1Object> children)
+                : ASN1Object(SET, set_sort(std::move(children))) {}
         };
     }
 }

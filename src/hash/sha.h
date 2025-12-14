@@ -17,7 +17,7 @@ namespace CBZ {
     // (used by HMAC, for instance - see "hmac.h")
     template<typename _H>
     concept HashFunction = requires(
-        std::span<uint8_t const> m,
+        std::span<const uint8_t> m,
         uint8_t* od
     ) {
         { _H::DIGEST_SIZE } -> std::convertible_to<size_t>; // Size of a hashing function's digest, in bytes
@@ -46,7 +46,7 @@ namespace CBZ {
         void _SHA_digest_generic(
             EVP_MD* md,
             char const* class_name,
-            std::span<uint8_t const> m,
+            std::span<const uint8_t> m,
             uint8_t* od
         );
 
@@ -58,7 +58,7 @@ namespace CBZ {
 
             SHA1() = delete;
             ~SHA1() = delete;
-            static void digest(std::span<uint8_t const> m, uint8_t* od);
+            static void digest(std::span<const uint8_t> m, uint8_t* od);
         };
 
         // SHA224 class
@@ -69,7 +69,7 @@ namespace CBZ {
 
             SHA224() = delete;
             ~SHA224() = delete;
-            static void digest(std::span<uint8_t const> m, uint8_t* od);
+            static void digest(std::span<const uint8_t> m, uint8_t* od);
         };
 
         // SHA256 class
@@ -80,7 +80,7 @@ namespace CBZ {
 
             SHA256() = delete;
             ~SHA256() = delete;
-            static void digest(std::span<uint8_t const> m, uint8_t* od);
+            static void digest(std::span<const uint8_t> m, uint8_t* od);
         };
 
         // Wrapper class for EVP_MD* object, since it's declared as 'static' in every
@@ -113,5 +113,25 @@ namespace CBZ {
                 return _md;
             }
         };
+
+        // this is a placeholder for MaksymilianOliwa sha256 implementation
+        // in case we'd like to use it (debatable but still)
+        // BTW: returning a digest as a return value instead of inside a mutable
+        // output pointer is a terrible design choice and i learned it a hard way
+        // this instead should be something like
+        //
+        // void sha256_digest(
+        //     std::span<const uint8_t> input,
+        //     uint8_t* out_digest
+        // );
+        namespace Archive {
+            // really simple implementation of sha256 based on pseudocode from wikipedia
+
+            // @input - bytes to be hashed
+            // return value: digest - techinally it's always the same length (256 bits)
+            // so it could be array instead of vector but program uses vector everywhere
+            // so no point in changing that just for this function
+            std::vector<uint8_t> sha256_digest(const std::vector<uint8_t>& input);
+        }
     }
 }

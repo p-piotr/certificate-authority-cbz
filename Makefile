@@ -1,6 +1,6 @@
 SRC_DIR=src
 #SRCS=$(shell find $(SRC_DIR)/ -name *.cpp)
-SRCS=src/asn1/asn1.cpp src/encryption/aes.cpp src/hash/sha.cpp src/pkcs/pkcs.cpp src/pkcs/private_key.cpp src/pkcs/public_key.cpp src/tests/tests.cpp src/utils/base64.cpp
+SRCS=src/asn1/asn1.cpp src/encryption/aes.cpp src/hash/sha.cpp src/pkcs/pkcs.cpp src/pkcs/private_key.cpp src/pkcs/public_key.cpp src/pkcs/sign.cpp src/tests/tests.cpp src/utils/base64.cpp src/utils/io.cpp src/main.cpp
 TARGET_DIR=build/out
 OBJ_DIR=build/obj
 OBJS=$(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)

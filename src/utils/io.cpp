@@ -1,4 +1,3 @@
-#include "utils/io.h"
 #include <iostream>
 #include <string>
 #include <filesystem>
@@ -6,6 +5,9 @@
 #include <fstream>
 #include <cassert>
 #include <stdexcept>
+#include <termios.h>
+#include <unistd.h>
+#include "utils/io.h"
 
 using std::string;
 using std::vector;
@@ -16,6 +18,30 @@ using std::endl;
 using std::getline;
 
 namespace CBZ::Utils::IO {
+
+    // Enables (or disables) stdin echo
+    // Temporarily disable while prompting for a passphrase or other secrets
+    void set_stdin_echo(bool enable) {
+        struct termios tty;
+        tcgetattr(STDIN_FILENO, &tty);
+
+        if (!enable)
+            tty.c_lflag &= ~ECHO;
+        else
+            tty.c_lflag |= ECHO;
+
+        tcsetattr(STDIN_FILENO, TCSANOW, &tty);
+    }
+
+    std::string ask_for_password() {
+        std::string passphrase;
+        std::cout << std::endl << "Enter passphrase: ";
+        set_stdin_echo(false);
+        std::cin >> passphrase;
+        set_stdin_echo(true);
+        std::cout << std::endl;
+        return passphrase;
+    }
 
     // This function is used to ask the user for information that will be include in the CSR
     // e.g. Country, State/Province etc.

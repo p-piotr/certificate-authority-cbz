@@ -6,6 +6,13 @@
 
 namespace CBZ::Utils::IO {
 
+    // Enables (or disables) stdin echo
+    // Temporarily disable while prompting for a passphrase or other secrets
+    void set_stdin_echo(bool enable = true);
+
+	// Asks for password, disabling the terminal echo during the process
+    std::string ask_for_password();
+
 	// This function is used to ask the user for information that will be include in the CSR
 	// e.g. Country, State/Province etc.
 	// Pretty much a copy of what "$openssl req -new -key [keyfile] -out [outfile]" command asks for

@@ -1,35 +1,77 @@
-#include "encoding.h"
-#include "input_and_output.h"
+#include <iostream>
+#include <vector>
+#include <utility>
 #include "utils/io.h"
-#include "sign.h"
-#include "PKCSObjects.h"
+#include "pkcs/csr.h"
+#include "pkcs/sign.h"
 #include "utils/security.hpp"
+#include "utils/utils.hpp"
+#include "utils/base64.h"
 #include "pkcs/private_key.h"
 
 // this function was just added to test functionality it's not really needed yet
-void test_signature_verification(PKCS::CertificationRequest& CR){
-    cout  << endl << "testing signature verification" << endl;
+void test_signature_verification(CBZ::PKCS::CertificationRequest& CR){
+    using namespace CBZ::PKCS;
+
+    std::cout << std::endl << "testing signature verification" << std::endl;
 
     // get public key from certification certification request
-    const PKCS::RSAPublicKey& pub_key = CR.getPublicKeyReference();
+    const RSAPublicKey& pub_key = CR.getPublicKeyReference();
     // get certifcationRequestInfo encoded as DER (that's the part of CSR that is actually signed)
-    const vector<uint8_t>& mess = CR.getCertificationRequestInfoReference().encode();
+    const std::vector<uint8_t>& mess = CR.getCertificationRequestInfoReference().encode();
     // get signature
-    const vector<uint8_t>& signature = CR.getSignatureReference();
+    const std::vector<uint8_t>& signature = CR.getSignatureReference();
     // verify signature
-    cout << std::boolalpha << RSASSA_PKCS1_V1_5_VERIFY(pub_key, mess, signature) << endl;
+    std::cout << std::boolalpha << Signature::RSASSA_PKCS1_V1_5_VERIFY(pub_key, mess, signature) << std::endl;
 }
 
+// prints out how to call the program
+static void print_usage(const std::string& name) {
+    std::cout << "Usage: " << name << " -in <inputfile> -out <outputfile>" << std::endl << std::endl;
+}
 
+// this function is used handle the command-line arguments
+void handle_arguments(
+    int argc, char** argv, 
+    std::string& inputFile, std::string& outputFile
+) {
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        // -in flag is used to indicate inputFile
+        if (arg == "-in" && i + 1 < argc) {
+            inputFile = argv[++i];
+        } 
+        // -out flag is used to indicate outputFile
+        else if (arg == "-out" && i + 1 < argc) {
+            outputFile = argv[++i];
+        } 
+        else {
+            print_usage(argv[0]);
+            exit(1);
+        }
+    }
+
+    // if user forgot some parameters print usage message and exit 
+    if (inputFile.empty()) {
+        print_usage(argv[0]);
+        exit(1);
+    }
+    if (outputFile.empty()) {
+        print_usage(argv[0]);
+        exit(1);
+    }
+}
 
 int main(int argc, char* argv[]){
     using namespace CBZ;
     using namespace CBZ::Security;
     using namespace CBZ::Utils::IO;
+    using namespace CBZ::PKCS;
+
     // file to read Private Key from
-    string inputFile;
+    std::string inputFile;
     // file to write into 
-    string outputFile;
+    std::string outputFile;
 
     handle_arguments(argc, argv, inputFile, outputFile);
 
@@ -39,55 +81,43 @@ int main(int argc, char* argv[]){
     vector<pair<string,string>> attributes = {{"1.2.840.113549.1.9.2", "example@agh.edu.pl"}};
     #else
     // If not skipping input just call the functions responsible for getting input from the user
-    vector<pair<string,string>> subject_info = ask_for_subject_info();
-    vector<pair<string,string>> attributes = ask_for_attrs_info();
+    std::vector<std::pair<std::string, std::string>> subject_info = ask_for_subject_info();
+    std::vector<std::pair<std::string, std::string>> attributes = ask_for_attrs_info();
     #endif
 
     // make the mpz_class to zeroize the memory when deallocating
     mpz_initialize_secure_free_policy();
 
-    // this buffer will hold the raw DER-encoded bytes of PrivateKey
-    // it will be read in from the file and used to create PrivateKeyInfo object
-    // and then it will be zeroized immiediately after
-    vector<uint8_t> file_buffer; 
-    // start decoding from first byte
-    size_t offset = 0;
-    read_privatekey_from_file(inputFile, file_buffer); 
-
     PKCS::RSAPrivateKey private_key;
     // decode the key from file
     try{
-        private_key = PKCS::PrivateKeyInfo::decode(file_buffer,offset);
-    } catch (const MyError& e) {
-        std::cerr << "failed to decode file with private key" << endl;
-        print_nested(e, 0);
+        private_key = PKCS::RSAPrivateKey(inputFile);
+    } catch (const std::runtime_error& e) {
+        std::cerr << "failed to decode file with private key" << std::endl;
+        CBZ::Utils::print_nested(e, 0);
         exit(1);
     }
-    // file buffer is not longer needed so it can be zeroized
-    // zeroize(file_buffer);
-    secure_zero_memory(file_buffer);
-
     // extract public key from private key
-    const mpz_class& e = private_key.getPrivateKeyReference().getEReference();
-    const mpz_class& n = private_key.getPrivateKeyReference().getNReference();
+    const mpz_class& e = private_key.e();
+    const mpz_class& n = private_key.n();
 
     // create certifcation request object using extracted public key and input from the user
     PKCS::CertificationRequest certification_request(
         std::move(subject_info),
-        rsaEncryption, 
+        CSRSupportedAlgorithms::rsaEncryption, 
         std::move(n), 
         std::move(e),
         std::move(attributes),
-        sha256WithRSAEncryption
+        CSRSupportedAlgorithms::sha256WithRSAEncryption
     );
 
     // generate signature for the CSR
     certification_request.sign(private_key);
 
     // encode the CSR int DER
-    vector<uint8_t> DER_encoding = certification_request.encode();
+    std::vector<uint8_t> DER_encoding = certification_request.encode();
     // enocde DER encoding of CSR into base64
-    string base64_output = base64_encode(DER_encoding);
+    std::string base64_output = Base64::encode(DER_encoding);
     // write base64 and DER encoded CSR into the file
     write_csr_to_file(base64_output, outputFile);
 

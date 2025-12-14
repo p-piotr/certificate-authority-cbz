@@ -9,6 +9,7 @@
 #include "pkcs/pkcs.h"
 #include "pkcs/csr.h"
 #include "pkcs/public_key.h"
+#include "pkcs/sign.h"
 #include "asn1/asn1.h"
 #include "encryption/kdf.hpp"
 #include "encryption/aes.h"
@@ -39,8 +40,8 @@ namespace CBZ::PKCS {
         });
     }
 
-    std::shared_ptr<std::vector<uint8_t>> AlgorithmIdentifier::encode() const {
-        return to_asn1().encode();
+    std::vector<uint8_t> AlgorithmIdentifier::encode() const {
+        return this->to_asn1().encode();
     }
 
     // Example: AlgorithmIdentifier = {algorithm: 1.2.840.113549.1.1.1, parameters:?}
@@ -48,7 +49,7 @@ namespace CBZ::PKCS {
     std::ostream& operator<<(std::ostream& os, const PKCS::AlgorithmIdentifier& ai) {
         os  << "AlgorithmIdentifier = {algorithm: "
             << ai.algorithm
-            << ", parameters:?}";
+            << ", parameters:?} ";
         return os;
     }
 
@@ -135,6 +136,41 @@ namespace CBZ::PKCS {
         }
     }
 
+    ASN1Object Attribute::to_asn1() const {
+        std::vector<ASN1Object> components;
+
+        for (const auto& element : _values) {
+            const variant_object& val = element.first;
+            ASN1Tag tag = element.second;
+
+            switch (tag) {
+                case PRINTABLE_STRING:
+                case IA5_STRING:
+                case UTF8_STRING:
+                    components.push_back(
+                        ASN1String(tag, std::get<std::string>(val))
+                    );
+                    break;
+                case OCTET_STRING:
+                    components.push_back(
+                        ASN1OctetString(std::get<std::vector<uint8_t>>(val))
+                    );
+                    break;
+                default:
+                    throw std::runtime_error("[Attribute::to_asn1] given tag does not match any string type");
+            }
+        }
+
+        return ASN1Sequence({
+            ASN1ObjectIdentifier(_type),
+            ASN1Set(std::move(components))
+        });
+    }
+
+    std::vector<uint8_t> Attribute::encode() const {
+        return this->to_asn1().encode();
+    }
+
     // Example: Attribute = { Type: 2.2.2.1, values = [ (tag: 22 "test"), (tag: 12 "meow"), (tag: 19 "TEST") ] }
     std::ostream& operator<<(std::ostream& os, const PKCS::Attribute& ATTR){
         using variant_object = 
@@ -211,22 +247,284 @@ namespace CBZ::PKCS {
             }, val);
             os << ")";
         }
-        os << " ] }";
+        os << " ] } ";
         return os;
     }
 
     ASN1Object SubjectPublicKeyInfo::to_asn1() const {
         return ASN1Sequence({
-            _algorithm.to_asn1(),
+            _algorithm.to_asn1(), // here's the MaksymilianOliwa legacy code
             _subject_public_key.to_asn1()
         });
+    }
+
+    std::vector<uint8_t> SubjectPublicKeyInfo::encode() const {
+        return this->to_asn1().encode();
+    }
+
+    // Example: SubjectPublicKeyInfo = { AlgorithmIdentifier = {algorithm: 1.2.840.113549.1.1.1, parameters: 0x05 0x00} RSAPublicKey: = {n: 1234, e: 1234}}
+    std::ostream& operator<<(std::ostream& os, const SubjectPublicKeyInfo& SPKI){
+        os << "SubjectPublicKeyInfo = { "
+            << SPKI._algorithm
+            << " "
+            << SPKI._subject_public_key
+            << "} ";
+        return os;
+    }
+
+    // Example: PKCS::AttributeTypeAndValue ATAV2{"2.5.4.6", "PL"};
+    AttributeTypeAndValue::AttributeTypeAndValue(std::string type, std::string value) {
+        // if we have to construct the class using the OID and value
+        // if we don't give it explicit ASN1_tag it will check the in attributeStringTypeMap map which ASN1_tag should be used for this type
+        // if OID is not found, it will assume UTF8_STRING
+        // it also calls validate_string_type to check if it doesn't contain any illegal chars
+        // I think this code fragment appears some time later but I haven't made an inline for it yet
+        try {
+            _value_type = attributeStringTypeMap.at(type);
+        } catch (const std::out_of_range& e) { 
+            _value_type = UTF8_STRING;
+        }
+
+        if(CBZ::Utils::validate_string_type(value, _value_type) == false){
+            throw std::runtime_error("AttributeTypeAndValue(string, string): attempt to create object with value that contains illegal characters");
+        }
+        _type = std::move(type);
+        _value = std::move(value);
+    }
+
+    // Example: PKCS::AttributeTypeAndValue ATAV3{"2.5.4.6", "PL", PRINTABLE_STRING};
+    // Here ASN1_tag is defined explicitly so we need check if it's a string type and then if it doesn't contain illega chars
+    AttributeTypeAndValue::AttributeTypeAndValue(std::string type, std::string value, ASN1Tag value_type) {
+        if(value_type != UTF8_STRING && 
+            value_type != IA5_STRING && 
+            value_type != PRINTABLE_STRING){
+            throw std::runtime_error("AttributeTypeAndValue(string, string, ASN1_tag): values different than strings that are currently not handled");
+        }
+
+        if(CBZ::Utils::validate_string_type(_value,_value_type) == false){
+            throw std::runtime_error("AttributeTypeAndValue(string, string, ASN1_tag): attempt to create object with value that contains illegal characters");
+        }
+        _value_type = value_type;
+        _type = std::move(type);
+        _value = std::move(value);
+    }
+
+    ASN1Object AttributeTypeAndValue::to_asn1() const {
+        return ASN1Sequence({
+            ASN1ObjectIdentifier(_type),
+            ASN1String(_value_type, _value)
+        });
+    }
+
+    std::vector<uint8_t> AttributeTypeAndValue::encode() const {
+        return this->to_asn1().encode();
+    }
+
+    // I decided not to include value_type in the output as I think it would add unnecessary clutter
+    std::ostream& operator<<(
+        std::ostream& os,
+        const PKCS::AttributeTypeAndValue& atav
+    ) {
+        os << "AttributeTypeAndValue = {type: " 
+            << atav._type 
+            << ", value: " 
+            << atav._value 
+            << "} ";
+        return os;
+    }
+
+    ASN1Object RelativeDistinguishedName::to_asn1() const {
+        std::vector<ASN1Object> components;
+        components.reserve(_atavs.size());
+
+        for (auto& atav : _atavs)
+            components.push_back(atav.to_asn1());
+        
+        return ASN1Set(std::move(components));
+    }
+
+    std::vector<uint8_t> RelativeDistinguishedName::encode() const {
+        return this->to_asn1().encode();
+    }
+
+    // Example: RelativeDistinguishedName = { AttributeTypeAndValue = {type: 1.1.1.1, value: TEST}, AttributeTypeAndValue = {type: 2.2.2.2, value: TSET} }
+    std::ostream& operator<<(std::ostream& os, const RelativeDistinguishedName& rdn) {
+        os << "RelativeDistinguishedName = { ";
+
+        const auto& attrs = rdn._atavs;
+        // adding each AttributeTypeAndValue to the stream
+        for (size_t i = 0; i < attrs.size(); ++i) {
+            os << attrs[i];
+            // first method of getting rid of trailing comma
+            if (i + 1 < attrs.size()) os << ", ";
+        }
+
+        os << " }";
+        return os;
+    }
+
+
+    RDNSequence::RDNSequence(
+        std::vector<std::pair<std::string, std::string>> list
+    ) {
+        for(auto& [OID, val] : list){
+            _rdn_sequence.emplace_back(std::move(OID), std::move(val));
+        }
+    }
+
+    ASN1Object RDNSequence::to_asn1() const {
+        std::vector<ASN1Object> components;
+
+        for (auto& rdn : _rdn_sequence)
+            components.push_back(rdn.to_asn1());
+
+        return ASN1Sequence(std::move(components));
+    }
+
+    std::vector<uint8_t> RDNSequence::encode() const {
+        return this->to_asn1().encode();
+    }
+
+    // Example: RDNSequence = [ RelativeDistinguishedName = { AttributeTypeAndValue = {type: 1.1.1.1, value: TEST} }, RelativeDistinguishedName = { AttributeTypeAndValue = {type: 2.2.2.2, value: TSET} }, RelativeDistinguishedName = { AttributeTypeAndValue = {type: 3.3.3.3, value: SETT}, AttributeTypeAndValue = {type: 4.4.4.4, value: TTES} } ]
+    std::ostream& operator<<(std::ostream& os, const RDNSequence& rdn_sequence) {
+        os << "RDNSequence = [ ";
+
+        const auto& rdns = rdn_sequence._rdn_sequence;
+        // adding each RDN to the stream
+        for (size_t i = 0; i < rdns.size(); ++i) {
+            os << rdns[i];
+            // trailing comma
+            if (i + 1 < rdns.size()) os << ", ";
+        }
+
+        os << " ] ";
+        return os;
+    }
+
+
+    CertificationRequestInfo::CertificationRequestInfo(
+        std::vector<std::pair<std::string, std::string>> subject_name,
+        CSRSupportedAlgorithms::algorithm_t algorithm,
+        mpz_class n,
+        mpz_class e,
+        std::vector<std::pair<std::string, std::string>> attributes
+    ) 
+    : _subject_name(std::move(subject_name)),
+    _subject_pkinfo(algorithm, std::move(n), std::move(e))
+    {
+        for(auto& [OID, val] : attributes){
+            _attributes.emplace_back(std::move(OID), std::move(val));
+        }
+    }
+
+    // CertificationRequestInfo::CertificationRequestInfo(
+    //     std::vector<std::pair<std::string, std::string>> subject_name,
+    //     std::string algorithm,
+    //     mpz_class n,
+    //     mpz_class e,
+    //     std::vector<std::pair<std::string, std::string>> attributes
+    // )
+    // : _subject_name(std::move(subject_name)),
+    // _subject_pkinfo(std::move(algorithm), std::move(n), std::move(e))
+    // {
+    //     for(auto& [OID, val] : attributes){
+    //         _attributes.emplace_back(std::move(OID), std::move(val));
+    //     }
+    // }
+
+    ASN1Object CertificationRequestInfo::to_asn1() const {
+        std::vector<ASN1Object> components = {
+            ASN1Integer(_version),
+            _subject_name.to_asn1(),
+            _subject_pkinfo.to_asn1()
+        };
+
+        std::vector<ASN1Object> attrs;
+        for (const Attribute& attr : _attributes)
+            attrs.push_back(attr.to_asn1());
+        
+        components.push_back(ASN1Object(CONSTRUCTED_TYPE, std::move(attrs)));
+
+        return ASN1Sequence({
+            std::move(components)
+        });
+    }
+
+    std::vector<uint8_t> CertificationRequestInfo::encode() const {
+        return this->to_asn1().encode();
+    }
+
+    std::ostream& operator<<(std::ostream& os, const CertificationRequestInfo& cri){
+        os  << "CertificationRequest = {"
+            << "Version = "<< cri._version << ", "
+            << "subjectName = " << cri._subject_name << ", "
+            << "subjectPKInfo = " << cri._subject_pkinfo << ", "
+            << "attributes = [";
+
+        // comma trailing prevention
+        bool first = true;
+
+        // print every attribute
+        for(const auto& attr : cri._attributes){
+            if(!first) { os << ", "; }
+            first = false;
+            os << attr;
+        }
+
+        os << "] } ";
+        return os;
+    }
+
+    ASN1Object CertificationRequest::to_asn1() const {
+        return ASN1Sequence({
+            _certification_request_info.to_asn1(),
+            _signature_algorithm.to_asn1(),
+            ASN1BitString(_signature)
+        });
+    }
+
+    std::vector<uint8_t> CertificationRequest::encode() const {
+        return this->to_asn1().encode();
+
+    }
+
+    // generate signature for CSR
+    std::vector<uint8_t> CertificationRequest::sign(const RSAPrivateKey& private_key){
+        try {
+            _signature = Signature::RSASSA_PKCS1_V1_5_SIGN(
+                private_key,
+                _certification_request_info.encode()
+            );
+            return _signature;
+        } catch (std::runtime_error const& e) {
+            CBZ::Utils::print_nested(e);
+            exit(1);
+        }
+    }
+
+    // Example:
+    // CertificationRequestInfo = {Version = 0, subjectName = RDNSequence = [ RelativeDistinguishedName = { AttributeTypeAndValue = {type: 2.5.4.6, value: PL} }, RelativeDistinguishedName = { AttributeTypeAndValue = {type: 2.5.4.8, value: Lesser Poland} }, RelativeDistinguishedName = { AttributeTypeAndValue = {type: 2.5.4.10, value: AGH} } ], subjectPKInfo = SubjectPublicKeyInfo = { AlgorithmIdentifier = {algorithm: 1.2.840.113549.1.1.1, parameters: 0x05 0x00} RSAPublicKey: = {n: 1234567890, e: 987654321}}, attributes = [Attribute = { Type: 1.2.840.113549.1.1.1, values = [ (tag: 12 "example.com") ] }] }
+    std::ostream& operator<<(std::ostream& os, CertificationRequest& cr){
+        os  << "CertificationRequestInfo = { " 
+            << cr._certification_request_info << ", "
+            << cr._signature_algorithm << ", "
+            << "Signature: "
+            
+        // print signature's bytes
+            << std::hex << std::setfill('0');
+        for(uint8_t byte : cr._signature)
+            os << std::setw(2) << static_cast<int>(byte);
+
+        os << std::dec << " } ";
+        return os;
     }
 
     namespace CSRSupportedAlgorithms {
 
         const std::unordered_map<uint32_t, std::string> algorithmMap = {
+            {rsaEncryption,             "1.2.840.113549.1.1.1"  },
             {sha256WithRSAEncryption,   "1.2.840.113549.1.1.11" },
-            {sha256,                    "2.16.840.1.101.3.4.2.1"}
+            {sha256,                    "2.16.840.1.101.3.4.2.1"},
         };
     }
 

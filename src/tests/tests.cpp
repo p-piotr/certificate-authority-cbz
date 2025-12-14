@@ -6,6 +6,7 @@
 #include "utils/base64.h"
 #include "asn1/asn1.h"
 #include "pkcs/private_key.h"
+#include "pkcs/public_key.h"
 #include "utils/security.hpp"
 #include "hash/sha.h"
 #include "encryption/aes.h"
@@ -33,14 +34,12 @@ void RSA_ASN1_test(int argc, char** argv) {
         std::vector<uint8_t> data = { 0x12, 0x34, 0x56 };
         ASN1::ASN1Object object(ASN1::ASN1Tag::INTEGER, std::move(data));
         object.print();
-        std::cout << ASN1::ASN1Integer::decode(object.value()) << std::endl;
+        std::cout << ASN1::ASN1Integer::decode(object.encode()).value() << std::endl;
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return;
     }
 
-    /*
-    std::cout << std::endl << "----------------------------------------" << std::endl << std::endl;
     std::cout << "ENCODING TEST" << std::endl << std::endl;
 
     // isn't it beautiful
@@ -66,11 +65,20 @@ void RSA_ASN1_test(int argc, char** argv) {
     }).encode();
 
     std::cout << "Encoded ASN.1 SEQUENCE: ";
-    for (uint8_t byte : *encoded) {
+    for (const uint8_t& byte : encoded) {
         std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte) << ' ';
     }
     std::cout << std::dec << std::endl;
-    */
+
+    CBZ::PKCS::RSAPublicKey rsa_public_key(rsa_private_key);
+    rsa_public_key.print();
+    rsa_public_key.to_asn1().print();
+    auto encoded2 = rsa_public_key.encode();
+    std::cout << "Encoded RSA Public Key: ";
+    for (const uint8_t& byte : encoded2) {
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte) << ' ';
+    }
+    std::cout << std::dec << std::endl;
 }
 
 void AES_test() {
@@ -424,7 +432,7 @@ void ASN1_test(int argc, char** argv) {
 
 }
 
-int main(int argc, char** argv) {
+int run_tests(int argc, char** argv) {
     CBZ::Security::mpz_initialize_secure_free_policy();
     RSA_ASN1_test(argc, argv);
     return 0;

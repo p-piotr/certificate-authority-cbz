@@ -86,7 +86,7 @@ namespace CBZ::PKCS {
         }
 
         // Prints the private key (use only for debugging purposes)
-        void print();
+        void print() const;
 
         // Loads a private key from file
         // This variant may only parse unencryptd keys

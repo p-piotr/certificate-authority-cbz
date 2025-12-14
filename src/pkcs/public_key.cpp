@@ -1,4 +1,5 @@
 #include <iostream>
+#include <vector>
 #include "asn1/asn1.h"
 #include "pkcs/public_key.h"
 
@@ -11,11 +12,20 @@ namespace CBZ::PKCS {
     }
 
     ASN1Object RSAPublicKey::to_asn1() const {
-        // return ASN1BitString(
-        //     ASN1Sequence({
-        //         ASN1Integer(n()),
-        //         ASN1Integer(e())
-        //     }).encode()
-        // );
+        return ASN1BitString(
+            ASN1Sequence({
+                ASN1Integer(n()),
+                ASN1Integer(e())
+            }).encode()
+        );
+    }
+
+    std::vector<uint8_t> RSAPublicKey::encode() const {
+        return to_asn1().encode();
+    }
+
+    void RSAPublicKey::print() const {
+        std::cout << "Modulus (n): " << n() << std::endl;
+        std::cout << "Public Exponent (e): " << e() << std::endl;
     }
 }

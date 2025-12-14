@@ -9,6 +9,6 @@ namespace CBZ::Base64 {
 
     // You guessed it - Base64 encoding/decoding
     // obvious functions
-    std::string encode(std::span<char> in);
+    std::string encode(std::span<uint8_t> in);
     std::vector<uint8_t> decode(std::string const& in);
 }

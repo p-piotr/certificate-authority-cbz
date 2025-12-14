@@ -6,11 +6,12 @@
 #include <sstream>
 #include <span>
 #include <gmpxx.h>
-#include "utils/security.hpp"
 #include "pkcs/private_key.h"
 #include "asn1/asn1.h"
 #include "utils/base64.h"
 #include "pkcs/pkcs.h"
+#include "utils/security.hpp"
+#include "utils/io.h"
 
 /*
 
@@ -171,7 +172,7 @@ namespace CBZ::PKCS {
     }
 
     // Prints the private key (use only for debugging purposes)
-    void RSAPrivateKey::print() {
+    void RSAPrivateKey::print() const {
         std::cout << "Version: " << version() << std::endl;
         std::cout << "Modulus (n): " << n() << std::endl;
         std::cout << "Public Exponent (e): " << e() << std::endl;
@@ -247,13 +248,7 @@ namespace CBZ::PKCS {
         std::getline(keyfile, line1);
         if (line1 == PKCS::Labels::encryptedPrivateKeyHeader) {
             // the header says it's encrypted, so let's try to parse it accordingly
-            std::string passphrase;
-            std::cout << "Enter passphrase: ";
-            set_stdin_echo(false);
-            std::cin >> passphrase;
-            set_stdin_echo(true);
-            std::cout << std::endl;
-            return from_file(filepath, std::move(passphrase));
+            return from_file(filepath, std::move(Utils::IO::ask_for_password()));
         }
         if (line1 != PKCS::Labels::privateKeyHeader)
             throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key header doesn't match the standard");

@@ -37,7 +37,7 @@ namespace CBZ::PKCS {
         //
         // Shouldn't be used except a carefully created legacy sandbox where MaksymilianOliwaCode wants to use them
         ASN1Object to_asn1() const;
-        std::shared_ptr<std::vector<uint8_t>> encode() const;
+        std::vector<uint8_t> encode() const;
 
         friend std::ostream& operator<<(std::ostream& os, const PKCS::AlgorithmIdentifier& ai);
     };

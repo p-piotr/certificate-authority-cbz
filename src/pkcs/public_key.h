@@ -24,11 +24,17 @@ namespace CBZ::PKCS {
         RSAPublicKey() : _n(0), _e(0) {}
 
         // Basic constructor
-        RSAPublicKey(mpz_class n, mpz_class e) : _n(std::move(n)), _e(std::move(e)) {}
+        RSAPublicKey(mpz_class n, mpz_class e)
+            : _n(std::move(n)), _e(std::move(e)) {}
+
+        RSAPublicKey(std::string n, std::string e)
+            : _n(mpz_class(std::move(n))), _e(mpz_class(std::move(e))) {}
 
         // Derive it from a private key
         RSAPublicKey(RSAPrivateKey const& private_key)
             : _n(private_key.n()), _e(private_key.e()) {}
+
+        void print() const;
 
         ASN1::ASN1Object to_asn1() const;
 
