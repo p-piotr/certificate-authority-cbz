@@ -37,13 +37,14 @@ namespace CBZ::ASN1 {
     }
 
     std::vector<uint8_t> ASN1Parser::encode(ASN1Object const& object) {
+        // TEMPORARILY COMMENTED
         // first, check whether it's NULL if it doesn't have neither value nor children
-        if (
-            object.value().size() == 0 
-            && object.children().size() != 0 
-            && object.tag() != ASN1Tag::NULL_TYPE
-        )
-            throw std::runtime_error("[ASN1Parser::encode] Can't encode a non-NULL object that has NULL properties");
+        // if (
+        //     object.value().size() == 0 
+        //     && object.children().size() != 0 
+        //     && object.tag() != ASN1Tag::NULL_TYPE
+        // )
+        //     throw std::runtime_error("[ASN1Parser::encode] Can't encode a non-NULL object that has NULL properties");
 
         std::vector<uint8_t> encoded_object, encoded_length;
         // append tag
@@ -243,7 +244,7 @@ namespace CBZ::ASN1 {
     }
 
     ASN1Object::ASN1Object(ASN1Tag tag, std::vector<ASN1Object>&& children)
-        : _tag(tag), _children(std::move(children))
+        : _tag(tag), _children(std::move(children)), _length(0)
     {
         #ifdef ASN1_DEBUG
         std::cerr << "[ASN1Object] ASN1Object created: tag=" << tag_to_string(_tag) 
