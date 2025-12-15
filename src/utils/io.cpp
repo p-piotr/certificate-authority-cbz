@@ -121,6 +121,8 @@ namespace CBZ::Utils::IO {
         if(std::filesystem::exists(path)){
             std::string input;
             std::cout << "File already exists do you want to overwrite [y/N]: ";
+            // clear the stdin buffer as some leftovers from previous inputs could remain
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             std::getline(std::cin, input);
             if(input.empty() || input[0] != 'y'){
                 return;
