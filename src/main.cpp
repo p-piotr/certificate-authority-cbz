@@ -76,9 +76,9 @@ int main(int argc, char* argv[]){
     handle_arguments(argc, argv, inputFile, outputFile);
 
     // Can be used for debugging in order not to input data each time the program is run
-    #ifdef SKIP_INPUT
-    vector<pair<string,string>> subject_info = { {"2.5.4.6", "PL"}, {"2.5.4.8", "Lesser Poland"}, {"2.5.4.10", "AGH"} };
-    vector<pair<string,string>> attributes = {{"1.2.840.113549.1.9.2", "example@agh.edu.pl"}};
+    #ifdef SKIP_INPUT_DEBUG
+    std::vector<std::pair<std::string,std::string>> subject_info = { {"2.5.4.6", "PL"}, {"2.5.4.8", "Lesser Poland"}, {"2.5.4.10", "AGH"} };
+    std::vector<std::pair<std::string,std::string>> attributes = {{"1.2.840.113549.1.9.2", "example@agh.edu.pl"}};
     #else
     // If not skipping input just call the functions responsible for getting input from the user
     std::vector<std::pair<std::string, std::string>> subject_info = ask_for_subject_info();

@@ -10,9 +10,8 @@
 namespace CBZ::PKCS {
 
     using namespace CBZ::ASN1;
-    using namespace CBZ::PKCS;
 
-    // Object representing an RSA private key (PKCS#1 compatibile)
+    // Object representing an RSA private key (PKCS#1 compatible)
     class RSAPrivateKey {
     private:
         mpz_class _version;
@@ -34,8 +33,8 @@ namespace CBZ::PKCS {
         // Basic constructor
         RSAPrivateKey(mpz_class version, mpz_class n, mpz_class e, mpz_class d,
             mpz_class p, mpz_class q, mpz_class exponent1, mpz_class exponent2, mpz_class coefficient)
-            : _version(version), _n(n), _e(e), _d(d), _p(p), _q(q), 
-            _exponent1(exponent1), _exponent2(exponent2), _coefficient(coefficient) {
+            : _version(std::move(version)), _n(std::move(n)), _e(std::move(e)), _d(std::move(d)), _p(std::move(p)), _q(std::move(q)), 
+            _exponent1(std::move(exponent1)), _exponent2(std::move(exponent2)), _coefficient(std::move(coefficient)) {
             if (version != 0) {
                 throw std::runtime_error("[RSAPrivateKey::RSAPrivateKey] Unsupported RSA private key version");
             }
@@ -89,7 +88,7 @@ namespace CBZ::PKCS {
         void print() const;
 
         // Loads a private key from file
-        // This variant may only parse unencryptd keys
+        // This variant may only parse unencrypted keys
         //
         // Input:
         // @filepath - path to the file containing the private key in PKCS#8

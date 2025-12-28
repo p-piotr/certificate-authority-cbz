@@ -6,7 +6,6 @@
 #include <iostream>
 #include <vector>
 #include <gmpxx.h>
-#include "debug.h"
 
 namespace CBZ::Security {
 
@@ -60,7 +59,7 @@ namespace CBZ::Security {
         delete ptr;
     }
 
-    // Securely zeores and deletes a structure
+    // Securely zeroes and deletes a structure
     //
     // Input:
     // @s - raw pointer to the structure
@@ -81,6 +80,9 @@ namespace CBZ::Security {
         free(ptr);
     }
 
+
+
+    #ifdef GMP_DEBUG
     inline void* mem_alloc_debug(size_t s) {
         static size_t total_memory = 0;
 
@@ -93,6 +95,7 @@ namespace CBZ::Security {
         std::cerr << "[mem_realloc_cbz] Reallocating " << o << " bytes to " << n << " under " << p << std::endl;
         return realloc(p, n);
     }
+    #endif
 
     // Initializes GMP to use secure memory deallocation
     inline void mpz_initialize_secure_free_policy() {

@@ -185,7 +185,7 @@ namespace CBZ::PKCS {
             << ", values = [ ";
 
         bool first = true; 
-        // used in second method of avoding danling commas
+        // used in second method of avoding dangling commas
     
         // iterate thorugh the vector of pairs
         // adding each value to the stream

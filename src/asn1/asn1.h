@@ -6,7 +6,6 @@
 #include <memory>
 #include <span>
 #include <gmpxx.h>
-#include "debug.h"
 #include "utils/security.hpp"
 
 namespace CBZ {
