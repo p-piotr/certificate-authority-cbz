@@ -102,7 +102,7 @@ namespace CBZ::KDF {
             );
             std::memcpy(
                 first_data.data() + s.size(),
-               & i_be,
+                &i_be,
                 sizeof(i_be)
             );
 

@@ -10,6 +10,7 @@
 
 namespace CBZ {
 
+    // why are there no comments that explain this fragment?
     template <typename _PRF>
     concept PseudoRandomFunction = requires(
         std::span<uint8_t const> m,

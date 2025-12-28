@@ -244,6 +244,11 @@ namespace CBZ::PKCS {
         std::ifstream keyfile(filepath);
         std::string line1, line2, key_asn1_b64 = "";
 
+        // throw an error if failed to open file
+        if (!keyfile.is_open()) {
+            throw std::runtime_error("[RSAPrivateKey::from_file] Failed to open file: " + filepath);
+        }
+
         // read the key file and complain if needed
         std::getline(keyfile, line1);
         if (line1 == PKCS::Labels::encryptedPrivateKeyHeader) {
@@ -265,7 +270,6 @@ namespace CBZ::PKCS {
 
         std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
         ASN1Object asn1_root = ASN1Object::decode(std::move(key_asn1));
-        std::cout << "------------------------ ASN1Object --------------------------------" << std::endl;
 
         // decode the final expanded structure into 9 integers
         return _Decode_key(asn1_root);

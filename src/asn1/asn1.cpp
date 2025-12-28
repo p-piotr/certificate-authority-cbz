@@ -100,7 +100,6 @@ namespace CBZ::ASN1 {
         );
         // append encoded children
         for (const auto& child_data : encoded_children) {
-            size_t current_offset = encoded_root_object.size();
             encoded_root_object.insert(
                 encoded_root_object.end(),
                 child_data.cbegin(),
@@ -355,7 +354,7 @@ namespace CBZ::ASN1 {
         remainders.push_back(static_cast<uint8_t>(integer.get_ui()));
 
         auto it = remainders.rbegin();
-        for (it; it != --remainders.rend(); it++)
+        for (; it != --remainders.rend(); it++)
             result.push_back(*it | 0x80);
 
         result.push_back(*it);
@@ -523,7 +522,7 @@ namespace CBZ::ASN1 {
         : ASN1Object(BIT_STRING, std::move(s))
     {
         if (unused > 7)
-            throw std::runtime_error("[ASN1BitString::ASN1BitString] cannot exceed 7 unused bytes");
+            throw std::runtime_error("[ASN1BitString::ASN1BitString] cannot exceed 7 unused bits");
 
         _value.insert(_value.cbegin(), static_cast<uint8_t>(unused));
         _length += 1;

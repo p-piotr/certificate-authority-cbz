@@ -12,3 +12,5 @@ a.out
 .gdb_history
 /pems
 /obj
+todo.txt
+local/
