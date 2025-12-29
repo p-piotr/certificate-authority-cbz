@@ -5,7 +5,9 @@
 #include <span>
 #include <iostream>
 #include <vector>
+#include <cstdio>
 #include <gmpxx.h>
+#include "utils/utils.hpp"
 
 namespace CBZ::Security {
 
@@ -117,7 +119,7 @@ namespace CBZ::Security {
     // @arg2 - second value to be compared
     // return value: true if equal else false
     template <ContiguousRange _R>
-    inline bool const_equal(_R const& arg1, _R const& arg2){
+    inline bool const_equal(const _R& arg1, const _R& arg2){
         const auto s_arg1 = std::span{arg1};
         const auto s_arg2 = std::span{arg2};
         uint8_t diff = 0;
@@ -138,4 +140,52 @@ namespace CBZ::Security {
         // if diff == 0 return true
         return diff == 0;
     }
+
+    // Securely reads contets from a file into an output buffer
+    // 'Securely' means that the function does not leave behind
+    // any uncleared intermediate buffers which may contain
+    // leftover sensitive data
+    //
+    // If size of out_buf is smaller than file size (in bytes),
+    // file size is returned as an error
+    // Otherwise, on success, 0 is returned
+    //
+    // This function may throw exceptions regarding filesystem errors
+    // (i.e. could not open a file, error while reading, etc.)
+    // and thus needs to be wrapped in a 'try-catch' clause
+    //
+    // Input:
+    // @filepath - path to a file to read
+    // @out_buf - buffer to read the file contents into
+    inline size_t secure_read_file(const char* filepath, std::span<std::byte> out_buf) {
+        size_t file_size;
+
+        try {
+            file_size = CBZ::Utils::get_file_size(filepath);
+        } catch (...) {
+            std::throw_with_nested(std::runtime_error("[secure_read_file] Could not get file size"));
+        }
+
+        if (file_size > out_buf.size_bytes())
+            return file_size; // error indicating how many bytes should be allocated in the return buffer
+
+        FILE* fp = std::fopen(filepath, "rb");
+        if (!fp) {
+            throw std::runtime_error("[secure_read_file] Could not open a file");
+        }
+
+        std::setvbuf(fp, nullptr, _IONBF, 0);
+        size_t bytes_read = std::fread(out_buf.data(), 1, file_size, fp);
+        std::fclose(fp);
+
+        if (bytes_read < file_size) {
+            // either an error occurred, or the file was modified (shortened)
+            // between our size check and read - either way throw
+            secure_zero_memory(out_buf); // don't forget to zero memory before throwing
+            throw std::runtime_error("[secure_read_file] Error while reading from a file; read less than the file's size");
+        }
+
+        return 0;
+    }
+
 }

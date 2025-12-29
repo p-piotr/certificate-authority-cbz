@@ -17,6 +17,8 @@
 
 namespace CBZ::PKCS {
 
+    using namespace ASN1;
+
     const std::unordered_map<std::string, ASN1Tag> attributeStringTypeMap = {
         {"2.5.4.6",                PRINTABLE_STRING},   // countryName
         {"2.5.4.8",                UTF8_STRING},        // stateOrProvinceName
@@ -61,7 +63,7 @@ namespace CBZ::PKCS {
         if(tag != UTF8_STRING && tag != IA5_STRING && tag != PRINTABLE_STRING){
             throw std::runtime_error("[Attribute::Attribute(std::string, std::string, ASN1Tag)] Tag doesn't match the string type");
         }
-        if(CBZ::Utils::validate_string_type(value, tag) == false){
+        if(validate_string_type(value, tag) == false){
             throw std::runtime_error("[Attribute::Attribute(std::string, std::string, ASN1Tag)] attempt to create object with value that contains illegal characters");
         }
         _values.emplace_back(std::move(value), tag);
@@ -74,7 +76,7 @@ namespace CBZ::PKCS {
         ASN1Tag tag;
         try {
             tag = attributeStringTypeMap.at(type);
-            if(CBZ::Utils::validate_string_type(value, tag) == false){
+            if(validate_string_type(value, tag) == false){
                 throw std::runtime_error("[Attribute::Attribute(std::string, std::string)] value_ contains illegal chars");
             }
         } catch (const std::out_of_range& e) { 
@@ -93,7 +95,7 @@ namespace CBZ::PKCS {
             if(v.second != UTF8_STRING && v.second != IA5_STRING && v.second != PRINTABLE_STRING){
                 throw std::runtime_error("[Attribute::Attribute(std::string, std::initializer_list<std::pair<std::string, ASN1Tag>>)] Tag doesn't match string type");
             }
-            if(CBZ::Utils::validate_string_type(v.first,v.second) == false){
+            if(validate_string_type(v.first,v.second) == false){
                 throw std::runtime_error("[Attribute::Attribute(std::string, std::initializer_list<std::pair<std::string, ASN1Tag>>)] Attempt to create object with value that contains illegal characters");
             }
             _values.emplace_back(std::move(v.first), v.second);
@@ -109,7 +111,7 @@ namespace CBZ::PKCS {
             ASN1Tag tag;
             try {
                 tag = attributeStringTypeMap.at(type);
-                if(CBZ::Utils::validate_string_type(v, tag) == false){
+                if(validate_string_type(v, tag) == false){
                     throw std::runtime_error("[Attribute::Attribute(std::string, std::initializer_list<std::string>)] Attempt to create object with value that contains illegal characters");
                 }
             } catch (const std::out_of_range& e) { 
@@ -285,7 +287,7 @@ namespace CBZ::PKCS {
             _value_type = UTF8_STRING;
         }
 
-        if(CBZ::Utils::validate_string_type(value, _value_type) == false){
+        if(validate_string_type(value, _value_type) == false){
             throw std::runtime_error("AttributeTypeAndValue(string, string): attempt to create object with value that contains illegal characters");
         }
         _type = std::move(type);
@@ -301,7 +303,7 @@ namespace CBZ::PKCS {
             throw std::runtime_error("AttributeTypeAndValue(string, string, ASN1_tag): values different than strings that are currently not handled");
         }
 
-        if(CBZ::Utils::validate_string_type(_value,_value_type) == false){
+        if(validate_string_type(_value,_value_type) == false){
             throw std::runtime_error("AttributeTypeAndValue(string, string, ASN1_tag): attempt to create object with value that contains illegal characters");
         }
         _value_type = value_type;
@@ -571,7 +573,7 @@ namespace CBZ::PKCS {
 
         int PBES2::extract_parameters(
             const ASN1Object& parameters_object,
-            struct Parameters* out_ptr
+            struct PBES2::Parameters* out_ptr
         ) {
             using namespace PrivateKeySupportedAlgorithms;
 
@@ -676,7 +678,7 @@ namespace CBZ::PKCS {
 
         int PBKDF2::extract_parameters(
             const ASN1Object& parameters_object,
-            struct Parameters* out_ptr
+            struct PBKDF2::Parameters* out_ptr
         ) {
             if (parameters_object.tag() != ASN1Tag::SEQUENCE)
                 return ERR_SEMANTIC_CHECK_FAILED;
@@ -800,7 +802,7 @@ namespace CBZ::PKCS {
 
         int EncryptionSchemes::AES::extract_parameters(
             const ASN1Object& parameters_object,
-            struct Parameters* out_ptr
+            struct EncryptionSchemes::AES::Parameters* out_ptr
         ) {
             constexpr const size_t IV_SIZE = 16;
 
@@ -879,7 +881,12 @@ namespace CBZ::PKCS {
                 switch (search->second) {
                     case pbes2: {
                         auto pbes2_parameters = out_ptr ? 
-                            std::make_shared<PBES2::Parameters>() : std::shared_ptr<PBES2::Parameters>(nullptr);
+                            std::shared_ptr<PBES2::Parameters>(
+                                new PBES2::Parameters(),
+                                CBZ::Security::secure_delete_struct<PBES2::Parameters>
+                            )
+                            : std::shared_ptr<PBES2::Parameters>(nullptr);
+
                         if (int result = PBES2::extract_parameters(parameters, pbes2_parameters.get()); result != ERR_OK)
                             return result;
 
@@ -920,7 +927,11 @@ namespace CBZ::PKCS {
                 switch (search->second) {
                     case pbkdf2: {
                         auto pbkdf2_parameters = out_ptr ?
-                            std::make_shared<PBKDF2::Parameters>() : std::shared_ptr<PBKDF2::Parameters>(nullptr);
+                            std::shared_ptr<PBKDF2::Parameters>(
+                                new PBKDF2::Parameters(),
+                                CBZ::Security::secure_delete_struct<PBKDF2::Parameters>
+                            )
+                            : std::shared_ptr<PBKDF2::Parameters>(nullptr);
                         if (int result = PBKDF2::extract_parameters(parameters, pbkdf2_parameters.get()); result != ERR_OK)
                             return result;
                         
@@ -1002,7 +1013,10 @@ namespace CBZ::PKCS {
                     case aes_128_CBC: 
                     case aes_256_CBC: {
                         auto aes_parameters = out_ptr ?
-                            std::make_shared<EncryptionSchemes::AES::Parameters>()
+                            std::shared_ptr<EncryptionSchemes::AES::Parameters>(
+                                new EncryptionSchemes::AES::Parameters(),
+                                CBZ::Security::secure_delete_struct<EncryptionSchemes::AES::Parameters>
+                            )
                             : std::shared_ptr<EncryptionSchemes::AES::Parameters>(nullptr);
                         if (
                             int result = EncryptionSchemes::AES
@@ -1029,10 +1043,10 @@ namespace CBZ::PKCS {
     }
 
     namespace Labels {
-        const std::string privateKeyHeader = "-----BEGIN PRIVATE KEY-----";
-        const std::string privateKeyFooter = "-----END PRIVATE KEY-----";
-        const std::string encryptedPrivateKeyHeader = "-----BEGIN ENCRYPTED PRIVATE KEY-----";
-        const std::string encryptedPrivateKeyFooter = "-----END ENCRYPTED PRIVATE KEY-----";
+        const std::string privateKeyHeader = "-----BEGIN PRIVATE KEY-----\n";
+        const std::string privateKeyFooter = "-----END PRIVATE KEY-----\n";
+        const std::string encryptedPrivateKeyHeader = "-----BEGIN ENCRYPTED PRIVATE KEY-----\n";
+        const std::string encryptedPrivateKeyFooter = "-----END ENCRYPTED PRIVATE KEY-----\n";
     }
 
     int PrivateKeySupportedAlgorithms::extract_algorithm(

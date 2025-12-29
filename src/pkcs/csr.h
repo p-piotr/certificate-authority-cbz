@@ -46,7 +46,7 @@ namespace CBZ::PKCS {
             mpz_class n,
             mpz_class e
         ) :
-        _algorithm{algorithm, std::shared_ptr<void>(nullptr)},
+        _algorithm{algorithm},
         _subject_public_key(std::move(n), std::move(e)) {}
 
         SubjectPublicKeyInfo(
@@ -54,7 +54,7 @@ namespace CBZ::PKCS {
             std::string n,
             std::string e
         ) :
-        _algorithm{algorithm, std::shared_ptr<void>(nullptr)},
+        _algorithm{algorithm},
         _subject_public_key(std::move(n), std::move(e)) {}
 
         ASN1Object to_asn1() const;
@@ -399,7 +399,7 @@ namespace CBZ::PKCS {
             CSRSupportedAlgorithms::algorithm_t sig_algorithm
         ) :
         _certification_request_info(std::move(subject_name), algorithm, std::move(n), std::move(e), std::move(attributes)),
-        _signature_algorithm(sig_algorithm) {}
+        _signature_algorithm{sig_algorithm} {}
 
         CertificationRequest(
             std::vector<std::pair<std::string, std::string>> subject_name,

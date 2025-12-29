@@ -46,6 +46,10 @@ namespace CBZ {
         // Converts an ASN.1 tag (enum) to string
         const char* tag_to_string(ASN1Tag tag);
 
+        bool validate_printable_string(const std::string& s) noexcept;
+        bool ia5string_validate(const std::string& s) noexcept;
+        bool validate_string_type(const std::string& s, CBZ::ASN1::ASN1Tag type) noexcept;
+
         // Look for definition below
         class ASN1Object;
 

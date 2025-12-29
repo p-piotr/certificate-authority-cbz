@@ -46,7 +46,7 @@ namespace CBZ::PKCS {
             : RSAPrivateKey(from_file(filepath)) {}
 
         RSAPrivateKey(std::string const& filepath, std::string&& passphrase)
-            : RSAPrivateKey(from_file(filepath, std::move(passphrase))) {}
+            : RSAPrivateKey(from_file_with_passphrase(filepath, std::move(passphrase))) {}
 
         inline const mpz_class& version() const {
             return _version;
@@ -87,22 +87,32 @@ namespace CBZ::PKCS {
         // Prints the private key (use only for debugging purposes)
         void print() const;
 
+        static RSAPrivateKey from_base64_buffer(std::string&& key_asn1_b64);
+
         // Loads a private key from file
-        // This variant may only parse unencrypted keys
+        // This variant may parse either encrypted or unencrypted keys
+        // If the key turns out to be encrypted, this function will prompt
+        // for passphrase and call RSAPrivateKey::from_base64_buffer_with_passphrase
+        //
+        // Call this variant if you're not sure whether the key
+        // is encrypted or not
         //
         // Input:
         // @filepath - path to the file containing the private key in PKCS#8
         static RSAPrivateKey from_file(const std::string& filepath);
 
+        static RSAPrivateKey from_base64_buffer_with_passphrase(std::string&& key_asn1_b64, std::string&& passphrase);
+
         // Loads a private key from file
         // This variant may parse either encrypted or unencrypted keys
         // If used for unencrypted key, the function behaves exactly like
         // the overload specifically for unencrypted keys (the passphrase is omitted)
+        //
         // Input:
         // @filepath - path to the file containing the private key in PKCS#8
         // @passphrase - passphrase used when the key turns out to be encrypted, as an rvalue
         //               - gets securely deleted when not needed anymore
-        static RSAPrivateKey from_file(const std::string& filepath, std::string&& passphrase);
+        static RSAPrivateKey from_file_with_passphrase(const std::string& filepath, std::string&& passphrase);
     };
 
     // Checks if the ASN.1 structure of the RSA private key is correct
@@ -155,19 +165,19 @@ namespace CBZ::PKCS {
 
     class FeatureUnsupportedException : public std::runtime_error {
     public:
-        explicit FeatureUnsupportedException(const char* const message) throw()
+        explicit FeatureUnsupportedException(const char* const message)
             : std::runtime_error(message) {}
     };
 
     class AlgorithmUnsupportedException : public std::runtime_error {
     public:
-        explicit AlgorithmUnsupportedException(const char* const message) throw()
+        explicit AlgorithmUnsupportedException(const char* const message)
             : std::runtime_error(message) {}
     };
 
     class SemanticCheckException : public std::runtime_error {
     public:
-        explicit SemanticCheckException(const char* const message) throw()
+        explicit SemanticCheckException(const char* const message)
             : std::runtime_error(message) {}
     };
 }

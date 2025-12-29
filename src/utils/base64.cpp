@@ -13,7 +13,7 @@ namespace CBZ::Base64 {
         "0123456789+/";
 
     // Encodes a buffer into a Base64 string
-    std::string encode(std::span<uint8_t> in) {
+    std::string encode(std::span<const uint8_t> in) {
         std::string out;
 
         int val=0;
@@ -32,7 +32,9 @@ namespace CBZ::Base64 {
     }
 
     // Decodes a Base64 string into a buffer
-    std::vector<uint8_t> decode(std::string const& in) {
+    // Also handles the string with '\n' characters
+    // by simply ignoring them (helpful with .PEM files)
+    std::vector<uint8_t> decode(std::span<const char> in) {
         std::vector<uint8_t> out;
 
         std::vector<int> T(256,-1);
@@ -40,7 +42,8 @@ namespace CBZ::Base64 {
 
         int val=0;
         int valb=-8;
-        for (uint8_t c : in) {
+        for (char c : in) {
+            if (c == '\n') continue; // ignore newline characters
             if (T[c] == -1) break;
             val = (val<<6) + T[c];
             valb += 6;

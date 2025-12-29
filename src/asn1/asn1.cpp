@@ -36,6 +36,56 @@ namespace CBZ::ASN1 {
         }
     }
 
+    // test if string doesn't contain illegal characters; printable_string version
+    bool validate_printable_string(const std::string& s) noexcept {
+        auto _check = [](char c) {
+            if (c >= 0x41 && c <= 0x5A)
+                return true;
+            if (c >= 0x61 && c <= 0x7A)
+                return true;
+            if (c >= 0x30 && c <= 0x39)
+                return true;
+            if (c >= 0x27 && c <= 0x29)
+                return true;
+            if (c >= 0x2B && c <= 0x2F)
+                return true;
+            if (c == 0x20 || c == 0x3A || c == 0x3D || c == 0x3F)
+                return true;
+            return false;
+        };
+
+        for (char c : s) {
+            if (!_check(c))
+                return false;
+        }
+        return true;
+    }
+
+    // test if string doesn't contain illegal characters ia5string version
+    bool ia5string_validate(const std::string& s) noexcept {
+        // returns false if string contains a char not found in set of legal chars
+        for (unsigned char c : s)
+            if (c > 0x7F) return false;  // Only first 128 ASCII chars allowed
+
+        return true;
+    }
+
+    // dispatcher function that calls appropriate validating function based on tag (only 2 functions as of now)
+    bool validate_string_type(const std::string& s, CBZ::ASN1::ASN1Tag type) noexcept {
+        using namespace CBZ::ASN1;
+
+        switch(type){
+            case IA5_STRING:
+                return ia5string_validate(s);
+            case PRINTABLE_STRING:
+                return validate_printable_string(s);
+            case UTF8_STRING:
+                return true;
+            default:
+                return false;
+        }
+    }
+
     std::vector<uint8_t> ASN1Parser::encode(ASN1Object const& object) {
         // TEMPORARILY COMMENTED
         // first, check whether it's NULL if it doesn't have neither value nor children
@@ -270,7 +320,9 @@ namespace CBZ::ASN1 {
     // }
 
     ASN1Object::~ASN1Object() {
-        CBZ::Security::secure_zero_memory(_value); // don't forget to zero data as it may be critical
+        // don't forget to zero data as it may be critical
+        CBZ::Security::secure_zero_memory(_value);
+        CBZ::Security::secure_zero_memory(_encoded);
         #ifdef ASN1_DEBUG
         std::cerr << "[ASN1Object] ASN1Object destroyed: tag=" << tag_to_string(_tag) 
             << ", value_size=" << _value.size() << std::endl;
@@ -531,7 +583,7 @@ namespace CBZ::ASN1 {
     ASN1String::ASN1String(ASN1Tag string_tag, std::string s)
         : ASN1Object(string_tag, std::move(s))
     {
-        if (!CBZ::Utils::validate_string_type(s, string_tag))
+        if (!validate_string_type(s, string_tag))
             throw std::runtime_error("[ASN1String::ASN1String] invalid string encoding or tag");
     }
 }

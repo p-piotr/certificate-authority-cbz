@@ -54,22 +54,27 @@ namespace CBZ::PKCS {
         const ASN1Object& private_key_algorithm = root_object.children()[1];
         ASN1Object& private_key = root_object._children[2];
 
-        if (version.tag() != ASN1Tag::INTEGER) // 'version' must be of type INTEGER
+        if (version.tag() != ASN1Tag::INTEGER) { // 'version' must be of type INTEGER
             return ERR_SEMANTIC_CHECK_FAILED;
-        if (static_cast<const ASN1Integer&>(version).value() != 0) // 'version' must be equal to 0
+        }
+        if (static_cast<const ASN1Integer&>(version).value() != 0) { // 'version' must be equal to 0
             return ERR_FEATURE_UNSUPPORTED;
-        if (private_key_algorithm.tag() != ASN1Tag::SEQUENCE) // 'private_key_algorithm' must be of type SEQUENCE
+        }
+        if (private_key_algorithm.tag() != ASN1Tag::SEQUENCE) { // 'private_key_algorithm' must be of type SEQUENCE
             return ERR_SEMANTIC_CHECK_FAILED;
-        if (private_key.tag() != ASN1Tag::OCTET_STRING) // 'private_key' must be of type OCTET_STRING
+        }
+        if (private_key.tag() != ASN1Tag::OCTET_STRING) { // 'private_key' must be of type OCTET_STRING
             return ERR_SEMANTIC_CHECK_FAILED;
+        }
 
         // Now proceed to the algorithm extraction
         struct AlgorithmIdentifier alg_id;
         if (
             int result = PrivateKeyAlgorithms::extract_algorithm(private_key_algorithm, &alg_id);
             result != 0
-        )
+        ) {
             return result;
+        }
         
         // Iterate through supported algorithms and act accordingly
         switch (alg_id.algorithm) {
@@ -106,16 +111,19 @@ namespace CBZ::PKCS {
     ) {
         using namespace PrivateKeySupportedAlgorithms;
 
-        if (root_object.tag() != ASN1Tag::SEQUENCE || root_object.children().size() != 2)
+        if (root_object.tag() != ASN1Tag::SEQUENCE || root_object.children().size() != 2) {
             return ERR_SEMANTIC_CHECK_FAILED;
+        }
         
         auto encryption_algorithm = root_object.children()[0];
         auto encrypted_data = root_object.children()[1];
         
-        if (int result = EncryptionAlgorithms::extract_algorithm(encryption_algorithm, out_ptr); result != ERR_OK)
+        if (int result = EncryptionAlgorithms::extract_algorithm(encryption_algorithm, out_ptr); result != ERR_OK) {
             return result;
-        if (encrypted_data.tag() != ASN1Tag::OCTET_STRING)
+        }
+        if (encrypted_data.tag() != ASN1Tag::OCTET_STRING) {
             return ERR_SEMANTIC_CHECK_FAILED;
+        }
 
         return ERR_OK;
     }
@@ -235,73 +243,122 @@ namespace CBZ::PKCS {
         );
     }
 
+    // Compares header at the beginning of given Base64 buffer
+    // with another specified header
+    bool _compare_header(const std::string& b64, const std::string& h) {
+        if (b64.size() < h.size())
+            return false;
+
+        int r = std::memcmp(
+            b64.data(),
+            h.data(),
+            h.size()
+        );
+
+        if (r == 0)
+            return true;
+        else return false;
+    }
+
+    // Compares footer at the end of given Base64 buffer
+    // with another specifier footer
+    bool _compare_footer(const std::string& b64, const std::string& f) {
+        if (b64.size() < f.size())
+            return false;
+
+        int r = std::memcmp(
+            b64.data() + (b64.size() - f.size()),
+            f.data(),
+            f.size()
+        );
+
+        if (r == 0)
+            return true;
+        else return false;
+    }
+
+    RSAPrivateKey RSAPrivateKey::from_base64_buffer(std::string&& key_b64) {
+        int h_c = _compare_header(key_b64, Labels::privateKeyHeader);
+        int f_c = _compare_footer(key_b64, Labels::privateKeyFooter);
+        if (!h_c || !f_c) {
+            // header/footer doesn't match
+            // check whether given key is encrypted and if it is, handle appropriately
+            // otherwise throw
+            h_c = _compare_header(key_b64, Labels::encryptedPrivateKeyHeader);
+            f_c = _compare_footer(key_b64, Labels::encryptedPrivateKeyFooter);
+            if (!h_c || !f_c) {
+                CBZ::Security::secure_zero_memory(key_b64);
+                throw std::runtime_error("[RSAPrivateKey::from_base64_buffer] RSA private key header/footer does not match the standard");
+            }
+
+            // the key is encrypted
+            std::string passphrase = CBZ::Utils::IO::ask_for_password();
+            return from_base64_buffer_with_passphrase(std::move(key_b64), std::move(passphrase));
+        }
+
+        std::span<char> key_asn1_b64 = std::span{
+            key_b64.data() + Labels::privateKeyHeader.size(),
+            key_b64.size() - (Labels::privateKeyHeader.size() + Labels::privateKeyFooter.size())
+        };
+        std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
+        ASN1Object asn1_root = ASN1Object::decode(key_asn1);
+
+        // zero the base64 and asn1 buffers
+        CBZ::Security::secure_zero_memory(key_b64);
+        CBZ::Security::secure_zero_memory(key_asn1);
+
+        // decode the final expanded structure into 9 integers
+        return _Decode_key(asn1_root);
+    }
+
     // Loads a private key from file
     // This variant may only parse unencryptd keys
     //
     // Input:
     // @filepath - path to the file containing the private key in PKCS#8
-    RSAPrivateKey RSAPrivateKey::from_file(std::string const& filepath) {
-        std::ifstream keyfile(filepath);
-        std::string line1, line2, key_asn1_b64 = "";
+    RSAPrivateKey RSAPrivateKey::from_file(const std::string& filepath) {
+        std::string key_b64;
+        size_t keyfile_size = CBZ::Utils::get_file_size(filepath.c_str());
+        key_b64.resize(keyfile_size);
 
-        // throw an error if failed to open file
-        if (!keyfile.is_open()) {
-            throw std::runtime_error("[RSAPrivateKey::from_file] Failed to open file: " + filepath);
+        try {
+            CBZ::Security::secure_read_file(
+                filepath.c_str(),
+                std::as_writable_bytes(std::span{key_b64})
+            );
+        } catch (const std::exception &e) {
+            std::throw_with_nested(std::runtime_error("[RSAPrivateKey::from_file] Could not read RSA private key from file"));
         }
 
-        // read the key file and complain if needed
-        std::getline(keyfile, line1);
-        if (line1 == PKCS::Labels::encryptedPrivateKeyHeader) {
-            // the header says it's encrypted, so let's try to parse it accordingly
-            return from_file(filepath, std::move(Utils::IO::ask_for_password()));
-        }
-        if (line1 != PKCS::Labels::privateKeyHeader)
-            throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key header doesn't match the standard");
-
-        // read all lines till the end and append to key_asn1_b64, except the footer
-        std::getline(keyfile, line1);
-        while (std::getline(keyfile, line2)) { // read next line and append the previous one
-            key_asn1_b64 += line1;
-            line1 = line2;
-        }
-
-        if (line1 != PKCS::Labels::privateKeyFooter)
-            throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key footer doesn't match the standard");
-
-        std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
-        ASN1Object asn1_root = ASN1Object::decode(std::move(key_asn1));
-
-        // decode the final expanded structure into 9 integers
-        return _Decode_key(asn1_root);
+        return from_base64_buffer(std::move(key_b64));
     }
-    
-    RSAPrivateKey RSAPrivateKey::from_file(std::string const& filepath, std::string&& passphrase) {
-        std::ifstream keyfile(filepath);
-        std::string line1, line2, key_asn1_b64 = "";
 
-        std::getline(keyfile, line1);
-        if (line1 == PKCS::Labels::privateKeyHeader) {
-            // i don't know why, but it seems this key is unencrypted, although we received a password for it
-            // assume this key is unencrypted and it was a mistake - discard the password and proceed with the
-            // unencrypted procedure
-            secure_zero_memory(passphrase);
-            return from_file(filepath);
-        }
-        if (line1 != PKCS::Labels::encryptedPrivateKeyHeader)
-            throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key header doesn't match the standard");
+    RSAPrivateKey RSAPrivateKey::from_base64_buffer_with_passphrase(std::string&& key_b64, std::string&& passphrase) {
+        int h_c = _compare_header(key_b64, Labels::encryptedPrivateKeyHeader);
+        int f_c = _compare_footer(key_b64, Labels::encryptedPrivateKeyFooter);
+        if (!h_c || !f_c) {
+            // header/footer doesn't match
+            // check whether given key is unencrypted and if it is, handle appropriately
+            // otherwise throw
+            h_c = _compare_header(key_b64, Labels::privateKeyHeader);
+            f_c = _compare_footer(key_b64, Labels::privateKeyFooter);
+            if (!h_c || !f_c) {
+                CBZ::Security::secure_zero_memory(key_b64);
+                CBZ::Security::secure_zero_memory(passphrase);
+                throw std::runtime_error("[RSAPrivateKey::from_file] RSA private key header/footer does not match the standard");
+            }
 
-        // read all lines till the end and append to key_asn1_b64, except the footer
-        std::getline(keyfile, line1);
-        while (std::getline(keyfile, line2)) { // read next line and append the previous one
-            key_asn1_b64 += line1;
-            line1 = line2;
+            // the key is unencrypted
+            CBZ::Security::secure_zero_memory(passphrase);
+            return from_base64_buffer(std::move(key_b64));
         }
 
-        if (line1 != PKCS::Labels::encryptedPrivateKeyFooter)
-            throw SemanticCheckException("[RSAPrivateKey::from_file] RSA private key footer doesn't match the standard");
-
+        std::span<char> key_asn1_b64 = std::span{
+            key_b64.data() + Labels::encryptedPrivateKeyHeader.size(),
+            key_b64.size() - (Labels::encryptedPrivateKeyHeader.size() + Labels::encryptedPrivateKeyFooter.size())
+        };
         std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
-        ASN1Object asn1_root = ASN1Parser::decode_all(std::move(key_asn1));
+        ASN1Object asn1_root = ASN1Object::decode(key_asn1);
         struct AlgorithmIdentifier alg_id;
 
         if (int result = _EncryptedRSAPrivateKey_check(asn1_root, &alg_id); result != ERR_OK) {
@@ -317,10 +374,32 @@ namespace CBZ::PKCS {
             }
         }
 
+        // zero the base64 and asn1 buffers
+        // alg_id will get deleted by itself so it won't leak anything
+        CBZ::Security::secure_zero_memory(key_b64);
+        CBZ::Security::secure_zero_memory(key_asn1);
+
         return _Decrypt_key(
             asn1_root.children()[1],
             &alg_id,
             std::move(passphrase)
         );
+    }
+    
+    RSAPrivateKey RSAPrivateKey::from_file_with_passphrase(const std::string& filepath, std::string&& passphrase) {
+        std::string key_b64;
+        size_t keyfile_size = CBZ::Utils::get_file_size(filepath.c_str());
+        key_b64.resize(keyfile_size);
+
+        try {
+            CBZ::Security::secure_read_file(
+                filepath.c_str(),
+                std::as_writable_bytes(std::span{key_b64})
+            );
+        } catch (const std::exception &e) {
+            std::throw_with_nested(std::runtime_error("[RSAPrivateKey::from_file] Could not read RSA private key from file"));
+        }
+
+        return from_base64_buffer_with_passphrase(std::move(key_b64), std::move(passphrase));
     }
 }

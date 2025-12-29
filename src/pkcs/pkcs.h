@@ -26,10 +26,18 @@ namespace CBZ::PKCS {
         uint32_t algorithm;
         std::shared_ptr<void> params;
 
-        AlgorithmIdentifier() {}
+        AlgorithmIdentifier() : algorithm(0), params(std::shared_ptr<void>(nullptr)) {}
 
-        AlgorithmIdentifier(uint32_t algorithm_, std::shared_ptr<void> params_ = std::shared_ptr<void>(nullptr))
+        AlgorithmIdentifier(
+            uint32_t algorithm_,
+            std::shared_ptr<void> params_ = std::shared_ptr<void>(nullptr)
+        )
             : algorithm(algorithm_), params(params_) {}
+
+        ~AlgorithmIdentifier() {
+            algorithm = 0;
+            // params will get destroyed by themselves since it's a shared_ptr
+        }
 
         // Those functions only exists for MaksymilianOliwaCode™ compatibility reasons
         // They don't take into consideration any parameters, always return a NULL_TYPE
