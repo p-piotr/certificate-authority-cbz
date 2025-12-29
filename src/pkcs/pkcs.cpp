@@ -1042,13 +1042,6 @@ namespace CBZ::PKCS {
         }
     }
 
-    namespace Labels {
-        const std::string privateKeyHeader = "-----BEGIN PRIVATE KEY-----\n";
-        const std::string privateKeyFooter = "-----END PRIVATE KEY-----\n";
-        const std::string encryptedPrivateKeyHeader = "-----BEGIN ENCRYPTED PRIVATE KEY-----\n";
-        const std::string encryptedPrivateKeyFooter = "-----END ENCRYPTED PRIVATE KEY-----\n";
-    }
-
     int PrivateKeySupportedAlgorithms::extract_algorithm(
         const ASN1Object& algorithm,
         struct AlgorithmIdentifier* out_ptr

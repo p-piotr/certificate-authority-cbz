@@ -240,14 +240,6 @@ namespace CBZ::PKCS {
         }
     }
 
-    // Labels related to PKCS - headers/footers of PKCS-compatible files
-    namespace Labels {
-        extern const std::string privateKeyHeader;
-        extern const std::string privateKeyFooter;
-        extern const std::string encryptedPrivateKeyHeader;
-        extern const std::string encryptedPrivateKeyFooter;
-    }
-
     // unordered map that maps given OID to it's correspoing string type
     // I just based this on what openssl uses, but here's more offical documentation
     // https://www.itu.int/rec/T-REC-X.520-201910-I/en

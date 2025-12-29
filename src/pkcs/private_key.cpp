@@ -12,6 +12,7 @@
 #include "pkcs/pkcs.h"
 #include "utils/security.hpp"
 #include "utils/io.h"
+#include "pkcs/labels.h"
 
 /*
 
