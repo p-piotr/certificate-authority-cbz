@@ -37,18 +37,22 @@ namespace CBZ::Base64 {
     std::vector<uint8_t> decode(std::span<const char> in) {
         std::vector<uint8_t> out;
 
-        std::vector<int> T(256,-1);
-        for (int i=0; i<64; i++) T[b[i]] = i;
+        static const std::vector<int> T = []() {
+            std::vector<int> table(256, -1);
+            for (int i = 0; i < 64; i++) table[b[i]] = i;
+            return table;
+        }();
 
         int val=0;
         int valb=-8;
         for (char c : in) {
-            if (c == '\n') continue; // ignore newline characters
-            if (T[c] == -1) break;
-            val = (val<<6) + T[c];
+            unsigned char uc = static_cast<unsigned char>(c);
+            if (uc == '\n') continue; // ignore newline characters
+            if (T[uc] == -1) break;
+            val = (val<<6) + T[uc];
             valb += 6;
             if (valb>=0) {
-                out.push_back(char((val>>valb)&0xFF));
+                out.push_back(static_cast<char>((val>>valb)&0xFF));
                 valb-=8;
             }
         }
