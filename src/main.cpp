@@ -9,21 +9,6 @@
 #include "utils/base64.h"
 #include "pkcs/private_key.h"
 
-// this function was just added to test functionality it's not really needed yet
-void test_signature_verification(CBZ::PKCS::CertificationRequest& CR){
-    using namespace CBZ::PKCS;
-
-    std::cout << std::endl << "testing signature verification" << std::endl;
-
-    // get public key from certification certification request
-    const RSAPublicKey& pub_key = CR.getPublicKeyReference();
-    // get certifcationRequestInfo encoded as DER (that's the part of CSR that is actually signed)
-    const std::vector<uint8_t>& mess = CR.getCertificationRequestInfoReference().encode();
-    // get signature
-    const std::vector<uint8_t>& signature = CR.getSignatureReference();
-    // verify signature
-    std::cout << std::boolalpha << Signature::RSASSA_PKCS1_V1_5_VERIFY(pub_key, mess, signature) << std::endl;
-}
 
 // prints out how to call the program
 static void print_usage(const std::string& name) {
@@ -124,8 +109,6 @@ int main(int argc, char* argv[]){
     // those are no longer need they can be zeroized
     secure_zero_memory(DER_encoding);
     secure_zero_memory(base64_output);
-
-    test_signature_verification(certification_request);
     
     return 0;
 }

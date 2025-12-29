@@ -19,7 +19,8 @@ namespace CBZ::Utils {
             << std::uppercase << std::hex 
             << std::setfill('0');
         for (const auto e : s) {
-            std::cout << std::setw(sizeof(typename _R::value_type)) << e << ' ';
+            std::cout << std::setw(2) << 
+            static_cast<unsigned int>(e) << ' ';
         }
         std::cout
             << std::nouppercase << std::dec

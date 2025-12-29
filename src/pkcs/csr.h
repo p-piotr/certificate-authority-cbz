@@ -12,7 +12,7 @@ namespace CBZ::PKCS {
 
         enum algorithm_t : uint32_t {
             rsaEncryption = 0x5001,
-            sha256WithRSAEncryption,
+            sha256WithRSAEncryption = 0x5002,
             sha256
         };
 
@@ -113,7 +113,7 @@ namespace CBZ::PKCS {
         // Multiple string constructor with explicit tags
         // Example Attribute Attr3("3.3.3.3", {std::make_pair("test", IA5_STRING), {"meow",UTF8_STRING}, {"TEST",PRINTABLE_STRING}});
         // Note the make pair, without it constructor call might become ambigious
-        Attribute(std::string type, std::initializer_list<std::pair<std::string, ASN1Tag>> list);
+        Attribute(std::string type, std::vector<std::pair<std::string, ASN1Tag>> list);
 
         // Multiple string constructor
         // Exmaple Attribute Attr4("4.4.4.4", {"test", "TEST"});
@@ -172,7 +172,7 @@ namespace CBZ::PKCS {
         AttributeTypeAndValue(std::string type, std::string value);
 
         // Example: PKCS::AttributeTypeAndValue ATAV3{"2.5.4.6", "PL", PRINTABLE_STRING};
-        // Here ASN1_tag is defined explicitly so we need check if it's a string type and then if it doesn't contain illega chars
+        // Here ASN1_tag is defined explicitly so we need check if it's a string type and then if it doesn't contain illegal chars
         AttributeTypeAndValue(std::string type, std::string value, ASN1Tag value_type);
 
         ASN1Object to_asn1() const;
@@ -212,7 +212,7 @@ namespace CBZ::PKCS {
             : RelativeDistinguishedName((AttributeTypeAndValue(std::move(oid), std::move(value)))) {}
 
         // Example: PKCS::RelativeDistinguishedName RDN4{{"2.5.4.6", "PL"}, {"2.5.4.10", "AGH"}};
-        RelativeDistinguishedName(std::initializer_list<AttributeTypeAndValue> list)
+        RelativeDistinguishedName(std::vector<AttributeTypeAndValue> list)
             : _atavs(list) {}
 
         ASN1Object to_asn1() const;
@@ -249,8 +249,8 @@ namespace CBZ::PKCS {
         // Note that the 2 initializations above are not equal;
         // In the first one RDNSequence contains 2 AttributeTypeAndValue each with 1 element
         // In the second one RDNSequence contains 1 AttributeTypeAndValue with 2 elements
-        RDNSequence(std::initializer_list<RelativeDistinguishedName> list)
-            : _rdn_sequence(std::move(list)) {}
+        RDNSequence(std::vector<RelativeDistinguishedName> vec)
+            : _rdn_sequence(std::move(vec)) {}
 
         // Example: vector<pair<string,string>> vec1{{"2.5.4.6","PL"}, {"2.5.4.10","AGH"}}; RDNSequence rdsn1(vec1);
         RDNSequence(std::vector<std::pair<std::string, std::string>> list);
@@ -446,8 +446,20 @@ namespace CBZ::PKCS {
         // return value : signature bytes
         std::vector<uint8_t> sign(RSAPrivateKey const& private_key);
 
+        // Read a base64 DER encoded CSR from file and create this object
+        // @filepath - the path from which it should read the CSR
+        CertificationRequest from_file(const std::string& filepath);
+
+        // Constructor that uses the from_file function above
+        CertificationRequest(const std::string& filepath) : CertificationRequest(from_file(filepath)) {}
         // << operator
         friend std::ostream& operator<<(std::ostream& os, CertificationRequest& CR);
+    };
+
+    class SignatureCheckException : public std::runtime_error {
+    public:
+        explicit SignatureCheckException(const char* const message) throw()
+            : std::runtime_error(message) {}
     };
 
 }

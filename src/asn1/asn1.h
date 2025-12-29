@@ -22,6 +22,8 @@ namespace CBZ {
         int _RSAPrivateKey_check_and_expand(
             ASN1::ASN1Object& root_object
         );
+
+        int _RSAPublicKey_check_and_expand(ASN1::ASN1Object& root_object, uint32_t algorithm);
     }
 
     namespace ASN1 {
@@ -249,6 +251,9 @@ namespace CBZ {
             friend int PKCS::_RSAPrivateKey_check_and_expand(
                 ASN1Object& root_object
             );
+
+
+            friend int PKCS::_RSAPublicKey_check_and_expand(ASN1::ASN1Object& root_object, uint32_t algorithm);
         };
 
 
@@ -330,6 +335,20 @@ namespace CBZ {
         class ASN1String : public ASN1Object {
         public:
             explicit ASN1String(ASN1Tag string_tag, std::string s);
+
+            // Why do I even need to add this?
+            explicit ASN1String(const ASN1Object& object) : ASN1Object(std::move(object)) {
+                if(
+                    this -> tag() != UTF8_STRING ||
+                    this -> tag() != PRINTABLE_STRING ||
+                    this -> tag() != IA5_STRING
+                )
+                    throw std::runtime_error("[ASN1String::ASN1String] object does not have STRING tag");
+            }
+
+            inline std::string const value() const {
+                return std::string(_value.begin(), _value.end());
+            }
         };
 
         class ASN1Set : public ASN1Object {

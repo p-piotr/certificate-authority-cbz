@@ -8,6 +8,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include "utils/io.h"
+#include "utils/labels.h"
 
 using std::string;
 using std::vector;
@@ -115,8 +116,6 @@ namespace CBZ::Utils::IO {
     // If the file doesn't exist it will be created;
     // If the file does exist the user will be prompted for permission to overwrite the file;
     void write_csr_to_file(std::string const& base64, std::string const& path){
-        std::string header =     "-----BEGIN CERTIFICATE REQUEST-----\n";
-        std::string trailer =    "-----END CERTIFICATE REQUEST-----\n";
 
         if(std::filesystem::exists(path)){
             std::string input;
@@ -133,7 +132,7 @@ namespace CBZ::Utils::IO {
         if(!ofile.is_open()){
             throw std::runtime_error("write_csr_to_file: Could not open the file \"" + path + "\" for writing");
         }
-        ofile << header;
+        ofile << CBZ::PKCS::Labels::certificateRequestHeader << std::endl;
 
         int i = 0;
         for(auto ch : base64){
@@ -148,7 +147,7 @@ namespace CBZ::Utils::IO {
             ofile << '\n';
         }
 
-        ofile << trailer;
+        ofile << CBZ::PKCS::Labels::certificateRequestFooter << std::endl;
         ofile.close();
 
         std::cout << "Writting into the file: " << path << " done" << std::endl;

@@ -20,6 +20,7 @@ namespace CBZ::PKCS {
     #define ERR_ALGORITHM_UNSUPPORTED 1
     #define ERR_FEATURE_UNSUPPORTED 2
     #define ERR_SEMANTIC_CHECK_FAILED 3
+    #define ERR_SIGNATURE_CHECK_FAILED 4
 
     typedef std::string OID;
     struct AlgorithmIdentifier {
@@ -41,6 +42,32 @@ namespace CBZ::PKCS {
 
         friend std::ostream& operator<<(std::ostream& os, const PKCS::AlgorithmIdentifier& ai);
     };
+
+    namespace CSRSupportedAlgorithms {
+
+        namespace SignatureAlgorithms {
+            int extract_algorithm(
+                const ASN1Object& algorithm,
+                struct AlgorithmIdentifier* out_ptr,
+                const std::string& oid = ""
+            );
+
+        extern const std::unordered_map<std::string, uint32_t> signatureAlgorithmsMap;
+
+        }
+
+        namespace PublicKeyAlgorithms {
+            int extract_algorithm(
+                const ASN1Object& algorithm,
+                struct AlgorithmIdentifier* out_ptr,
+                const std::string& oid = ""
+            );
+
+        extern const std::unordered_map<std::string, uint32_t> publicKeyAlgorithmsMap;
+
+        }
+
+    }
 
     namespace PrivateKeySupportedAlgorithms {
 
@@ -122,6 +149,8 @@ namespace CBZ::PKCS {
             };
             extern const std::unordered_map<OID, EncryptionAlgorithmsEnum> encryptionAlgorithmsMap;
         }
+
+
         namespace KDFs {
 
             int extract_algorithm(
@@ -230,14 +259,6 @@ namespace CBZ::PKCS {
             };
             extern const std::unordered_map<OID, EncryptionSchemesEnum> encryptionSchemesMap;
         }
-    }
-
-    // Labels related to PKCS - headers/footers of PKCS-compatible files
-    namespace Labels {
-        extern const std::string privateKeyHeader;
-        extern const std::string privateKeyFooter;
-        extern const std::string encryptedPrivateKeyHeader;
-        extern const std::string encryptedPrivateKeyFooter;
     }
 
     // unordered map that maps given OID to it's correspoing string type

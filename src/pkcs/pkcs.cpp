@@ -86,7 +86,7 @@ namespace CBZ::PKCS {
 
     Attribute::Attribute(
         std::string type,
-        std::initializer_list<std::pair<std::string, ASN1Tag>> list
+        std::vector<std::pair<std::string, ASN1Tag>> list
     ) : _type(std::move(type)) {
         _values.reserve(list.size());
         for (auto& v : list){
@@ -301,7 +301,14 @@ namespace CBZ::PKCS {
             throw std::runtime_error("AttributeTypeAndValue(string, string, ASN1_tag): values different than strings that are currently not handled");
         }
 
-        if(CBZ::Utils::validate_string_type(_value,_value_type) == false){
+        // I think some changes were made to this constuctor
+        // because when I compared it with how it used to be defined in PoC1
+        // it turned out some variables are now named differently
+        // now this means that the validate_string_type() below uses uninitialized variables
+        // I cannot guarantee that there aren't more situations like this
+
+        // It has to use the valuesw it recevied in the constuctor because the internal ones haven't been initialized yet
+        if(CBZ::Utils::validate_string_type(value, value_type) == false){
             throw std::runtime_error("AttributeTypeAndValue(string, string, ASN1_tag): attempt to create object with value that contains illegal characters");
         }
         _value_type = value_type;
@@ -526,6 +533,50 @@ namespace CBZ::PKCS {
             {sha256WithRSAEncryption,   "1.2.840.113549.1.1.11" },
             {sha256,                    "2.16.840.1.101.3.4.2.1"},
         };
+
+        const std::unordered_map<std::string, uint32_t> SignatureAlgorithms::signatureAlgorithmsMap = {
+            {"1.2.840.113549.1.1.11", sha256WithRSAEncryption}
+        };
+
+        int SignatureAlgorithms::extract_algorithm(
+            const ASN1Object& algorithm,
+            struct AlgorithmIdentifier* out_ptr,
+            const std::string& oid
+        ) {
+            if (algorithm.children().size() != 2)
+                return ERR_SEMANTIC_CHECK_FAILED;
+
+            const std::string algorithm_oid = (oid.empty()) ? 
+                static_cast<const ASN1ObjectIdentifier&>(algorithm.children()[0]).value() : oid;
+            auto parameters = algorithm.children()[1];
+
+
+            if (
+                auto search = CSRSupportedAlgorithms::SignatureAlgorithms::signatureAlgorithmsMap.find(algorithm_oid);
+                search != CSRSupportedAlgorithms::SignatureAlgorithms::signatureAlgorithmsMap.end()
+            ) {
+                switch (search->second) {
+                    case sha256WithRSAEncryption: {
+                        // parameters must be null
+                        if(parameters.tag() != NULL_TYPE)
+                            return ERR_SEMANTIC_CHECK_FAILED;
+
+                        if (out_ptr) {
+                            *out_ptr = AlgorithmIdentifier{
+                                sha256WithRSAEncryption,
+                                std::shared_ptr<void>(nullptr)
+                            };
+                        }
+                        return ERR_OK;
+                    }
+                    default:
+                        throw std::runtime_error("[PKCS::SignatureAlgorithms::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                }
+            }
+
+            return ERR_ALGORITHM_UNSUPPORTED;
+        }
+
     }
 
     namespace PrivateKeySupportedAlgorithms {
@@ -854,9 +905,9 @@ namespace CBZ::PKCS {
                         throw std::runtime_error("[PKCS::PrivateKeyAlgorithms::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
                 }
             }
-
             return ERR_ALGORITHM_UNSUPPORTED;
         }
+
 
         int EncryptionAlgorithms::extract_algorithm(
             const ASN1Object& algorithm,
@@ -1028,13 +1079,6 @@ namespace CBZ::PKCS {
         }
     }
 
-    namespace Labels {
-        const std::string privateKeyHeader = "-----BEGIN PRIVATE KEY-----";
-        const std::string privateKeyFooter = "-----END PRIVATE KEY-----";
-        const std::string encryptedPrivateKeyHeader = "-----BEGIN ENCRYPTED PRIVATE KEY-----";
-        const std::string encryptedPrivateKeyFooter = "-----END ENCRYPTED PRIVATE KEY-----";
-    }
-
     int PrivateKeySupportedAlgorithms::extract_algorithm(
         const ASN1Object& algorithm,
         struct AlgorithmIdentifier* out_ptr
@@ -1070,4 +1114,47 @@ namespace CBZ::PKCS {
 
         return ERR_ALGORITHM_UNSUPPORTED;
     }
+
+
+    namespace CSRSupportedAlgorithms {
+        const std::unordered_map<std::string, uint32_t> PublicKeyAlgorithms::publicKeyAlgorithmsMap = {
+            {"1.2.840.113549.1.1.1", rsaEncryption}
+        };
+
+        int PublicKeyAlgorithms::extract_algorithm(
+            const ASN1Object& algorithm,
+            struct AlgorithmIdentifier* out_ptr,
+            const std::string& oid
+        ) {
+            if (algorithm.children().size() != 2)
+                return ERR_SEMANTIC_CHECK_FAILED;
+
+            const std::string algorithm_oid = (oid.empty()) ? 
+                static_cast<const ASN1ObjectIdentifier&>(algorithm.children()[0]).value() : oid;
+            auto parameters = algorithm.children()[1];
+
+            if (
+                auto search = PublicKeyAlgorithms::publicKeyAlgorithmsMap.find(algorithm_oid);
+                search != PublicKeyAlgorithms::publicKeyAlgorithmsMap.end()
+            ) {
+                switch (search->second) {
+                    case rsaEncryption: {
+                        if (int result = PrivateKeySupportedAlgorithms::RSAEncryption::validate_parameters(parameters); result != ERR_OK)
+                            return result;
+
+                        if (out_ptr) {
+                            *out_ptr = AlgorithmIdentifier{
+                                rsaEncryption,
+                                std::shared_ptr<void>(nullptr)
+                            };
+                        }
+                        return ERR_OK;
+                    }
+                    default:
+                        throw std::runtime_error("[PKCS::PrivateKeyAlgorithms::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                }
+            }
+            return ERR_ALGORITHM_UNSUPPORTED;
+        }   
+    }   
 }
