@@ -57,6 +57,8 @@ namespace CBZ::PKCS {
         if (version.tag() != ASN1Tag::INTEGER) { // 'version' must be of type INTEGER
             return ERR_SEMANTIC_CHECK_FAILED;
         }
+        // although this cast should be undefined behaviour, it works
+        // so i'll keep that in mind and move on
         if (static_cast<const ASN1Integer&>(version).value() != 0) { // 'version' must be equal to 0
             return ERR_FEATURE_UNSUPPORTED;
         }

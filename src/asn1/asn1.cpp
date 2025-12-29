@@ -484,7 +484,7 @@ namespace CBZ::ASN1 {
 
         // parse (from the end to the beginning), till the first two integers
         while (re != data.crend()) {
-            if (*re  & 0x80) { // MSB set - continue
+            if (*re & 0x80) { // MSB set - continue
                 re++;
                 continue;
             }

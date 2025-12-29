@@ -298,7 +298,7 @@ namespace CBZ {
             }
 
             // Returns the ASN.1 INTEGER object value as GMP integer (instead of default buffer)
-            inline mpz_class const value() const {
+            inline mpz_class value() const {
                 return ASN1Parser::integer_decode(_value);
             }
 
