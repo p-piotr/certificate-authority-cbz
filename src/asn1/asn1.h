@@ -322,6 +322,10 @@ namespace CBZ {
         class ASN1BitString : public ASN1Object {
         public:
             explicit ASN1BitString(std::vector<uint8_t> s, int unused = 0);
+
+            inline std::vector<uint8_t> value() const {
+                return std::vector<uint8_t>(_value.begin() + 1, _value.end());
+            }
         };
 
         class ASN1OctetString : public ASN1Object {

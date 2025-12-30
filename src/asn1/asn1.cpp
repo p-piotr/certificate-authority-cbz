@@ -457,6 +457,9 @@ namespace CBZ::ASN1 {
         if (temp.size() > 0) // append the last integer, since it won't be followed by a dot
             integers.push_back(mpz_class(temp));
 
+        if (integers.size() < 2)
+            throw std::runtime_error("[ASN1ObjectIdentifier::encode] Invalid format of ASN.1 Object Identifier");
+
         // encode the whole OBJECT IDENTIFIER acording to https://letsencrypt.org/docs/a-warm-welcome-to-asn1-and-der/#object-identifier-encoding
         auto it = integers.begin();
         mpz_class integer = *it++ * 40;

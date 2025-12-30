@@ -126,6 +126,13 @@ int main(int argc, char* argv[]){
     secure_zero_memory(base64_output);
 
     test_signature_verification(certification_request);
+
+    try {
+        PKCS::CertificationRequest request(certification_request.to_asn1());
+        std::cout << request << std::endl;
+    } catch (const std::exception &e) {
+        CBZ::Utils::print_nested(e);
+    }
     
     return 0;
 }

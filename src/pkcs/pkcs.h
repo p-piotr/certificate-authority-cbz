@@ -34,6 +34,10 @@ namespace CBZ::PKCS {
         )
             : algorithm(algorithm_), params(params_) {}
 
+        // This function is broken the same way as to_asn1() and encode()
+        // - it always returns nullptr as params - as of now
+        AlgorithmIdentifier(ASN1Object root_object);
+
         ~AlgorithmIdentifier() {
             algorithm = 0;
             // params will get destroyed by themselves since it's a shared_ptr

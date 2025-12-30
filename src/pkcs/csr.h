@@ -5,6 +5,7 @@
 #include <string>
 #include "pkcs/pkcs.h"
 #include "pkcs/public_key.h"
+#include "utils/utils.hpp"
 
 namespace CBZ::PKCS {
 
@@ -17,7 +18,7 @@ namespace CBZ::PKCS {
         };
 
         // unordered map that maps algorithm_t types to it's correspoing OID
-        extern const std::unordered_map<uint32_t, std::string> algorithmMap;
+        extern const CBZ::Utils::BidirectionalMap<uint32_t, std::string> algorithmMap;
     }
 
     // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1
@@ -56,6 +57,9 @@ namespace CBZ::PKCS {
         ) :
         _algorithm{algorithm},
         _subject_public_key(std::move(n), std::move(e)) {}
+
+        // This constructor acts like a "from_asn1"
+        SubjectPublicKeyInfo(ASN1Object root_object);
 
         ASN1Object to_asn1() const;
 
@@ -130,7 +134,11 @@ namespace CBZ::PKCS {
             std::vector<std::pair<std::vector<uint8_t>, ASN1Tag>> list
         );
 
+        // This constructor acts like a "from_asn1"
+        Attribute(ASN1Object root_object);
+
         ASN1Object to_asn1() const;
+
         // returns encoded bytes
         // It assumes that tag stores sensible information
         std::vector<uint8_t> encode() const; 
@@ -143,7 +151,7 @@ namespace CBZ::PKCS {
         inline const std::vector<std::pair<variant_object, ASN1Tag>>& getValuesReference() const { return _values; }
     };
 
-    // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1.indicates what kind of value is stored in this SEQUENCE
+    // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1 indicates what kind of value is stored in this SEQUENCE
     //     type     AttributeType,
     //     value    AttributeValue }
     //   AttributeType ::= OBJECT IDENTIFIER
@@ -174,6 +182,9 @@ namespace CBZ::PKCS {
         // Example: PKCS::AttributeTypeAndValue ATAV3{"2.5.4.6", "PL", PRINTABLE_STRING};
         // Here ASN1_tag is defined explicitly so we need check if it's a string type and then if it doesn't contain illega chars
         AttributeTypeAndValue(std::string type, std::string value, ASN1Tag value_type);
+
+        // This constructor acts like a "from_asn1"
+        AttributeTypeAndValue(ASN1Object root_object);
 
         ASN1Object to_asn1() const;
 
@@ -215,6 +226,9 @@ namespace CBZ::PKCS {
         RelativeDistinguishedName(std::initializer_list<AttributeTypeAndValue> list)
             : _atavs(list) {}
 
+        // This constructor acts like a "from_asn1"
+        RelativeDistinguishedName(ASN1Object root_object);
+
         ASN1Object to_asn1() const;
 
         // returns RelativeDistinguishedName as DER encoded bytes
@@ -254,6 +268,9 @@ namespace CBZ::PKCS {
 
         // Example: vector<pair<string,string>> vec1{{"2.5.4.6","PL"}, {"2.5.4.10","AGH"}}; RDNSequence rdsn1(vec1);
         RDNSequence(std::vector<std::pair<std::string, std::string>> list);
+
+        // This constructor acts like a "from_asn1"
+        RDNSequence(ASN1Object root_object);
 
         // reference getter
         inline const std::vector<PKCS::RelativeDistinguishedName>& getRDNSequenceReference() const { return _rdn_sequence; }
@@ -307,7 +324,6 @@ namespace CBZ::PKCS {
         _attributes(std::move(attributes)) {}
 
 
-
         // Example:
         //CertificationRequestInfo CRI3( { {"2.5.4.6","PL"}, {"2.5.4.8", "Lesser Poland"}, {"2.5.4.10", "AGH"} },
         //                              rsaEncryption, std::move(mpz_class("1234567890")), std::move(mpz_class("987654321")),
@@ -335,14 +351,8 @@ namespace CBZ::PKCS {
             std::move(attributes)
         ) {}
 
-        // Same as above but use string with OID instead of algorithm_t
-        // CertificationRequestInfo::CertificationRequestInfo(
-        //     std::vector<std::pair<std::string, std::string>> subject_name,
-        //     std::string algorithm,
-        //     mpz_class n,
-        //     mpz_class e,
-        //     std::vector<std::pair<std::string, std::string>> attributes
-        // );
+        // This constructor acts like a "from_asn1"
+        CertificationRequestInfo(ASN1Object root_object);
 
         ASN1Object to_asn1() const;
 
@@ -418,15 +428,7 @@ namespace CBZ::PKCS {
             sig_algorithm
         ) {}
 
-        // CertificationRequest(
-        //     std::vector<std::pair<std::string, std::string>> subject_name,
-        //     std::string algorithm,
-        //     mpz_class n,
-        //     mpz_class e,
-        //     std::vector<std::pair<std::string, std::string>> attributes,
-        //     std::string sig_algorithm) :
-        //     _certification_request_info(std::move(subject_name), std::move(algorithm), std::move(n), std::move(e), std::move(attributes)),
-        //     _signature_algorithm(std::move(sig_algorithm)) {}
+        CertificationRequest(ASN1Object root_object);
 
         // << getters
         inline const CertificationRequestInfo& getCertificationRequestInfoReference() const { return _certification_request_info; };

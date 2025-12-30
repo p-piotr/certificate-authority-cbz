@@ -34,6 +34,9 @@ namespace CBZ::PKCS {
         RSAPublicKey(RSAPrivateKey const& private_key)
             : _n(private_key.n()), _e(private_key.e()) {}
 
+        // This constructor acts like a "from_asn1"
+        RSAPublicKey(ASN1Object root_object);
+
         void print() const;
 
         ASN1::ASN1Object to_asn1() const;

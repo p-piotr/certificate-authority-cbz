@@ -31,6 +31,26 @@ namespace CBZ::PKCS {
         {"1.2.840.113549.1.9.7",   UTF8_STRING}         // challengePassword
     };
 
+    AlgorithmIdentifier::AlgorithmIdentifier(ASN1Object root_object) {
+        auto _semantics_failed = []() {
+            CBZ::Utils::universal_throw("[AlgorithmIdentifier::AlgorithmIdentifier] Semantic check failed");
+        };
+
+        if (root_object.tag() != ASN1Tag::SEQUENCE) _semantics_failed();
+        if (root_object.children().size() != 2) _semantics_failed();
+        if (root_object.children()[0].tag() != ASN1Tag::OBJECT_IDENTIFIER) _semantics_failed();
+
+        // decode
+
+        std::string algorithm_oid = static_cast<const ASN1ObjectIdentifier>(root_object.children()[0]).value();
+        auto r_find = CSRSupportedAlgorithms::algorithmMap.reverse_find(algorithm_oid);
+        if (r_find == CSRSupportedAlgorithms::algorithmMap.reverse_end())
+            throw std::runtime_error("[AlgorithmIdentifier::AlgorithmIdentifier] Unsupported algorithm");
+
+        algorithm = r_find->second;
+        params = std::shared_ptr<void>(nullptr);
+    }
+
     ASN1Object AlgorithmIdentifier::to_asn1() const {
         auto find = CSRSupportedAlgorithms::algorithmMap.find(algorithm);
         if (find == CSRSupportedAlgorithms::algorithmMap.end())
@@ -136,6 +156,43 @@ namespace CBZ::PKCS {
         for (auto& v : list){
             _values.emplace_back(std::move(v.first), v.second);
         }
+    }
+
+    Attribute::Attribute(ASN1Object root_object) {
+        auto _semantics_failed = []() {
+            CBZ::Utils::universal_throw("[Attribute::Attribute] Semantic check failed");
+        };
+
+        if (root_object.tag() != ASN1Tag::SEQUENCE) _semantics_failed();
+        if (root_object.children().size() != 2) _semantics_failed();
+        if (root_object.children()[0].tag() != ASN1Tag::OBJECT_IDENTIFIER) _semantics_failed();
+        if (root_object.children()[1].tag() != ASN1Tag::SET) _semantics_failed();
+
+        // decode
+
+        std::vector<std::pair<variant_object, ASN1Tag>> values;
+
+        try {
+            for (const ASN1Object& value : root_object.children()[1].children()) {
+                ASN1Tag tag = value.tag();
+                variant_object val;
+                if (
+                    tag == PRINTABLE_STRING
+                    || tag == IA5_STRING
+                    || tag == UTF8_STRING
+                ) {
+                    val = std::string(value.value().begin(), value.value().end());
+                } else {
+                    val = std::vector<uint8_t>(value.value().begin(), value.value().end());
+                }
+                values.emplace_back(std::move(val), tag);
+            }
+        } catch (const std::exception& e) {
+            _semantics_failed();
+        }
+
+        _type = static_cast<const ASN1ObjectIdentifier&>(root_object.children()[0]).value();
+        _values = std::move(values);
     }
 
     ASN1Object Attribute::to_asn1() const {
@@ -253,6 +310,29 @@ namespace CBZ::PKCS {
         return os;
     }
 
+    SubjectPublicKeyInfo::SubjectPublicKeyInfo(ASN1Object root_object) {
+        auto _semantics_failed = []() {
+            CBZ::Utils::universal_throw("[SubjectPublicKeyInfo::SubjectPublicKeyInfo] Semantic check failed");
+        };
+
+        if (root_object.tag() != ASN1Tag::SEQUENCE) _semantics_failed();
+
+        // decode
+
+        AlgorithmIdentifier algorithm;
+        RSAPublicKey subject_public_key;
+
+        try {
+            algorithm = AlgorithmIdentifier(root_object.children()[0]);
+            subject_public_key = RSAPublicKey(root_object.children()[1]);
+        } catch (const std::exception &e) {
+            _semantics_failed();
+        }
+
+        _algorithm = std::move(algorithm);
+        _subject_public_key = std::move(subject_public_key);
+    }
+
     ASN1Object SubjectPublicKeyInfo::to_asn1() const {
         return ASN1Sequence({
             _algorithm.to_asn1(), // here's the MaksymilianOliwa legacy code
@@ -288,7 +368,7 @@ namespace CBZ::PKCS {
         }
 
         if(validate_string_type(value, _value_type) == false){
-            throw std::runtime_error("AttributeTypeAndValue(string, string): attempt to create object with value that contains illegal characters");
+            throw std::runtime_error("[AttributeTypeAndValue::AttributeTypeAndValue(string, string)] Attempt to create object with value that contains illegal characters");
         }
         _type = std::move(type);
         _value = std::move(value);
@@ -300,12 +380,41 @@ namespace CBZ::PKCS {
         if(value_type != UTF8_STRING && 
             value_type != IA5_STRING && 
             value_type != PRINTABLE_STRING){
-            throw std::runtime_error("AttributeTypeAndValue(string, string, ASN1_tag): values different than strings that are currently not handled");
+            throw std::runtime_error("[AttributeTypeAndValue::AttributeTypeAndValue(string, string, ASN1_tag)] Values different than strings that are currently not handled");
         }
 
         if(validate_string_type(_value,_value_type) == false){
-            throw std::runtime_error("AttributeTypeAndValue(string, string, ASN1_tag): attempt to create object with value that contains illegal characters");
+            throw std::runtime_error("[AttributeTypeAndValue::AttributeTypeAndValue(string, string, ASN1_tag)] Attempt to create object with value that contains illegal characters");
         }
+        _value_type = value_type;
+        _type = std::move(type);
+        _value = std::move(value);
+    }
+
+    AttributeTypeAndValue::AttributeTypeAndValue(ASN1Object root_object) {
+        auto _semantics_failed = []() {
+            CBZ::Utils::universal_throw("[AttributeTypeAndValue::AttributeTypeAndValue(ASN1Object)] Semantic check failed");
+        };
+
+        // perform semantic check
+        if (root_object.tag() != ASN1Tag::SEQUENCE) _semantics_failed();
+        if (root_object.children().size() != 2) _semantics_failed();
+        if (root_object.children()[0].tag() != ASN1Tag::OBJECT_IDENTIFIER) _semantics_failed();
+
+        // decode
+        const std::vector<uint8_t>& value_vector = root_object.children()[1].value();
+        ASN1Tag value_type;
+        std::string type;
+        std::string value;
+
+        try {
+            value_type = root_object.children()[1].tag();
+            type = static_cast<const ASN1ObjectIdentifier>(root_object.children()[0]).value();
+            value = std::string(value_vector.begin(), value_vector.end());
+        } catch (const std::exception& e) {
+            _semantics_failed();
+        }
+
         _value_type = value_type;
         _type = std::move(type);
         _value = std::move(value);
@@ -333,6 +442,28 @@ namespace CBZ::PKCS {
             << atav._value 
             << "} ";
         return os;
+    }
+
+    RelativeDistinguishedName::RelativeDistinguishedName(ASN1Object root_object) {
+        auto _semantics_failed = []() {
+            CBZ::Utils::universal_throw("[RelativeDistinguishedName::RelativeDistinguishedName(ASN1Object)] Semantic check failed");
+        };
+
+        // perform semantic check
+        if (root_object.tag() != ASN1Tag::SET) _semantics_failed();
+        // further checks will be performed by the set children themselves (in their constructor)
+
+        // decode
+        std::vector<AttributeTypeAndValue> atavs;
+        try {
+            for (const ASN1Object& child : root_object.children()) {
+                atavs.push_back(AttributeTypeAndValue(child));
+            }
+        } catch (const std::exception& e) {
+            _semantics_failed();
+        }
+
+        _atavs = std::move(atavs);
     }
 
     ASN1Object RelativeDistinguishedName::to_asn1() const {
@@ -372,6 +503,28 @@ namespace CBZ::PKCS {
         for(auto& [OID, val] : list){
             _rdn_sequence.emplace_back(std::move(OID), std::move(val));
         }
+    }
+
+    RDNSequence::RDNSequence(ASN1Object root_object) {
+        auto _semantics_failed = []() {
+            CBZ::Utils::universal_throw("[RDNSequence::RDNSequence(ASN1Object)] Semantic check failed");
+        };
+
+        // perform semantic check
+        if (root_object.tag() != ASN1Tag::SEQUENCE) _semantics_failed();
+        // further checks will be performed by the sequence children themselves (in their constructor)
+
+        // decode
+        std::vector<RelativeDistinguishedName> rdn_sequence;
+        try {
+            for (const ASN1Object& child : root_object.children()) {
+                rdn_sequence.push_back(RelativeDistinguishedName(child));
+            }
+        } catch (const std::exception& e) {
+            _semantics_failed();
+        }
+
+        _rdn_sequence = std::move(rdn_sequence);
     }
 
     ASN1Object RDNSequence::to_asn1() const {
@@ -419,20 +572,40 @@ namespace CBZ::PKCS {
         }
     }
 
-    // CertificationRequestInfo::CertificationRequestInfo(
-    //     std::vector<std::pair<std::string, std::string>> subject_name,
-    //     std::string algorithm,
-    //     mpz_class n,
-    //     mpz_class e,
-    //     std::vector<std::pair<std::string, std::string>> attributes
-    // )
-    // : _subject_name(std::move(subject_name)),
-    // _subject_pkinfo(std::move(algorithm), std::move(n), std::move(e))
-    // {
-    //     for(auto& [OID, val] : attributes){
-    //         _attributes.emplace_back(std::move(OID), std::move(val));
-    //     }
-    // }
+    CertificationRequestInfo::CertificationRequestInfo(ASN1Object root_object) {
+        auto _semantics_failed = []() {
+            CBZ::Utils::universal_throw("[CertificationRequestInfo::CertificationRequestInfo] Semantic check failed");
+        };
+
+        if (root_object.tag() != ASN1Tag::SEQUENCE || root_object.children().size() != 4) _semantics_failed();
+        if (root_object.children()[0].tag() != ASN1Tag::INTEGER) _semantics_failed();
+        if (root_object.children()[3].tag() != ASN1Tag::CONSTRUCTED_TYPE) _semantics_failed();
+
+        // decode
+
+        mpz_class version = static_cast<const ASN1Integer&>(root_object.children()[0]).value();
+        if (version != 0) {
+            throw std::runtime_error("[CertificationRequestInfo::CertificationRequestInfo] version != 0");
+        }
+
+        RDNSequence subject_name;
+        SubjectPublicKeyInfo subject_pkinfo;
+        std::vector<Attribute> attributes;
+
+        try {
+            subject_name = RDNSequence(root_object.children()[1]);
+            subject_pkinfo = SubjectPublicKeyInfo(root_object.children()[2]);
+            for (const ASN1Object& attr : root_object.children()[3].children()) {
+                attributes.push_back(Attribute(attr));
+            }
+        } catch (const std::exception &e) {
+            _semantics_failed();
+        }
+
+        _subject_name = std::move(subject_name);
+        _subject_pkinfo = std::move(subject_pkinfo);
+        _attributes = std::move(attributes);
+    }
 
     ASN1Object CertificationRequestInfo::to_asn1() const {
         std::vector<ASN1Object> components = {
@@ -447,9 +620,9 @@ namespace CBZ::PKCS {
         
         components.push_back(ASN1Object(CONSTRUCTED_TYPE, std::move(attrs)));
 
-        return ASN1Sequence({
+        return ASN1Sequence(
             std::move(components)
-        });
+        );
     }
 
     std::vector<uint8_t> CertificationRequestInfo::encode() const {
@@ -477,6 +650,34 @@ namespace CBZ::PKCS {
         return os;
     }
 
+    CertificationRequest::CertificationRequest(ASN1Object root_object) {
+        auto _semantics_failed = []() {
+            CBZ::Utils::universal_throw("[CertificationRequest::CertificationRequest] Semantic check failed");
+        };
+
+        if (root_object.tag() != ASN1Tag::SEQUENCE) _semantics_failed();
+        if (root_object.children().size() != 3) _semantics_failed();
+        if (root_object.children()[2].tag() != ASN1Tag::BIT_STRING) _semantics_failed();
+
+        // decode
+
+        CertificationRequestInfo certification_request_info;
+        AlgorithmIdentifier signature_algorithm;
+        std::vector<uint8_t> signature;
+
+        try {
+            certification_request_info = CertificationRequestInfo(root_object.children()[0]);
+            signature_algorithm = AlgorithmIdentifier(root_object.children()[1]);
+            signature = static_cast<const ASN1BitString&>(root_object.children()[2]).value();
+        } catch (const std::exception& e) {
+            _semantics_failed();
+        }
+
+        _certification_request_info = std::move(certification_request_info);
+        _signature_algorithm = std::move(signature_algorithm);
+        _signature = std::move(signature);
+    }
+
     ASN1Object CertificationRequest::to_asn1() const {
         return ASN1Sequence({
             _certification_request_info.to_asn1(),
@@ -487,7 +688,6 @@ namespace CBZ::PKCS {
 
     std::vector<uint8_t> CertificationRequest::encode() const {
         return this->to_asn1().encode();
-
     }
 
     // generate signature for CSR
@@ -522,8 +722,7 @@ namespace CBZ::PKCS {
     }
 
     namespace CSRSupportedAlgorithms {
-
-        const std::unordered_map<uint32_t, std::string> algorithmMap = {
+        const CBZ::Utils::BidirectionalMap<uint32_t, std::string> algorithmMap = {
             {rsaEncryption,             "1.2.840.113549.1.1.1"  },
             {sha256WithRSAEncryption,   "1.2.840.113549.1.1.11" },
             {sha256,                    "2.16.840.1.101.3.4.2.1"},
