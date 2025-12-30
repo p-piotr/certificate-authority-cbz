@@ -84,17 +84,46 @@ namespace CBZ::PKCS {
             case PrivateKeyAlgorithms::rsaEncryption: {
                 // According to the rsaEncryption PKCS specification, the private_key OCTET STRING
                 // is actually a SEQUENCE containing 9 INTEGERs
-                if (private_key.children().size() == 0) {
-                    // Decode the private_key according to the PKCS#1 structure, since
-                    // the ASN.1 parser didn't do it (it's a Primitive OCTET STRING after all)
-                    ASN1Object pk_sequence = ASN1Parser::decode_all(std::move(private_key.value()));
-                    if (pk_sequence.children().size() != 9)
-                        return ERR_SEMANTIC_CHECK_FAILED;
+                auto _private_key_semantic_check = [&](const ASN1Object& _pk_sequence) {
+                    if (_pk_sequence.tag() != ASN1Tag::SEQUENCE) {
+                        return false;
+                    }
+                    if (_pk_sequence.children().size() != 9) {
+                        return false;
+                    }
+                    for (const ASN1Object& child : _pk_sequence.children()) {
+                        if (child.tag() != ASN1Tag::INTEGER) {
+                            return false;
+                        }
+                    }
+                    return true;
+                };
 
-                    private_key._children.push_back(pk_sequence);
-                } else if (private_key.children()[0].children().size() != 9)
+                if (private_key.children().size() != 0) {
+                    // private key has already been decoded - just check if everything
+                    // is intact
+                    if (!_private_key_semantic_check(private_key.children()[0])) {
+                        return ERR_SEMANTIC_CHECK_FAILED;
+                    }
+                    return ERR_OK;
+                }
+
+                // else private_key.children().size() == 0 - unencoded
+                //
+                // Decode the private_key according to the PKCS#1 structure, since
+                // the ASN.1 parser didn't do it (it's a Primitive OCTET STRING after all)
+                ASN1Object pk_sequence = ASN1Parser::decode_all(private_key.value());
+                if (!_private_key_semantic_check(pk_sequence))
                     return ERR_SEMANTIC_CHECK_FAILED;
 
+                private_key._children.push_back(pk_sequence);
+
+                // ASN1Parser::decode_all takes a const reference, so since we want
+                // to replace _value with appropriately decoded _children
+                // (an object cannot have both _value and _children)
+                // we need to zero + resize the _value field
+                CBZ::Security::secure_zero_memory(private_key.value()); // zero-out a modifiable reference
+                private_key.value().resize(0); // and resize to 0
                 return ERR_OK;
             }
             default:

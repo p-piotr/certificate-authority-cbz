@@ -9,12 +9,28 @@
 
 namespace CBZ::PKCS {
 
-    // https://www.rfc-editor.org/rfc/rfc2313.html#section-7.1
+    // Object representing an RSA Public Key (PKCS#10)
+    //
+    // Technically speaking, the RSA public key has the following structure:
     // 
     // RSAPublicKey ::= SEQUENCE {
     //   modulus INTEGER, -- n
     //   publicExponent INTEGER -- e
     // }
+    //
+    // (https://www.rfc-editor.org/rfc/rfc2313.html#section-7.1)
+    //
+    // However, this object rather represents it as wrapped inside the ASN.1 Bit String,
+    // like so:
+    //
+    // subjectPublicKey ::= BIT STRING {
+    //   RSAPublicKey SEQUENCE {
+    //     modulus INTEGER, -- n
+    //     publicExponent INTEGER -- e
+    //   }
+    // }
+    //
+    // (https://datatracker.ietf.org/doc/html/rfc5280#section-4.1)
     class RSAPublicKey{
     private:
         mpz_class _n;
@@ -51,4 +67,6 @@ namespace CBZ::PKCS {
         // << operator
         friend std::ostream& operator<<(std::ostream& os, const RSAPublicKey& PK);
     };
+
+    int _RSAPublicKey_check_and_expand(ASN1Object& root_object);
 }

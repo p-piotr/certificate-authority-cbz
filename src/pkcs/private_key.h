@@ -12,6 +12,19 @@ namespace CBZ::PKCS {
     using namespace CBZ::ASN1;
 
     // Object representing an RSA private key (PKCS#1 compatible)
+    //
+    // Technically speaking, this object does not represent an RSA private key per se,
+    // but rather the PKCS PrivateKeyInfo using rsaEncryption as the privateKeyAlgorithm
+    // and without any attributes in 'attributes' field (rsaEncryption does not specify any)
+    //
+    // PrivateKeyInfo ::= SEQUENCE {
+    //   version                   Version,
+    //   privateKeyAlgorithm       PrivateKeyAlgorithmIdentifier,
+    //   privateKey                PrivateKey,
+    //   attributes           [0]  IMPLICIT Attributes OPTIONAL 
+    // }
+    //
+    // See: https://datatracker.ietf.org/doc/html/rfc5208#section-5
     class RSAPrivateKey {
     private:
         mpz_class _version;

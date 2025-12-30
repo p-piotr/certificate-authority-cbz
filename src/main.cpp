@@ -127,9 +127,11 @@ int main(int argc, char* argv[]){
 
     test_signature_verification(certification_request);
 
+    certification_request.to_asn1().print();
+
     try {
         PKCS::CertificationRequest request(certification_request.to_asn1());
-        std::cout << request << std::endl;
+        std::cout << std::endl << request << std::endl;
     } catch (const std::exception &e) {
         CBZ::Utils::print_nested(e);
     }

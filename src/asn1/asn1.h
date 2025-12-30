@@ -21,6 +21,9 @@ namespace CBZ {
         int _RSAPrivateKey_check_and_expand(
             ASN1::ASN1Object& root_object
         );
+        int _RSAPublicKey_check_and_expand(
+            ASN1::ASN1Object& root_object
+        );
     }
 
     namespace ASN1 {
@@ -250,6 +253,9 @@ namespace CBZ {
 
             friend class ASN1Parser;
             friend int PKCS::_RSAPrivateKey_check_and_expand(
+                ASN1Object& root_object
+            );
+            friend int PKCS::_RSAPublicKey_check_and_expand(
                 ASN1Object& root_object
             );
         };
