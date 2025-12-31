@@ -62,7 +62,7 @@ all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	mkdir -p $(TARGET_DIR)
-	$(CXX) $(CXXFLAGS) $(OBJS) $(LIBS) -O3 -o $@
+	$(CXX) $(CXXFLAGS) $(OBJS) $(LIBS) -O3 -DNDEBUG -o $@
 
 debug: $(DEBUG_TARGET)
 
