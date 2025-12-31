@@ -7,7 +7,6 @@
 #include <variant>
 #include <utility>
 #include "pkcs/pkcs.h"
-#include "pkcs/csr.h"
 #include "pkcs/public_key.h"
 #include "pkcs/sign.h"
 #include "asn1/asn1.h"

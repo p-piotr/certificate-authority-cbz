@@ -2,6 +2,7 @@
 #include <vector>
 #include "asn1/asn1.h"
 #include "pkcs/public_key.h"
+#include "pkcs/pkcs.h"
 #include "utils/utils.hpp"
 
 namespace CBZ::PKCS {

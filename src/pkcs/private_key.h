@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <gmpxx.h>
 #include <stdexcept>
-#include "pkcs/pkcs.h"
 #include "asn1/asn1.h"
 
 namespace CBZ::PKCS {
