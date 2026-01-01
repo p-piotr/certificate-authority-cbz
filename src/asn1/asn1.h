@@ -6,6 +6,7 @@
 #include <memory>
 #include <span>
 #include <gmpxx.h>
+#include <chrono>
 #include "utils/security.hpp"
 
 namespace CBZ {
@@ -45,6 +46,9 @@ namespace CBZ {
             SET = 0x31,
             CONSTRUCTED_TYPE = 0xA0,
         };
+
+        //typedef decltype(std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now())) asn1date_t;
+        typedef decltype(std::chrono::system_clock::now()) asn1date_t;
 
         // Converts an ASN.1 tag (enum) to string
         const char* tag_to_string(ASN1Tag tag);
@@ -128,8 +132,8 @@ namespace CBZ {
             // ASN.1 OBJECT IDENTIFIER decoder - outputs a string (eg. "1.23.4567.89.0")
             //
             // Input:
-            // @obj_id_data - ASN1ObjectData containing the OBJECT IDENTIFIER
-            static std::string object_identifier_decode(const std::vector<uint8_t>& data);
+            // @obj_id_data - buffer containing the OBJECT IDENTIFIER
+            static std::string object_identifier_decode(const std::vector<uint8_t>& obj_id_bin);
 
             // Encodes a GMP integer to the binary form, big-endian (ANS.1 compatibile), returning a buffer
             //
@@ -140,8 +144,32 @@ namespace CBZ {
             // Decodes a buffer holding binary data into a GMP integer and returns it
             //
             // Input:
-            // @data - ASN1ObjectData containing the integer
-            static mpz_class integer_decode(const std::vector<uint8_t>& data);
+            // @data - buffer containing the integer
+            static mpz_class integer_decode(const std::vector<uint8_t>& num_bin);
+
+            // Encodes a generalized date to the binary form, returning a buffer
+            //
+            // Input:
+            // @date - date to encode
+            static std::vector<uint8_t> generalized_time_encode(const asn1date_t& date);
+
+            // Decodes a buffer holding binary data into a generalized date and returns it
+            //
+            // Input:
+            // @data - buffer containing the date
+            static asn1date_t generalized_time_decode(const std::vector<uint8_t>& date_bin);
+
+            // Encodes a UTC date to the binary form, returning a buffer
+            //
+            // INput:
+            // @date - date to encode
+            static std::vector<uint8_t> utc_time_encode(const asn1date_t& date);
+
+            // Decodes a buffer holding binary data into a UTC date and returns it
+            //
+            // Input:
+            // @data - buffer containing the date
+            static asn1date_t utc_time_decode(const std::vector<uint8_t>& date_bin);
 
             ASN1Parser() = delete;
             ~ASN1Parser() = delete;
@@ -355,6 +383,19 @@ namespace CBZ {
         public:
             explicit ASN1Set(std::vector<ASN1Object> children)
                 : ASN1Object(SET, set_sort(std::move(children))) {}
+        };
+
+
+        class ASN1UTCTime : public ASN1Object {
+        public:
+            explicit ASN1UTCTime(asn1date_t date)
+                : ASN1Object(UTC_TIME, ASN1Parser::utc_time_encode(std::move(date))) {}
+        };
+
+        class ASN1GeneralizedTime : public ASN1Object {
+        public:
+            explicit ASN1GeneralizedTime(asn1date_t date)
+                : ASN1Object(GENERALIZED_TIME, ASN1Parser::generalized_time_encode(std::move(date))) {}
         };
     }
 }

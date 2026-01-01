@@ -8,6 +8,7 @@
 #include <gmpxx.h>
 #include <cctype>
 #include <sstream>
+#include <cassert>
 #include "asn1/asn1.h"
 #include "utils/security.hpp"
 #include "utils/utils.hpp"
@@ -479,14 +480,14 @@ namespace CBZ::ASN1 {
     // ASN.1 OBJECT IDENTIFIER decoder - outputs a string (eg. "1.23.4567.89.0")
     // Input:
     // @obj_id - vector containing binary representatoin of the OBJECT IDENTIFIER
-    std::string ASN1Parser::object_identifier_decode(std::vector<uint8_t> const& data) {
+    std::string ASN1Parser::object_identifier_decode(std::vector<uint8_t> const& obj_id_bin) {
         std::string integer_str;
         std::string result = "";
-        auto rb = data.crbegin();
+        auto rb = obj_id_bin.crbegin();
         auto re = rb + 1;
 
         // parse (from the end to the beginning), till the first two integers
-        while (re != data.crend()) {
+        while (re != obj_id_bin.crend()) {
             if (*re & 0x80) { // MSB set - continue
                 re++;
                 continue;
@@ -557,17 +558,17 @@ namespace CBZ::ASN1 {
     // Decodes a buffer holding binary data into a GMP integer and returns it
     // Input:
     // @buffer - buffer holding the integer in binary form (big-endian)
-    mpz_class ASN1Parser::integer_decode(std::vector<uint8_t> const& data) {
+    mpz_class ASN1Parser::integer_decode(std::vector<uint8_t> const& num_bin) {
         mpz_class num;
 
         mpz_import(
             num.get_mpz_t(),
-            data.size(),
+            num_bin.size(),
             1, // big-endian
             sizeof(uint8_t),
             1,
             0,
-            data.data()
+            num_bin.data()
         );
 
         return num;
@@ -588,5 +589,199 @@ namespace CBZ::ASN1 {
     {
         if (!validate_string_type(s, string_tag))
             throw std::runtime_error("[ASN1String::ASN1String] invalid string encoding or tag");
+    }
+
+    // simple date struct
+    struct s_date {
+        int year;
+        unsigned char month;
+        unsigned char day;
+        unsigned char hour;
+        unsigned char minute;
+        unsigned char second;
+    };
+
+    void _date_to_sdate(asn1date_t date, struct s_date* sdate) {
+        std::chrono::sys_days date_part = std::chrono::floor<std::chrono::days>(date);
+        auto time_part = date - date_part;
+
+        std::chrono::year_month_day ymd{date_part};
+
+        int year = static_cast<int>(ymd.year()); // int
+        unsigned char month = static_cast<unsigned char>(static_cast<unsigned>(ymd.month())); // unsigned char
+        unsigned char day = static_cast<unsigned char>(static_cast<unsigned>(ymd.day())); // unsigned char
+
+        std::chrono::hh_mm_ss hms{time_part};
+
+        unsigned char hour = static_cast<unsigned char>(hms.hours().count());
+        unsigned char minute = static_cast<unsigned char>(hms.minutes().count());
+        unsigned char second = static_cast<unsigned char>(hms.seconds().count());
+
+        *sdate = {
+            .year = year,
+            .month = month,
+            .day = day,
+            .hour = hour,
+            .minute = minute,
+            .second = second
+        };
+    }
+
+    void _sdate_to_date(const struct s_date* sdate, asn1date_t* date) {
+        auto year = std::chrono::year(sdate->year);
+        auto month = std::chrono::month(sdate->month);
+        auto day = std::chrono::day(sdate->day);
+        auto hour = std::chrono::hours(sdate->hour);
+        auto minute = std::chrono::minutes(sdate->minute);
+        auto second = std::chrono::seconds(sdate->second);
+
+        *date = std::chrono::sys_days{std::chrono::year_month_day{year, month, day}}
+            + hour + minute + second;
+        
+    }
+
+    std::vector<uint8_t> _date_to_vector(struct s_date* sdate, bool generalized_format=false) {
+        if (sdate == nullptr) {
+            return {};
+        }
+        // Helper function which splits given two-digit decimal number
+        // and pushes them back into a vector
+        // e.g. 12 -> '1', '2' -> 0x31, 0x32
+        auto _d_h = [&](unsigned char n, std::vector<uint8_t> &v) {
+            assert((n <= 99) && "Given integer must be a one-digit or two-digit decimal");
+
+            uint8_t f = (n / 10) + 0x30;
+            uint8_t s = (n % 10) + 0x30;
+
+            v.push_back(f);
+            v.push_back(s);
+        };
+
+        // From https://datatracker.ietf.org/doc/html/rfc5280#section-4.1.2.5.1:
+        //
+        // "For the purposes of this profile, UTCTime values MUST be expressed in
+        // Greenwich Mean Time (Zulu) and MUST include seconds (i.e., times are
+        // YYMMDDHHMMSSZ), even where the number of seconds is zero.  Conforming
+        // systems MUST interpret the year field (YY) as follows:
+        //
+        // Where YY is greater than or equal to 50, the year SHALL be
+        // interpreted as 19YY; and
+        //
+        // Where YY is less than 50, the year SHALL be interpreted as 20YY."
+
+        std::vector<uint8_t> result;
+
+        // i could've written it differently but i didn't bother
+        if (generalized_format) {
+            unsigned char y4 = (sdate->year % 10) + 0x30;
+            unsigned char y3 = ((sdate->year % 100)/10) + 0x30;
+            unsigned char y2 = ((sdate->year % 1000)/100) + 0x30;
+            unsigned char y1 = (sdate->year / 1000) + 0x30;
+            result.push_back(y1);
+            result.push_back(y2);
+            result.push_back(y3);
+            result.push_back(y4);
+        } else {
+            unsigned char year_sliced = sdate->year % 100;
+            _d_h(year_sliced, result);
+        }
+
+        _d_h(sdate->month, result);
+        _d_h(sdate->day, result);
+        _d_h(sdate->hour, result);
+        _d_h(sdate->minute, result);
+        _d_h(sdate->second, result);
+
+        result.push_back(0x5A); // 'Z' as in Zulu (UTC+0)
+
+        return result;
+    }
+
+    asn1date_t _vector_to_date(const std::vector<uint8_t> &date_bin) {
+        assert((date_bin.size() == 13 || date_bin.size() == 15) && "Date MUST be either 13 bytes (UTCTime), or 15 bytes (GeneralizedTime)");
+
+        auto _d_h_r = [&](char ch1, char ch2) {
+            return (ch1 - 0x30) * 10 + (ch2 - 0x30);
+        };
+
+        int idx = 0;
+        int y = 0;
+
+        // check the date encoding and calculate year based on
+        // date_bin size (UTCTime or GeneralizedTime)
+        if (date_bin.size() == 13) {
+            // UTCTime
+            // quick check whether all elements are ascii digits (0x30 <= x <= 0x39)
+            for (int i = 0; i < 12; i++) {
+                if (date_bin[i] < 0x30 || date_bin[i] > 0x39) {
+                    throw std::runtime_error("[_vector_to_date] Invalid date encoding (UTCTime)");
+                }
+            }
+
+            char y_ltd = _d_h_r(date_bin[0], date_bin[1]); // last two digits of the year
+            idx += 2;
+            if (y_ltd >= 0 && y_ltd <= 49) {
+                y = 2000 + static_cast<int>(y_ltd);
+            } else {
+                y = 1900 + static_cast<int>(y_ltd);
+            }
+        } else if (date_bin.size() == 15) {
+            // GeneralizedTime
+            // quick check whether all elements are ascii digits (0x30 <= x <= 0x39)
+            for (int i = 0; i < 14; i++) {
+                if (date_bin[i] < 0x30 || date_bin[i] > 0x39) {
+                    throw std::runtime_error("[_vector_to_date] Invalid date encoding (GeneralizedTime)");
+                }
+            }
+
+            for (; idx < 4; idx++) {
+                y *= 10;
+                y += static_cast<int>((date_bin[idx] - 0x30));
+            }
+        }
+        unsigned m = _d_h_r(date_bin[idx], date_bin[idx+1]);
+        idx += 2;
+        unsigned d = _d_h_r(date_bin[idx], date_bin[idx+1]);
+        idx += 2;
+        int h = static_cast<int>(_d_h_r(date_bin[idx], date_bin[idx+1]));
+        idx += 2;
+        int mm = static_cast<int>(_d_h_r(date_bin[idx], date_bin[idx+1]));
+        idx += 2;
+        int s = static_cast<int>(_d_h_r(date_bin[idx], date_bin[idx+1]));
+        idx += 2;
+
+        if (date_bin[idx] != 'Z') {
+            throw std::runtime_error("[_vector_to_date] Only Zulu timezone is handled (RFC 5280)");
+        }
+
+        std::chrono::sys_days date_tp = std::chrono::sys_days{std::chrono::year_month_day{
+            std::chrono::year(y), std::chrono::month(m), std::chrono::day(d)
+        }};
+        asn1date_t final_tp = date_tp + std::chrono::hours(h) + 
+            std::chrono::minutes(mm) + std::chrono::seconds(s);
+
+        return final_tp;
+    }
+
+    std::vector<uint8_t> ASN1Parser::utc_time_encode(const asn1date_t& date) {
+        struct s_date sdate;
+        _date_to_sdate(date, &sdate);
+        std::vector<uint8_t> result = _date_to_vector(&sdate);
+        return result;
+    }
+
+    asn1date_t ASN1Parser::utc_time_decode(const std::vector<uint8_t>& date_bin) {
+        return _vector_to_date(date_bin);
+    }
+
+    std::vector<uint8_t> ASN1Parser::generalized_time_encode(const asn1date_t& date) {
+        struct s_date sdate;
+        _date_to_sdate(date, &sdate);
+        std::vector<uint8_t> result = _date_to_vector(&sdate, true);
+        return result;
+    }
+
+    asn1date_t ASN1Parser::generalized_time_decode(const std::vector<uint8_t>& date_bin) {
+        return _vector_to_date(date_bin);
     }
 }
