@@ -16,11 +16,11 @@ void test_signature_verification(CBZ::PKCS::CertificationRequest& CR){
     std::cout << std::endl << "testing signature verification" << std::endl;
 
     // get public key from certification certification request
-    const RSAPublicKey& pub_key = CR.getPublicKeyReference();
+    const RSAPublicKey& pub_key = CR.get_public_key();
     // get certifcationRequestInfo encoded as DER (that's the part of CSR that is actually signed)
-    const std::vector<uint8_t>& mess = CR.getCertificationRequestInfoReference().encode();
+    const std::vector<uint8_t>& mess = CR.get_certification_request_info().encode();
     // get signature
-    const std::vector<uint8_t>& signature = CR.getSignatureReference();
+    const std::vector<uint8_t>& signature = CR.get_signature();
     // verify signature
     std::cout << std::boolalpha << Signature::RSASSA_PKCS1_V1_5_VERIFY(pub_key, mess, signature) << std::endl;
 }

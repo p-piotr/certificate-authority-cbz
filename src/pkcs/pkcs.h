@@ -74,7 +74,7 @@ namespace CBZ::PKCS {
             int extract_algorithm(
                 const ASN1Object& algorithm,
                 struct AlgorithmIdentifier* out_ptr,
-                const std::string& oid = ""
+                const OID& oid = ""
             );
 
             namespace RSAEncryption {
@@ -96,7 +96,7 @@ namespace CBZ::PKCS {
             int extract_algorithm(
                 const ASN1Object& algorithm,
                 struct AlgorithmIdentifier* out_ptr,
-                const std::string& oid = ""
+                const OID& oid = ""
             );
 
             namespace PBES2 {
@@ -140,7 +140,7 @@ namespace CBZ::PKCS {
             int extract_algorithm(
                 const ASN1Object& algorithm,
                 struct AlgorithmIdentifier* out_ptr,
-                const std::string& oid = ""
+                const OID& oid = ""
             );
 
             namespace PBKDF2 {
@@ -189,7 +189,7 @@ namespace CBZ::PKCS {
             int extract_algorithm(
                 const ASN1Object& algorithm,
                 struct AlgorithmIdentifier* out_ptr,
-                const std::string& oid = ""
+                const OID& oid = ""
             );
 
             // This is a generic function for validating the HMACWithSHA* functions,
@@ -216,7 +216,7 @@ namespace CBZ::PKCS {
             int extract_algorithm(
                 const ASN1Object& algorithm,
                 struct AlgorithmIdentifier* out_ptr,
-                const std::string& oid = ""
+                const OID& oid = ""
             );
 
             namespace AES {
@@ -249,7 +249,7 @@ namespace CBZ::PKCS {
     // I just based this on what openssl uses, but here's more offical documentation
     // https://www.itu.int/rec/T-REC-X.520-201910-I/en
     // https://datatracker.ietf.org/doc/html/rfc2985
-    extern const std::unordered_map<std::string, ASN1Tag> attributeStringTypeMap;
+    extern const std::unordered_map<OID, ASN1Tag> attributeStringTypeMap;
 
     namespace CSRSupportedAlgorithms {
 
@@ -260,7 +260,21 @@ namespace CBZ::PKCS {
         };
 
         // unordered map that maps algorithm_t types to it's correspoing OID
-        extern const CBZ::Utils::BidirectionalMap<uint32_t, std::string> algorithmMap;
+        extern const CBZ::Utils::BidirectionalMap<uint32_t, OID> algorithmMap;
+    }
+
+    namespace ExtensionSupportedIDs {
+
+        // there are 15 extensions in total (https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1)
+        // we'll support only those 3 chosen empirically by inspecting which ones were present in a OpenSSL-generated
+        // certificate with no additional options
+        enum id_t : uint32_t {
+            authorityKeyIdentifier = 0x6001,
+            subjectKeyIdentifier,
+            basicConstraints
+        };
+
+        extern const CBZ::Utils::BidirectionalMap<uint32_t, OID> idMap;
     }
 
     // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1
@@ -312,8 +326,8 @@ namespace CBZ::PKCS {
         friend std::ostream& operator<<(std::ostream& os, const PKCS::SubjectPublicKeyInfo& SPKI);
 
         // getters
-        inline const PKCS::AlgorithmIdentifier& getAlgorithmReference() const { return _algorithm; }
-        inline const PKCS::RSAPublicKey& getPublicKeyReference() const { return _subject_public_key; }
+        inline const PKCS::AlgorithmIdentifier& get_algorithm() const { return _algorithm; }
+        inline const PKCS::RSAPublicKey& get_public_key() const { return _subject_public_key; }
 
     };
 
@@ -362,7 +376,7 @@ namespace CBZ::PKCS {
         Attribute(std::string type, std::initializer_list<std::pair<std::string, ASN1Tag>> list);
 
         // Multiple string constructor
-        // Exmaple Attribute Attr4("4.4.4.4", {"test", "TEST"});
+        // Example Attribute Attr4("4.4.4.4", {"test", "TEST"});
         Attribute(std::string type, std::initializer_list<std::string> list);
 
         // single byte array constructor
@@ -389,8 +403,8 @@ namespace CBZ::PKCS {
         friend std::ostream& operator<<(std::ostream& os, const PKCS::Attribute& ATTR);
 
         // getters
-        inline const std::string& getTypeReference() const { return _type; }
-        inline const std::vector<std::pair<variant_object, ASN1Tag>>& getValuesReference() const { return _values; }
+        inline const std::string& get_type() const { return _type; }
+        inline const std::vector<std::pair<variant_object, ASN1Tag>>& get_values() const { return _values; }
     };
 
     // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1 indicates what kind of value is stored in this SEQUENCE
@@ -434,9 +448,9 @@ namespace CBZ::PKCS {
         std::vector<uint8_t> encode() const;
 
         // getters to reference to private components
-        inline const std::string& getTypeReference() const { return _type; }
-        inline const std::string& getValueReference() const { return _value; }
-        inline const ASN1Tag& getValueTypeReference() const { return _value_type; }
+        inline const std::string& get_type() const { return _type; }
+        inline const std::string& get_value() const { return _value; }
+        inline const ASN1Tag& get_value_type() const { return _value_type; }
 
         // overload << operator to allow to seamlessly view contents of the class
         friend std::ostream& operator<<(std::ostream& os, const AttributeTypeAndValue& atav);
@@ -459,7 +473,7 @@ namespace CBZ::PKCS {
         RelativeDistinguishedName(AttributeTypeAndValue atav)
             : _atavs({std::move(atav)}) {}
 
-        // Exmaple: PKCS::RelativeDistinguishedName RDN3{"2.5.4.6", "PL"};
+        // Example: PKCS::RelativeDistinguishedName RDN3{"2.5.4.6", "PL"};
         // Used to create PKCS with a single element
         RelativeDistinguishedName(std::string oid, std::string value)
             : RelativeDistinguishedName((AttributeTypeAndValue(std::move(oid), std::move(value)))) {}
@@ -477,10 +491,10 @@ namespace CBZ::PKCS {
         std::vector<uint8_t> encode() const;
 
         // getter
-        inline const std::vector<AttributeTypeAndValue>& getAttributesReference() const { return _atavs; }
+        inline const std::vector<AttributeTypeAndValue>& get_attributes() const { return _atavs; }
 
         // overload << operator
-        friend std::ostream& operator<<(std::ostream& os, RelativeDistinguishedName const& RDN);
+        friend std::ostream& operator<<(std::ostream& os, const RelativeDistinguishedName& RDN);
     };
 
     // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1.2.4
@@ -515,7 +529,7 @@ namespace CBZ::PKCS {
         RDNSequence(ASN1Object root_object);
 
         // reference getter
-        inline const std::vector<PKCS::RelativeDistinguishedName>& getRDNSequenceReference() const { return _rdn_sequence; }
+        inline const std::vector<PKCS::RelativeDistinguishedName>& get_rdn_sequence() const { return _rdn_sequence; }
 
         ASN1Object to_asn1() const;
 
@@ -523,7 +537,7 @@ namespace CBZ::PKCS {
         std::vector<uint8_t> encode() const;
 
         // overloaded << operator
-        friend std::ostream& operator<<(std::ostream& os, PKCS::RDNSequence const& rdnS);
+        friend std::ostream& operator<<(std::ostream& os, const RDNSequence& rdnS);
     };
 
     //https://datatracker.ietf.org/doc/html/rfc2986#page-5
@@ -604,9 +618,9 @@ namespace CBZ::PKCS {
         friend std::ostream& operator<<(std::ostream& os, const CertificationRequestInfo& cri);
 
         // getters
-        inline const PKCS::RDNSequence& getSubjectNameReference() const { return _subject_name; }
-        inline const PKCS::SubjectPublicKeyInfo& getsubjectPKinfoReference() const { return _subject_pkinfo; }
-        inline const std::vector<Attribute>& getAttributesReference() const { return _attributes; }
+        inline const PKCS::RDNSequence& get_subject_name() const { return _subject_name; }
+        inline const PKCS::SubjectPublicKeyInfo& get_subject_pkinfo() const { return _subject_pkinfo; }
+        inline const std::vector<Attribute>& get_attributes() const { return _attributes; }
 
         // does not include signature
     };
@@ -618,7 +632,7 @@ namespace CBZ::PKCS {
     //       signatureAlgorithm AlgorithmIdentifier{{ SignatureAlgorithms }},
     //       signature          BIT STRING
     //  }
-    class CertificationRequest{
+    class CertificationRequest {
     private:
         CertificationRequestInfo _certification_request_info;
         AlgorithmIdentifier _signature_algorithm;
@@ -673,10 +687,10 @@ namespace CBZ::PKCS {
         CertificationRequest(ASN1Object root_object);
 
         // << getters
-        inline const CertificationRequestInfo& getCertificationRequestInfoReference() const { return _certification_request_info; };
-        inline const AlgorithmIdentifier& getSignatureAlgorithmReference() const { return _signature_algorithm; }
-        inline const std::vector<uint8_t>& getSignatureReference() const { return _signature; }
-        inline const RSAPublicKey& getPublicKeyReference() const { return _certification_request_info.getsubjectPKinfoReference().getPublicKeyReference(); }
+        inline const CertificationRequestInfo& get_certification_request_info() const { return _certification_request_info; };
+        inline const AlgorithmIdentifier& get_signature_algorithm() const { return _signature_algorithm; }
+        inline const std::vector<uint8_t>& get_signature() const { return _signature; }
+        inline const RSAPublicKey& get_public_key() const { return _certification_request_info.get_subject_pkinfo().get_public_key(); }
 
         ASN1Object to_asn1() const;
 
@@ -691,6 +705,121 @@ namespace CBZ::PKCS {
         std::vector<uint8_t> sign(RSAPrivateKey const& private_key);
 
         // << operator
-        friend std::ostream& operator<<(std::ostream& os, CertificationRequest& CR);
+        friend std::ostream& operator<<(std::ostream& os, const CertificationRequest& CR);
+    };
+
+    // https://datatracker.ietf.org/doc/html/rfc5280#appendix-A.1
+    //  Validity ::= SEQUENCE {
+    //      notBefore      Time,
+    //      notAfter       Time
+    //  }
+    //
+    //  Time ::= CHOICE {
+    //      utcTime        UTCTime,
+    //      generalTime    GeneralizedTime
+    //  }
+    class Validity {
+    private:
+        asn1date_t _not_before;
+        asn1date_t _not_after;
+
+    public:
+        Validity(asn1date_t not_before, asn1date_t not_after)
+            : _not_before(std::move(not_before)), _not_after(std::move(not_after)) {}
+
+        Validity(ASN1Object root_object);
+
+        inline const asn1date_t& get_not_before_date() const { return _not_before; }
+        inline const asn1date_t& get_not_after_date() const {return _not_after; }
+
+        ASN1Object to_asn1() const;
+
+        std::vector<uint8_t> encode() const;
+
+        friend std::ostream& operator<<(std::ostream& os, const Validity& validity);
+    };
+
+    // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1
+    //  CertificateSerialNumber  ::=  INTEGER
+    class CertificateSerialNumber {
+    private:
+        mpz_class _serial;
+
+    public:
+        CertificateSerialNumber(mpz_class serial) : _serial(std::move(serial)) {}
+
+        CertificateSerialNumber(ASN1Object root_object);
+
+        inline const mpz_class& get_serial_number() const { return _serial; }
+
+        ASN1Object to_asn1() const;
+
+        std::vector<uint8_t> encode() const;
+
+        friend std::ostream& operator<<(std::ostream& os, const CertificateSerialNumber& csn);
+    };
+
+    // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1
+    //  Extension  ::=  SEQUENCE  {
+    //     extnID      OBJECT IDENTIFIER,
+    //     critical    BOOLEAN DEFAULT FALSE,
+    //     extnValue   OCTET STRING
+    //                 -- contains the DER encoding of an ASN.1 value
+    //                 -- corresponding to the extension type identified
+    //                 -- by extnID
+    //     }
+    class Extension {
+    private:
+        OID _extn_id;
+        bool _critical;
+        std::string _extn_value;
+
+    public:
+        Extension(OID extn_id, bool critical, std::string extn_value)
+            : _extn_id(std::move(extn_id)), _critical(critical), _extn_value(std::move(extn_value)) {}
+
+        inline const OID& get_extn_id() const { return _extn_id; }
+        inline bool get_critical() const { return _critical; }
+        inline const std::string& get_extn_value() const { return _extn_value; }
+
+        ASN1Object to_asn1() const;
+
+        std::vector<uint8_t> encode() const;
+
+        friend std::ostream& operator<<(std::ostream& os, const Extension& ex);
+
+        // TODO: implement functions above
+    };
+
+    // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1
+    //  TBSCertificate  ::=  SEQUENCE  {
+    //       version         [0]  EXPLICIT Version DEFAULT v1,
+    //       serialNumber         CertificateSerialNumber,
+    //       signature            AlgorithmIdentifier,
+    //       issuer               Name,
+    //       validity             Validity,
+    //       subject              Name,
+    //       subjectPublicKeyInfo SubjectPublicKeyInfo,
+    //       issuerUniqueID  [1]  IMPLICIT UniqueIdentifier OPTIONAL,
+    //                            -- If present, version MUST be v2 or v3
+    //       subjectUniqueID [2]  IMPLICIT UniqueIdentifier OPTIONAL,
+    //                            -- If present, version MUST be v2 or v3
+    //       extensions      [3]  EXPLICIT Extensions OPTIONAL
+    //                            -- If present, version MUST be v3
+    //       }
+    class TBSCertificate {
+    private:
+        int _version = 2; // v3(2) - theoretically, this can be v1(0), v2(1), v3(2) - in practice, we'll issue only v3 certificates
+        mpz_class _serial_number;
+        AlgorithmIdentifier _signature;
+        RDNSequence _issuer;
+        Validity _validity;
+        RDNSequence _subject;
+        SubjectPublicKeyInfo _subject_public_key_info;
+        // issuerUniqueID and subjectUniqueID were replaced by extensions with the introduction of v3
+        // and thus are effectively not used nowadays, so we omit them
+        std::vector<Extension> _extensions;
+
+        // TODO: finish
     };
 }

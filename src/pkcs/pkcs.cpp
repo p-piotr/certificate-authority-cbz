@@ -6,6 +6,7 @@
 #include <span>
 #include <variant>
 #include <utility>
+#include <format>
 #include "pkcs/pkcs.h"
 #include "pkcs/public_key.h"
 #include "pkcs/sign.h"
@@ -18,7 +19,7 @@ namespace CBZ::PKCS {
 
     using namespace ASN1;
 
-    const std::unordered_map<std::string, ASN1Tag> attributeStringTypeMap = {
+    const std::unordered_map<OID, ASN1Tag> attributeStringTypeMap = {
         {"2.5.4.6",                PRINTABLE_STRING},   // countryName
         {"2.5.4.8",                UTF8_STRING},        // stateOrProvinceName
         {"2.5.4.7",                UTF8_STRING},        // localityName
@@ -705,7 +706,7 @@ namespace CBZ::PKCS {
 
     // Example:
     // CertificationRequestInfo = {Version = 0, subjectName = RDNSequence = [ RelativeDistinguishedName = { AttributeTypeAndValue = {type: 2.5.4.6, value: PL} }, RelativeDistinguishedName = { AttributeTypeAndValue = {type: 2.5.4.8, value: Lesser Poland} }, RelativeDistinguishedName = { AttributeTypeAndValue = {type: 2.5.4.10, value: AGH} } ], subjectPKInfo = SubjectPublicKeyInfo = { AlgorithmIdentifier = {algorithm: 1.2.840.113549.1.1.1, parameters: 0x05 0x00} RSAPublicKey: = {n: 1234567890, e: 987654321}}, attributes = [Attribute = { Type: 1.2.840.113549.1.1.1, values = [ (tag: 12 "example.com") ] }] }
-    std::ostream& operator<<(std::ostream& os, CertificationRequest& cr){
+    std::ostream& operator<<(std::ostream& os, const CertificationRequest& cr){
         os  << "CertificationRequestInfo = { " 
             << cr._certification_request_info << ", "
             << cr._signature_algorithm << ", "
@@ -720,13 +721,100 @@ namespace CBZ::PKCS {
         return os;
     }
 
-    namespace CSRSupportedAlgorithms {
-        const CBZ::Utils::BidirectionalMap<uint32_t, std::string> algorithmMap = {
-            {rsaEncryption,             "1.2.840.113549.1.1.1"  },
-            {sha256WithRSAEncryption,   "1.2.840.113549.1.1.11" },
-            {sha256,                    "2.16.840.1.101.3.4.2.1"},
+    Validity::Validity(ASN1Object root_object) {
+        auto _semantics_failed = []() {
+            CBZ::Utils::universal_throw("[Validity::Validity] Semantic check failed");
         };
+        auto _is_either_utctime_or_generalizedtime = [&](const ASN1Object& object) {
+            return object.tag() == ASN1Tag::UTC_TIME || object.tag() == ASN1Tag::GENERALIZED_TIME;
+        };
+
+        if (root_object.tag() != ASN1Tag::SEQUENCE) _semantics_failed();
+        if (root_object.children().size() != 2) _semantics_failed();
+        if (
+            !_is_either_utctime_or_generalizedtime(root_object.children()[0])
+            || !_is_either_utctime_or_generalizedtime(root_object.children()[1])
+        ) _semantics_failed();
+
+        _not_before = _ASN1_helpers::_vector_to_date(root_object.children()[0].value());
+        _not_after = _ASN1_helpers::_vector_to_date(root_object.children()[1].value());
     }
+
+    ASN1Object Validity::to_asn1() const {
+        // check whether 1950 <= year <= 2049 and map to UTCTime, otherwise GeneralizedTime
+        struct s_date sdate;
+        std::vector<ASN1Object> children;
+
+        // _not_before
+        _ASN1_helpers::_date_to_sdate(this->_not_before, &sdate);
+        if (sdate.year >= 1950 && sdate.year <= 2049) {
+            children.push_back(ASN1UTCTime(this->_not_before));
+        } else {
+            children.push_back(ASN1GeneralizedTime(this->_not_before));
+        }
+        
+        // _not_after
+        _ASN1_helpers::_date_to_sdate(this->_not_after, &sdate);
+        if (sdate.year >= 1950 && sdate.year <= 2049) {
+            children.push_back(ASN1UTCTime(this->_not_before));
+        } else {
+            children.push_back(ASN1GeneralizedTime(this->_not_before));
+        }
+
+        return ASN1Sequence(std::move(children));
+    }
+
+    std::vector<uint8_t> Validity::encode() const {
+        return this->to_asn1().encode();
+    }
+
+    std::ostream& operator<<(std::ostream& os, const Validity& validity) {
+        auto _printable_date = [&](const asn1date_t& date) {
+            return std::format("{:%b %d %Y %H:%M:%S}", date);
+        };
+
+        os  << "Validity = {"
+            << "notBefore = " << _printable_date(validity._not_before) << ", "
+            << "notAfter = " << _printable_date(validity._not_after)
+            << "} ";
+        return os;
+    }
+
+    CertificateSerialNumber::CertificateSerialNumber(ASN1Object root_object) {
+        auto _semantics_failed = []() {
+            CBZ::Utils::universal_throw("[CertificateSerialNumber::CertificateSerialNumber] Semantic check failed");
+        };
+        
+        if (root_object.tag() != ASN1Tag::INTEGER) _semantics_failed();
+
+        _serial = static_cast<const ASN1Integer&>(root_object).value();
+    }
+
+    ASN1Object CertificateSerialNumber::to_asn1() const {
+        return ASN1Integer(_serial);
+    }
+
+    std::vector<uint8_t> CertificateSerialNumber::encode() const {
+        return this->to_asn1().encode();
+    }
+
+    std::ostream& operator<<(std::ostream& os, CertificateSerialNumber csn) {
+        os  << "CertificateSerialNumber = " << csn.get_serial_number()
+            << " ";
+        return os;
+    }
+
+    const CBZ::Utils::BidirectionalMap<uint32_t, OID> CSRSupportedAlgorithms::algorithmMap = {
+        {rsaEncryption,             "1.2.840.113549.1.1.1"  },
+        {sha256WithRSAEncryption,   "1.2.840.113549.1.1.11" },
+        {sha256,                    "2.16.840.1.101.3.4.2.1"},
+    };
+
+    const CBZ::Utils::BidirectionalMap<uint32_t, OID> ExtensionSupportedIDs::idMap = {
+        {authorityKeyIdentifier,    "2.5.29.35"},
+        {subjectKeyIdentifier,      "2.5.29.14"},
+        {basicConstraints,          "2.5.29.19"},
+    };
 
     namespace PrivateKeySupportedAlgorithms {
 

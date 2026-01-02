@@ -2,8 +2,8 @@
 #include <cassert>
 #include <utility>
 #include <vector>
-#include "pkcs/csr.h"
 #include "utils/utils.hpp"
+#include "pkcs/pkcs.h"
 
 using namespace CBZ::PKCS;
 using std::cout;
@@ -42,9 +42,9 @@ int main(){
     cout << ATAV_move << endl;
 
     // Assertions
-    assert(ATAV2.getTypeReference() == "2.5.4.6");
-    assert(ATAV2.getValueReference() == "PL");
-    assert(ATAV_copy.getValueReference() == ATAV2.getValueReference());
+    assert(ATAV2.get_type() == "2.5.4.6");
+    assert(ATAV2.get_value() == "PL");
+    assert(ATAV_copy.get_value() == ATAV2.get_value());
 
     cout << "AttributeTypeAndValue tests done.\n";
 
@@ -74,9 +74,9 @@ int main(){
     cout << RDN_edge2 << endl;
 
     // Assertions
-    assert(RDN_single.getAttributesReference().size() == 1);
-    assert(RDN_initializer_list.getAttributesReference().size() == 2);
-    assert(!RDN_edge1.getAttributesReference().empty());
+    assert(RDN_single.get_attributes().size() == 1);
+    assert(RDN_initializer_list.get_attributes().size() == 2);
+    assert(!RDN_edge1.get_attributes().empty());
 
     cout << "RelativeDistinguishedName tests done.\n";
 
@@ -105,9 +105,9 @@ int main(){
     cout << rdnS_edge << endl;
 
     // Assertions
-    assert(rdnS_single.getRDNSequenceReference().size() == 1);
-    assert(rdnS_move.getRDNSequenceReference().size() == 3);
-    assert(!rdnS_edge.getRDNSequenceReference().empty());
+    assert(rdnS_single.get_rdn_sequence().size() == 1);
+    assert(rdnS_move.get_rdn_sequence().size() == 3);
+    assert(!rdnS_edge.get_rdn_sequence().empty());
     RDNSequence rdnS1 { {"2.5.4.6", "PL"}, {"2.5.4.10", "AGH"} };
     RDNSequence rdnS2 { {{"2.5.4.6", "PL"}, {"2.5.4.10", "AGH"}} };
     cout << rdnS1 << endl;

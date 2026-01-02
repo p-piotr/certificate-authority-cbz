@@ -88,15 +88,6 @@ namespace CBZ::ASN1 {
     }
 
     std::vector<uint8_t> ASN1Parser::encode(ASN1Object const& object) {
-        // TEMPORARILY COMMENTED
-        // first, check whether it's NULL if it doesn't have neither value nor children
-        // if (
-        //     object.value().size() == 0 
-        //     && object.children().size() != 0 
-        //     && object.tag() != ASN1Tag::NULL_TYPE
-        // )
-        //     throw std::runtime_error("[ASN1Parser::encode] Can't encode a non-NULL object that has NULL properties");
-
         std::vector<uint8_t> encoded_object, encoded_length;
         // append tag
         encoded_object.push_back(static_cast<uint8_t>(object.tag()));
@@ -591,17 +582,7 @@ namespace CBZ::ASN1 {
             throw std::runtime_error("[ASN1String::ASN1String] invalid string encoding or tag");
     }
 
-    // simple date struct
-    struct s_date {
-        int year;
-        unsigned char month;
-        unsigned char day;
-        unsigned char hour;
-        unsigned char minute;
-        unsigned char second;
-    };
-
-    void _date_to_sdate(asn1date_t date, struct s_date* sdate) {
+    void _ASN1_helpers::_date_to_sdate(asn1date_t date, struct s_date* sdate) {
         std::chrono::sys_days date_part = std::chrono::floor<std::chrono::days>(date);
         auto time_part = date - date_part;
 
@@ -627,7 +608,7 @@ namespace CBZ::ASN1 {
         };
     }
 
-    void _sdate_to_date(const struct s_date* sdate, asn1date_t* date) {
+    void _ASN1_helpers::_sdate_to_date(const struct s_date* sdate, asn1date_t* date) {
         auto year = std::chrono::year(sdate->year);
         auto month = std::chrono::month(sdate->month);
         auto day = std::chrono::day(sdate->day);
@@ -640,7 +621,7 @@ namespace CBZ::ASN1 {
         
     }
 
-    std::vector<uint8_t> _date_to_vector(struct s_date* sdate, bool generalized_format=false) {
+    std::vector<uint8_t> _ASN1_helpers::_date_to_vector(struct s_date* sdate, bool generalized_format) {
         if (sdate == nullptr) {
             return {};
         }
@@ -673,6 +654,9 @@ namespace CBZ::ASN1 {
 
         // i could've written it differently but i didn't bother
         if (generalized_format) {
+            if (sdate->year < 0 || sdate->year > 9999) {
+                throw std::runtime_error("[_ASN1_helpers::_date_to_vector] cannot encode year outisde the 0-9999 range into GeneralizedTime");
+            }
             unsigned char y4 = (sdate->year % 10) + 0x30;
             unsigned char y3 = ((sdate->year % 100)/10) + 0x30;
             unsigned char y2 = ((sdate->year % 1000)/100) + 0x30;
@@ -682,6 +666,9 @@ namespace CBZ::ASN1 {
             result.push_back(y3);
             result.push_back(y4);
         } else {
+            if (sdate->year < 1950 || sdate->year > 2049) {
+                throw std::runtime_error("[_ASN1_helpers::_date_to_vector] cannot encode year outside the 1950-2049 range into UTCTime (use GeneralizedTime)");
+            }
             unsigned char year_sliced = sdate->year % 100;
             _d_h(year_sliced, result);
         }
@@ -697,7 +684,7 @@ namespace CBZ::ASN1 {
         return result;
     }
 
-    asn1date_t _vector_to_date(const std::vector<uint8_t> &date_bin) {
+    asn1date_t _ASN1_helpers::_vector_to_date(const std::vector<uint8_t> &date_bin) {
         assert((date_bin.size() == 13 || date_bin.size() == 15) && "Date MUST be either 13 bytes (UTCTime), or 15 bytes (GeneralizedTime)");
 
         auto _d_h_r = [&](char ch1, char ch2) {
@@ -714,7 +701,7 @@ namespace CBZ::ASN1 {
             // quick check whether all elements are ascii digits (0x30 <= x <= 0x39)
             for (int i = 0; i < 12; i++) {
                 if (date_bin[i] < 0x30 || date_bin[i] > 0x39) {
-                    throw std::runtime_error("[_vector_to_date] Invalid date encoding (UTCTime)");
+                    throw std::runtime_error("[_ASN1_helpers::_vector_to_date] Invalid date encoding (UTCTime)");
                 }
             }
 
@@ -730,7 +717,7 @@ namespace CBZ::ASN1 {
             // quick check whether all elements are ascii digits (0x30 <= x <= 0x39)
             for (int i = 0; i < 14; i++) {
                 if (date_bin[i] < 0x30 || date_bin[i] > 0x39) {
-                    throw std::runtime_error("[_vector_to_date] Invalid date encoding (GeneralizedTime)");
+                    throw std::runtime_error("[_ASN1_helpers::_vector_to_date] Invalid date encoding (GeneralizedTime)");
                 }
             }
 
@@ -751,7 +738,7 @@ namespace CBZ::ASN1 {
         idx += 2;
 
         if (date_bin[idx] != 'Z') {
-            throw std::runtime_error("[_vector_to_date] Only Zulu timezone is handled (RFC 5280)");
+            throw std::runtime_error("[_ASN1_helpers::_vector_to_date] Only Zulu timezone is handled (RFC 5280)");
         }
 
         std::chrono::sys_days date_tp = std::chrono::sys_days{std::chrono::year_month_day{
@@ -765,23 +752,23 @@ namespace CBZ::ASN1 {
 
     std::vector<uint8_t> ASN1Parser::utc_time_encode(const asn1date_t& date) {
         struct s_date sdate;
-        _date_to_sdate(date, &sdate);
-        std::vector<uint8_t> result = _date_to_vector(&sdate);
+        _ASN1_helpers::_date_to_sdate(date, &sdate);
+        std::vector<uint8_t> result = _ASN1_helpers::_date_to_vector(&sdate);
         return result;
     }
 
     asn1date_t ASN1Parser::utc_time_decode(const std::vector<uint8_t>& date_bin) {
-        return _vector_to_date(date_bin);
+        return _ASN1_helpers::_vector_to_date(date_bin);
     }
 
     std::vector<uint8_t> ASN1Parser::generalized_time_encode(const asn1date_t& date) {
         struct s_date sdate;
-        _date_to_sdate(date, &sdate);
-        std::vector<uint8_t> result = _date_to_vector(&sdate, true);
+        _ASN1_helpers::_date_to_sdate(date, &sdate);
+        std::vector<uint8_t> result = _ASN1_helpers::_date_to_vector(&sdate, true);
         return result;
     }
 
     asn1date_t ASN1Parser::generalized_time_decode(const std::vector<uint8_t>& date_bin) {
-        return _vector_to_date(date_bin);
+        return _ASN1_helpers::_vector_to_date(date_bin);
     }
 }

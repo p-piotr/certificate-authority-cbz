@@ -47,8 +47,17 @@ namespace CBZ {
             CONSTRUCTED_TYPE = 0xA0,
         };
 
-        //typedef decltype(std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now())) asn1date_t;
         typedef decltype(std::chrono::system_clock::now()) asn1date_t;
+
+        // simple date struct
+        struct s_date {
+            int year;
+            unsigned char month;
+            unsigned char day;
+            unsigned char hour;
+            unsigned char minute;
+            unsigned char second;
+        };
 
         // Converts an ASN.1 tag (enum) to string
         const char* tag_to_string(ASN1Tag tag);
@@ -76,6 +85,12 @@ namespace CBZ {
             // // ASN1ObjectIdentifier helper functions
             std::vector<uint8_t> _ASN1ObjectIdentifier_encode_single_integer(mpz_class integer);
             mpz_class _ASN1ObjectIdentifier_decode_single_integer(std::vector<uint8_t>::reverse_iterator rb, std::vector<uint8_t>::reverse_iterator re);
+
+            // Date-reated helper functions
+            void _date_to_sdate(asn1date_t date, struct s_date* sdate);
+            void _sdate_to_date(const struct s_date* sdate, asn1date_t* date);
+            std::vector<uint8_t> _date_to_vector(struct s_date* sdate, bool generalized_format=false);
+            asn1date_t _vector_to_date(const std::vector<uint8_t> &date_bin);
         };
 
         // Responsible for parsing ASN.1
@@ -384,7 +399,6 @@ namespace CBZ {
             explicit ASN1Set(std::vector<ASN1Object> children)
                 : ASN1Object(SET, set_sort(std::move(children))) {}
         };
-
 
         class ASN1UTCTime : public ASN1Object {
         public:
