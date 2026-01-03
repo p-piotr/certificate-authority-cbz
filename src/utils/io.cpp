@@ -107,6 +107,7 @@ namespace CBZ::Utils::IO {
         return result;
     }
 
+    // THIS MAY BE DELETED IN THE FORESEEABLE FUTURE
     // This function is used to write Certificate Signing Request into a file
     // It assumes that CSR have already beed DER encoded and base64 encoded
     // @base64 - std::string to be written into the file

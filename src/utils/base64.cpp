@@ -15,6 +15,14 @@ namespace CBZ::Base64 {
     // Encodes a buffer into a Base64 string
     std::string encode(std::span<const uint8_t> in) {
         std::string out;
+        size_t real_outstring_size = 0;
+        // helper lambda to push back a character along with newline every 64 characters (to the std::string out)
+        auto _pushback_helper = [&](char c) {
+            if (real_outstring_size % 64 == 0 && real_outstring_size > 0)
+                out.push_back('\n');
+            out.push_back(c);
+            real_outstring_size++;
+        };
 
         int val=0;
         int valb=-6;
@@ -22,12 +30,12 @@ namespace CBZ::Base64 {
             val = (val<<8) + c;
             valb += 8;
             while (valb>=0) {
-                out.push_back(b[(val>>valb)&0x3F]);
+                _pushback_helper(b[(val>>valb)&0x3F]);
                 valb-=6;
             }
         }
-        if (valb>-6) out.push_back(b[((val<<8)>>(valb+8))&0x3F]);
-        while (out.size()%4) out.push_back('=');
+        if (valb>-6) _pushback_helper(b[((val<<8)>>(valb+8))&0x3F]);
+        while (real_outstring_size%4) _pushback_helper('=');
         return out;
     }
 

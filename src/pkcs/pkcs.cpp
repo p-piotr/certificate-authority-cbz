@@ -560,12 +560,11 @@ namespace CBZ::PKCS {
     CertificationRequestInfo::CertificationRequestInfo(
         std::vector<std::pair<std::string, std::string>> subject_name,
         CSRSupportedAlgorithms::algorithm_t algorithm,
-        mpz_class n,
-        mpz_class e,
+        RSAPublicKey public_key,
         std::vector<std::pair<std::string, std::string>> attributes
     ) 
     : _subject_name(std::move(subject_name)),
-    _subject_pkinfo(algorithm, std::move(n), std::move(e))
+    _subject_pkinfo(algorithm, std::move(public_key))
     {
         for(auto& [oid_t, val] : attributes){
             _attributes.emplace_back(std::move(oid_t), std::move(val));
@@ -774,9 +773,9 @@ namespace CBZ::PKCS {
         // _not_after
         _ASN1_helpers::_date_to_sdate(_not_after, &sdate);
         if (sdate.year >= 1950 && sdate.year <= 2049) {
-            children.push_back(ASN1UTCTime(_not_before));
+            children.push_back(ASN1UTCTime(_not_after));
         } else {
-            children.push_back(ASN1GeneralizedTime(_not_before));
+            children.push_back(ASN1GeneralizedTime(_not_after));
         }
 
         return ASN1Sequence(std::move(children));
@@ -823,9 +822,23 @@ namespace CBZ::PKCS {
     }
 
     ASN1Object Extension::to_asn1() const {
+        std::string oid;
+        try {
+            oid = ExtensionSupportedIDs::idMap.at(_extn_id);
+        } catch (const std::out_of_range& e) {
+            CBZ::Utils::universal_throw("[Extension::to_asn1] Extension ID not supported");
+        }
+        // if _critical is true, include it inside the sequence
+        if (_critical) {
+            return ASN1Sequence({
+                ASN1ObjectIdentifier(std::move(oid)),
+                ASN1Boolean(_critical),
+                ASN1OctetString(_extn_value)
+            });
+        }
+        // if not, omit (if its missing, its assumed to be false)
         return ASN1Sequence({
-            ASN1ObjectIdentifier(_extn_id),
-            ASN1Boolean(_critical),
+            ASN1ObjectIdentifier(std::move(oid)),
             ASN1OctetString(_extn_value)
         });
     }

@@ -586,8 +586,7 @@ namespace CBZ::PKCS {
         CertificationRequestInfo(
             std::vector<std::pair<std::string, std::string>> subject_name,
             CSRSupportedAlgorithms::algorithm_t algorithm,
-            mpz_class n,
-            mpz_class e,
+            RSAPublicKey public_key,
             std::vector<std::pair<std::string, std::string>> attributes
         ); 
 
@@ -601,8 +600,7 @@ namespace CBZ::PKCS {
         CertificationRequestInfo(
             std::move(subject_name),
             algorithm,
-            mpz_class(std::move(n)),
-            mpz_class(std::move(e)),
+            RSAPublicKey(mpz_class(std::move(n)), mpz_class(std::move(e))),
             std::move(attributes)
         ) {}
 
@@ -658,12 +656,11 @@ namespace CBZ::PKCS {
         CertificationRequest(
             std::vector<std::pair<std::string, std::string>> subject_name,
             CSRSupportedAlgorithms::algorithm_t algorithm,
-            mpz_class n,
-            mpz_class e,
+            RSAPublicKey public_key,
             std::vector<std::pair<std::string, std::string>> attributes,
             CSRSupportedAlgorithms::algorithm_t sig_algorithm
         ) :
-        _certification_request_info(std::move(subject_name), algorithm, std::move(n), std::move(e), std::move(attributes)),
+        _certification_request_info(std::move(subject_name), algorithm, std::move(public_key), std::move(attributes)),
         _signature_algorithm{sig_algorithm} {}
 
         CertificationRequest(
@@ -677,8 +674,7 @@ namespace CBZ::PKCS {
         CertificationRequest(
             std::move(subject_name),
             algorithm,
-            mpz_class(std::move(n)),
-            mpz_class(std::move(e)),
+            RSAPublicKey(mpz_class(std::move(n)), mpz_class(std::move(e))),
             std::move(attributes),
             sig_algorithm
         ) {}
@@ -774,17 +770,29 @@ namespace CBZ::PKCS {
     //     }
     class Extension {
     private:
-        oid_t _extn_id;
+        ExtensionSupportedIDs::id_t _extn_id;
         bool _critical;
         std::vector<uint8_t> _extn_value;
 
     public:
         Extension() {}
 
-        Extension(oid_t extn_id, bool critical, std::vector<uint8_t> extn_value)
+        Extension(ExtensionSupportedIDs::id_t extn_id, bool critical, std::vector<uint8_t> extn_value)
             : _extn_id(std::move(extn_id)), _critical(critical), _extn_value(std::move(extn_value)) {}
 
-        inline const oid_t& get_extn_id() const { return _extn_id; }
+        Extension(oid_t extn_id, bool critical, std::vector<uint8_t> extn_value) {
+            ExtensionSupportedIDs::id_t extn_id_t;
+            try {
+                extn_id = ExtensionSupportedIDs::idMap.get_by_value(extn_id);
+            } catch (const std::out_of_range& e) {
+                CBZ::Utils::universal_throw("[Extension::Extension(oid_t, bool, std::vector<uint8_t>)] Extension ID not supported");
+            }
+            _extn_id = extn_id_t;
+            _critical = critical;
+            _extn_value = std::move(extn_value);
+        }
+
+        inline ExtensionSupportedIDs::id_t get_extn_id() const { return _extn_id; }
         inline bool get_critical() const { return _critical; }
         inline const std::vector<uint8_t>& get_extn_value() const { return _extn_value; }
 
@@ -889,6 +897,13 @@ namespace CBZ::PKCS {
 
     public:
         Certificate() {}
+
+        Certificate(
+            TBSCertificate tbs_certificate,
+            AlgorithmIdentifier signature_algorithm
+        ) :
+        _tbs_certificate(std::move(tbs_certificate)),
+        _signature_algorithm(std::move(signature_algorithm)) {}
 
         Certificate(
             TBSCertificate tbs_certificate,

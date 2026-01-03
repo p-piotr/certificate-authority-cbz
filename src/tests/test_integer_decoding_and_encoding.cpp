@@ -3,6 +3,8 @@
 #include <utility>
 #include <vector>
 #include <iostream>
+#include <gmpxx.h>
+#include "asn1/asn1.h"
 #include "utils/utils.hpp"
 
 using std::cout;

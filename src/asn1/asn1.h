@@ -45,6 +45,7 @@ namespace CBZ {
             GENERALIZED_TIME = 0x18,
             SEQUENCE = 0x30,
             SET = 0x31,
+            CONTEXT_SPECIFIC0 = 0x80,
             CONSTRUCTED_TYPE0 = 0xA0,
             CONSTRUCTED_TYPE1 = 0xA1,
             CONSTRUCTED_TYPE2 = 0xA2,

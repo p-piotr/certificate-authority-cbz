@@ -310,14 +310,14 @@ namespace CBZ::PKCS {
     }
 
     RSAPrivateKey RSAPrivateKey::from_base64_buffer(std::string&& key_b64) {
-        int h_c = _compare_header(key_b64, Labels::privateKeyHeader);
-        int f_c = _compare_footer(key_b64, Labels::privateKeyFooter);
+        int h_c = _compare_header(key_b64, Labels::private_key_header);
+        int f_c = _compare_footer(key_b64, Labels::private_key_footer);
         if (!h_c || !f_c) {
             // header/footer doesn't match
             // check whether given key is encrypted and if it is, handle appropriately
             // otherwise throw
-            h_c = _compare_header(key_b64, Labels::encryptedPrivateKeyHeader);
-            f_c = _compare_footer(key_b64, Labels::encryptedPrivateKeyFooter);
+            h_c = _compare_header(key_b64, Labels::encrypted_private_key_header);
+            f_c = _compare_footer(key_b64, Labels::encrypted_private_key_footer);
             if (!h_c || !f_c) {
                 CBZ::Security::secure_zero_memory(key_b64);
                 throw std::runtime_error("[RSAPrivateKey::from_base64_buffer] RSA private key header/footer does not match the standard");
@@ -329,8 +329,8 @@ namespace CBZ::PKCS {
         }
 
         std::span<char> key_asn1_b64 = std::span{
-            key_b64.data() + Labels::privateKeyHeader.size(),
-            key_b64.size() - (Labels::privateKeyHeader.size() + Labels::privateKeyFooter.size())
+            key_b64.data() + Labels::private_key_header.size(),
+            key_b64.size() - (Labels::private_key_header.size() + Labels::private_key_footer.size())
         };
         std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
         ASN1Object asn1_root = ASN1Object::decode(key_asn1);
@@ -366,14 +366,14 @@ namespace CBZ::PKCS {
     }
 
     RSAPrivateKey RSAPrivateKey::from_base64_buffer_with_passphrase(std::string&& key_b64, std::string&& passphrase) {
-        int h_c = _compare_header(key_b64, Labels::encryptedPrivateKeyHeader);
-        int f_c = _compare_footer(key_b64, Labels::encryptedPrivateKeyFooter);
+        int h_c = _compare_header(key_b64, Labels::encrypted_private_key_header);
+        int f_c = _compare_footer(key_b64, Labels::encrypted_private_key_footer);
         if (!h_c || !f_c) {
             // header/footer doesn't match
             // check whether given key is unencrypted and if it is, handle appropriately
             // otherwise throw
-            h_c = _compare_header(key_b64, Labels::privateKeyHeader);
-            f_c = _compare_footer(key_b64, Labels::privateKeyFooter);
+            h_c = _compare_header(key_b64, Labels::private_key_header);
+            f_c = _compare_footer(key_b64, Labels::private_key_footer);
             if (!h_c || !f_c) {
                 CBZ::Security::secure_zero_memory(key_b64);
                 CBZ::Security::secure_zero_memory(passphrase);
@@ -386,8 +386,8 @@ namespace CBZ::PKCS {
         }
 
         std::span<char> key_asn1_b64 = std::span{
-            key_b64.data() + Labels::encryptedPrivateKeyHeader.size(),
-            key_b64.size() - (Labels::encryptedPrivateKeyHeader.size() + Labels::encryptedPrivateKeyFooter.size())
+            key_b64.data() + Labels::encrypted_private_key_header.size(),
+            key_b64.size() - (Labels::encrypted_private_key_header.size() + Labels::encrypted_private_key_footer.size())
         };
         std::vector<uint8_t> key_asn1 = Base64::decode(key_asn1_b64);
         ASN1Object asn1_root = ASN1Object::decode(key_asn1);
