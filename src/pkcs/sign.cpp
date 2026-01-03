@@ -39,13 +39,13 @@ namespace CBZ::PKCS::Signature {
     static std::vector<uint8_t> I2OSP(const mpz_class& in, size_t xLen){
         // can't be used to convert negative integers
         if (in < 0) {
-            throw std::runtime_error("I2OSP: integer must be nonnegative");
+            throw std::runtime_error("[I2OSP] Integer must be nonnegative");
         }
 
         // check if integer will fit in requested xLen
         size_t bytes_count = (mpz_sizeinbase(in.get_mpz_t(), 2) + 7)/8;
         if (bytes_count > xLen) {
-            throw std::runtime_error("I2OSP: integer too large");
+            throw std::runtime_error("[I2OSP] Integer too large");
         }
 
 
@@ -68,7 +68,7 @@ namespace CBZ::PKCS::Signature {
 
         // if less bytes were written something must have wrong
         if(written != bytes_count)
-            throw std::runtime_error("I2OSP: Wrong Number of bytes written");
+            throw std::runtime_error("[I2OSP] Wrong number of bytes written");
 
         return out;
     }
@@ -93,7 +93,7 @@ namespace CBZ::PKCS::Signature {
 
         // message representative cannot be 0 nor can it be greater than n (RSA wouldn't work)
         if (m < 0 || m >= n) {
-            throw std::runtime_error("RSAPS1: message representative isn't in correct range");
+            throw std::runtime_error("[RSAPS1] Message representative isn't in correct range");
         }
 
         // Sanity checks:
@@ -106,21 +106,21 @@ namespace CBZ::PKCS::Signature {
                 mpz_mul(chk.get_mpz_t(), q.get_mpz_t(), qInv.get_mpz_t());
                 mpz_mod(chk.get_mpz_t(), chk.get_mpz_t(), p.get_mpz_t());
                 if (chk != 1) {
-                    throw std::runtime_error("RSAPS1: qInv is not the modular inverse of q mod p");
+                    throw std::runtime_error("[RSAPS1] qInv is not the modular inverse of q mod p");
                 }
             }
 
             // check if p and q are distinct
             {
             if (p == q)
-                throw std::runtime_error("RSAPS1: p and q must be distinct");
+                throw std::runtime_error("[RSAPS1] p and q must be distinct");
             }
 
             // check primarlity using simple gmp primarlity test
             //https://gmplib.org/manual/Number-Theoretic-Functions
             {
             if (!mpz_probab_prime_p(p.get_mpz_t(), 25) || !mpz_probab_prime_p(q.get_mpz_t(), 25))
-                throw std::runtime_error("RSAPS1: p or q is not prime");
+                throw std::runtime_error("[RSAPS1] p or q is not prime");
             }
         }
 
@@ -182,7 +182,7 @@ namespace CBZ::PKCS::Signature {
 
         // signature representative must be positive and can't be greater than (Otherwise RSA won't work)
         if(s < 0 || s >= n)
-            throw std::runtime_error("RSAVP1: Singnature representative is not between 0 and n-1");
+            throw std::runtime_error("[RSAVP1] Singnature representative is not between 0 and n-1");
 
         mpz_class m;
         // m = s ^ e mod n (just like encryption in RSA)
@@ -217,7 +217,7 @@ namespace CBZ::PKCS::Signature {
         // just required by the standard
         size_t tLen = digest_info.size();
         if(emLen < tLen + 11){
-            throw ("EMSA_PKCS1_V1_5_ENCODE_sha256: intended encoded message length too short");
+            throw ("[EMSA_PKCS1_V1_5_ENCODE_sha256] Intended encoded message length too short");
         }
         // pad with number 0xFF 
         size_t PSLen = emLen - tLen - 3;
@@ -257,7 +257,7 @@ namespace CBZ::PKCS::Signature {
         try {
             EM = EMSA_PKCS1_V1_5_ENCODE_sha256(M, k);
         } catch (const std::runtime_error& e) {
-            std::throw_with_nested(std::runtime_error("RSASSA_PKCS1_V1_5_SIGN: failed to encode message"));
+            std::throw_with_nested(std::runtime_error("[RSASSA_PKCS1_V1_5_SIGN] Failed to encode message"));
         }
 
 
@@ -266,7 +266,7 @@ namespace CBZ::PKCS::Signature {
         try {
             m = OS2IP(EM);
         } catch( const std::runtime_error& e){
-            std::throw_with_nested(std::runtime_error("RSASSA_PKCS1_V1_5_SIGN: failed to convert message to integer representative"));
+            std::throw_with_nested(std::runtime_error("[RSASSA_PKCS1_V1_5_SIGN] Failed to convert message to integer representative"));
         }
 
 
@@ -275,7 +275,7 @@ namespace CBZ::PKCS::Signature {
         try {
             s = RSAPS1(K, m);
         } catch( const std::runtime_error& e){
-            std::throw_with_nested(std::runtime_error("RSASSA_PKCS1_V1_5_SIGN: failed to sing the message"));
+            std::throw_with_nested(std::runtime_error("[RSASSA_PKCS1_V1_5_SIGN] Failed to sing the message"));
         }
 
 
@@ -284,7 +284,7 @@ namespace CBZ::PKCS::Signature {
         try {
             S = I2OSP(s, k);
         } catch( const std::runtime_error& e){
-            std::throw_with_nested(std::runtime_error("RSASSA_PKCS1_V1_5_SIGN: failed to convert signature to bytes"));
+            std::throw_with_nested(std::runtime_error("[RSASSA_PKCS1_V1_5_SIGN] Failed to convert signature to bytes"));
         }
 
         return S;
@@ -302,7 +302,7 @@ namespace CBZ::PKCS::Signature {
         // it is calculated as length in bytes of n from RSA key
         size_t k = (mpz_sizeinbase(n.get_mpz_t(), 2) + 7) / 8;
         if (k != S.size()){
-            throw std::runtime_error("RSASSA_PKCS1_V1_5_VERIFY: Signature length doesn't match key length");
+            throw std::runtime_error("[RSASSA_PKCS1_V1_5_VERIFY] Signature length doesn't match key length");
         }
 
         // convert signature to integer representative
@@ -310,7 +310,7 @@ namespace CBZ::PKCS::Signature {
         try {
             s = OS2IP(S);
         } catch ( const std::runtime_error& e ){
-            std::throw_with_nested(std::runtime_error("RSASSA_PKCS1_V1_5_VERIFY: failed to convert siganture to integer representative"));
+            std::throw_with_nested(std::runtime_error("[RSASSA_PKCS1_V1_5_VERIFY] Failed to convert siganture to integer representative"));
         }
 
         // apply verfication primitive to signature integer representative
@@ -319,7 +319,7 @@ namespace CBZ::PKCS::Signature {
         try {
             m = RSAVP1(K, s);
         } catch ( const std::runtime_error& e ){
-            std::throw_with_nested(std::runtime_error("RSASSA_PKCS1_V1_5_VERIFY: failed to convert siganture to integer representative"));
+            std::throw_with_nested(std::runtime_error("[RSASSA_PKCS1_V1_5_VERIFY] Failed to convert siganture to integer representative"));
         }
 
         // convert the message representative to bytes
@@ -327,7 +327,7 @@ namespace CBZ::PKCS::Signature {
         try {
             EM = I2OSP(m, S.size());
         } catch ( const std::runtime_error& e ){
-            std::throw_with_nested(std::runtime_error("RSASSA_PKCS1_V1_5_VERIFY: failed to message representative to bytes"));
+            std::throw_with_nested(std::runtime_error("[RSASSA_PKCS1_V1_5_VERIFY] Failed to message representative to bytes"));
         }
 
         // apply the EMSA-PKCS1-v1_5 encoding operation to the message M to produce a second encoded message EM2
@@ -335,7 +335,7 @@ namespace CBZ::PKCS::Signature {
         try {
             EM2 = EMSA_PKCS1_V1_5_ENCODE_sha256(M, S.size());
         } catch ( const std::runtime_error& e ){
-            std::throw_with_nested(std::runtime_error("RSASSA_PKCS1_V1_5_VERIFY: failed to encode the message bytes"));
+            std::throw_with_nested(std::runtime_error("[RSASSA_PKCS1_V1_5_VERIFY] Failed to encode the message bytes"));
         }
 
         // compare values in constant time

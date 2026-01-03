@@ -32,6 +32,7 @@ namespace CBZ {
         // Chosen set of ASN.1 tags
         enum ASN1Tag {
             ANY = 0x00,
+            BOOLEAN = 0x01,
             INTEGER = 0x02,
             BIT_STRING = 0x03,
             OCTET_STRING = 0x04,
@@ -44,10 +45,14 @@ namespace CBZ {
             GENERALIZED_TIME = 0x18,
             SEQUENCE = 0x30,
             SET = 0x31,
-            CONSTRUCTED_TYPE = 0xA0,
+            CONSTRUCTED_TYPE0 = 0xA0,
+            CONSTRUCTED_TYPE1 = 0xA1,
+            CONSTRUCTED_TYPE2 = 0xA2,
+            CONSTRUCTED_TYPE3 = 0xA3,
         };
 
         typedef decltype(std::chrono::system_clock::now()) asn1date_t;
+        typedef std::string oid_t;
 
         // simple date struct
         struct s_date {
@@ -307,7 +312,7 @@ namespace CBZ {
         // Responsible for encoding/decoding ASN.1 OBJECT IDENTIFIER objects
         class ASN1ObjectIdentifier : public ASN1Object{
         public:
-            explicit ASN1ObjectIdentifier(const std::string& oid)
+            explicit ASN1ObjectIdentifier(const oid_t& oid)
                 : ASN1Object(OBJECT_IDENTIFIER, ASN1Parser::object_identifier_encode(oid)) {}
 
             explicit ASN1ObjectIdentifier(const ASN1Object& object)
@@ -366,6 +371,22 @@ namespace CBZ {
         public:
             explicit ASN1Null()
                 : ASN1Object(NULL_TYPE) {}
+        };
+
+        class ASN1Boolean : public ASN1Object {
+        private:
+            static inline std::vector<uint8_t> boolean_to_vector(bool b) {
+                if (b) return { 0xFF };
+                else return { 0x00 };
+            }
+        public:
+            explicit ASN1Boolean(bool b)
+                : ASN1Object(BOOLEAN, boolean_to_vector(b)) {}
+
+            inline bool value() const {
+                if (_value == std::vector<uint8_t>{ 0xFF }) return true;
+                else return false;
+            }
         };
 
         class ASN1BitString : public ASN1Object {

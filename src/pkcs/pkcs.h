@@ -22,7 +22,6 @@ namespace CBZ::PKCS {
     #define ERR_FEATURE_UNSUPPORTED 2
     #define ERR_SEMANTIC_CHECK_FAILED 3
 
-    typedef std::string OID;
     struct AlgorithmIdentifier {
         uint32_t algorithm;
         std::shared_ptr<void> params;
@@ -74,11 +73,11 @@ namespace CBZ::PKCS {
             int extract_algorithm(
                 const ASN1Object& algorithm,
                 struct AlgorithmIdentifier* out_ptr,
-                const OID& oid = ""
+                const oid_t& oid = ""
             );
 
             namespace RSAEncryption {
-                extern const OID oid;
+                extern const oid_t oid;
 
                 // Parameters for this function should be NULL according to the PKCS
                 // https://datatracker.ietf.org/doc/html/rfc8017#appendix-A.1
@@ -88,7 +87,7 @@ namespace CBZ::PKCS {
             enum PrivateKeyAlgorithmsEnum : uint32_t {
                 rsaEncryption = 0x1
             };
-            extern const std::unordered_map<OID, PrivateKeyAlgorithmsEnum> privateKeyAlgorithmsMap;
+            extern const std::unordered_map<oid_t, PrivateKeyAlgorithmsEnum> privateKeyAlgorithmsMap;
         }
 
         namespace EncryptionAlgorithms {
@@ -96,11 +95,11 @@ namespace CBZ::PKCS {
             int extract_algorithm(
                 const ASN1Object& algorithm,
                 struct AlgorithmIdentifier* out_ptr,
-                const OID& oid = ""
+                const oid_t& oid = ""
             );
 
             namespace PBES2 {
-                extern const OID oid;
+                extern const oid_t oid;
 
                 // https://www.rfc-editor.org/rfc/rfc8018.html#appendix-A.4
                 struct Parameters {
@@ -133,18 +132,18 @@ namespace CBZ::PKCS {
             enum EncryptionAlgorithmsEnum : uint32_t {
                 pbes2 = 0x1001
             };
-            extern const std::unordered_map<OID, EncryptionAlgorithmsEnum> encryptionAlgorithmsMap;
+            extern const std::unordered_map<oid_t, EncryptionAlgorithmsEnum> encryptionAlgorithmsMap;
         }
         namespace KDFs {
 
             int extract_algorithm(
                 const ASN1Object& algorithm,
                 struct AlgorithmIdentifier* out_ptr,
-                const OID& oid = ""
+                const oid_t& oid = ""
             );
 
             namespace PBKDF2 {
-                extern const OID oid;
+                extern const oid_t oid;
 
                 // https://www.rfc-editor.org/rfc/rfc8018.html#appendix-A.2
                 // 
@@ -181,7 +180,7 @@ namespace CBZ::PKCS {
             enum KDFsEnum : uint32_t{
                 pbkdf2 = 0x2001
             };
-            extern const std::unordered_map<OID, KDFsEnum> kdfsMap;
+            extern const std::unordered_map<oid_t, KDFsEnum> kdfsMap;
         }
 
         namespace HMACFunctions {
@@ -189,7 +188,7 @@ namespace CBZ::PKCS {
             int extract_algorithm(
                 const ASN1Object& algorithm,
                 struct AlgorithmIdentifier* out_ptr,
-                const OID& oid = ""
+                const oid_t& oid = ""
             );
 
             // This is a generic function for validating the HMACWithSHA* functions,
@@ -197,18 +196,18 @@ namespace CBZ::PKCS {
             int _generic_validate_parameters(const ASN1Object& parameters_object);
 
             namespace HMACWithSHA1 {
-                extern const OID oid;
+                extern const oid_t oid;
             }
 
             namespace HMACWithSHA256 {
-                extern const OID oid;
+                extern const oid_t oid;
             }
             
             enum HMACFunctionsEnum : uint32_t {
                 hmacWithSHA1 = 0x3001,
                 hmacWithSHA256
             };
-            extern const std::unordered_map<OID, HMACFunctionsEnum> hmacFunctionsMap;
+            extern const std::unordered_map<oid_t, HMACFunctionsEnum> hmacFunctionsMap;
         }
 
         namespace EncryptionSchemes {
@@ -216,7 +215,7 @@ namespace CBZ::PKCS {
             int extract_algorithm(
                 const ASN1Object& algorithm,
                 struct AlgorithmIdentifier* out_ptr,
-                const OID& oid = ""
+                const oid_t& oid = ""
             );
 
             namespace AES {
@@ -230,10 +229,10 @@ namespace CBZ::PKCS {
                 );
 
                 namespace AES_128_CBC {
-                    extern const OID oid;
+                    extern const oid_t oid;
                 }
                 namespace AES_256_CBC {
-                    extern const OID oid;
+                    extern const oid_t oid;
                 }
             }
 
@@ -241,7 +240,7 @@ namespace CBZ::PKCS {
                 aes_128_CBC = 0x4001,
                 aes_256_CBC
             };
-            extern const std::unordered_map<OID, EncryptionSchemesEnum> encryptionSchemesMap;
+            extern const std::unordered_map<oid_t, EncryptionSchemesEnum> encryptionSchemesMap;
         }
     }
 
@@ -249,7 +248,7 @@ namespace CBZ::PKCS {
     // I just based this on what openssl uses, but here's more offical documentation
     // https://www.itu.int/rec/T-REC-X.520-201910-I/en
     // https://datatracker.ietf.org/doc/html/rfc2985
-    extern const std::unordered_map<OID, ASN1Tag> attributeStringTypeMap;
+    extern const std::unordered_map<oid_t, ASN1Tag> attributeStringTypeMap;
 
     namespace CSRSupportedAlgorithms {
 
@@ -260,7 +259,7 @@ namespace CBZ::PKCS {
         };
 
         // unordered map that maps algorithm_t types to it's correspoing OID
-        extern const CBZ::Utils::BidirectionalMap<uint32_t, OID> algorithmMap;
+        extern const CBZ::Utils::BidirectionalMap<uint32_t, oid_t> algorithmMap;
     }
 
     namespace ExtensionSupportedIDs {
@@ -274,7 +273,7 @@ namespace CBZ::PKCS {
             basicConstraints
         };
 
-        extern const CBZ::Utils::BidirectionalMap<uint32_t, OID> idMap;
+        extern const CBZ::Utils::BidirectionalMap<uint32_t, oid_t> idMap;
     }
 
     // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1
@@ -698,11 +697,12 @@ namespace CBZ::PKCS {
         std::vector<uint8_t> encode() const;
 
         // function that generates a signature for Certification Request
-        // signature is both stored into signature parameter of the object
-        // add returned by the function
-        // @private_key - key with which CSR will be signed
-        // return value : signature bytes
-        std::vector<uint8_t> sign(RSAPrivateKey const& private_key);
+        void sign(const RSAPrivateKey& private_key);
+
+        // function to verify the signature
+        // the function may throw if the signature is not present
+        // so it's intended to be wrapped inside a 'try-catch' clause
+        bool verify() const;
 
         // << operator
         friend std::ostream& operator<<(std::ostream& os, const CertificationRequest& CR);
@@ -724,6 +724,8 @@ namespace CBZ::PKCS {
         asn1date_t _not_after;
 
     public:
+        Validity() {}
+
         Validity(asn1date_t not_before, asn1date_t not_after)
             : _not_before(std::move(not_before)), _not_after(std::move(not_after)) {}
 
@@ -746,6 +748,8 @@ namespace CBZ::PKCS {
         mpz_class _serial;
 
     public:
+        CertificateSerialNumber() : _serial(0) {}
+
         CertificateSerialNumber(mpz_class serial) : _serial(std::move(serial)) {}
 
         CertificateSerialNumber(ASN1Object root_object);
@@ -770,25 +774,25 @@ namespace CBZ::PKCS {
     //     }
     class Extension {
     private:
-        OID _extn_id;
+        oid_t _extn_id;
         bool _critical;
-        std::string _extn_value;
+        std::vector<uint8_t> _extn_value;
 
     public:
-        Extension(OID extn_id, bool critical, std::string extn_value)
+        Extension() {}
+
+        Extension(oid_t extn_id, bool critical, std::vector<uint8_t> extn_value)
             : _extn_id(std::move(extn_id)), _critical(critical), _extn_value(std::move(extn_value)) {}
 
-        inline const OID& get_extn_id() const { return _extn_id; }
+        inline const oid_t& get_extn_id() const { return _extn_id; }
         inline bool get_critical() const { return _critical; }
-        inline const std::string& get_extn_value() const { return _extn_value; }
+        inline const std::vector<uint8_t>& get_extn_value() const { return _extn_value; }
 
         ASN1Object to_asn1() const;
 
         std::vector<uint8_t> encode() const;
 
         friend std::ostream& operator<<(std::ostream& os, const Extension& ex);
-
-        // TODO: implement functions above
     };
 
     // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1
@@ -810,7 +814,7 @@ namespace CBZ::PKCS {
     class TBSCertificate {
     private:
         int _version = 2; // v3(2) - theoretically, this can be v1(0), v2(1), v3(2) - in practice, we'll issue only v3 certificates
-        mpz_class _serial_number;
+        CertificateSerialNumber _certificate_serial_number;
         AlgorithmIdentifier _signature;
         RDNSequence _issuer;
         Validity _validity;
@@ -820,6 +824,97 @@ namespace CBZ::PKCS {
         // and thus are effectively not used nowadays, so we omit them
         std::vector<Extension> _extensions;
 
-        // TODO: finish
+    public:
+        TBSCertificate() {}
+
+        TBSCertificate(
+            mpz_class serial_number,
+            AlgorithmIdentifier signature,
+            RDNSequence issuer,
+            Validity validity,
+            RDNSequence subject,
+            SubjectPublicKeyInfo subject_public_key_info
+        ) :
+        _certificate_serial_number(std::move(serial_number)),
+        _signature(std::move(signature)),
+        _issuer(std::move(issuer)),
+        _validity(std::move(validity)),
+        _subject(std::move(subject)),
+        _subject_public_key_info(std::move(subject_public_key_info)) {}
+
+        TBSCertificate(
+            mpz_class serial_number,
+            AlgorithmIdentifier signature,
+            RDNSequence issuer,
+            Validity validity,
+            RDNSequence subject,
+            SubjectPublicKeyInfo subject_public_key_info,
+            std::vector<Extension> extensions
+        ) :
+        _certificate_serial_number(std::move(serial_number)),
+        _signature(std::move(signature)),
+        _issuer(std::move(issuer)),
+        _validity(std::move(validity)),
+        _subject(std::move(subject)),
+        _subject_public_key_info(std::move(subject_public_key_info)),
+        _extensions(std::move(extensions)) {}
+
+        inline int get_version() const { return _version; }
+        inline const CertificateSerialNumber& get_certificate_serial_number() const { return _certificate_serial_number; }
+        inline const AlgorithmIdentifier& get_signature() const { return _signature; }
+        inline const RDNSequence& get_issuer() const { return _issuer; }
+        inline const Validity& get_validity() const { return _validity; }
+        inline const RDNSequence& get_subject() const { return _subject; }
+        inline const SubjectPublicKeyInfo& get_subject_public_key_info() const { return _subject_public_key_info; }
+        inline const std::vector<Extension>& get_extensions() const { return _extensions; }
+
+        ASN1Object to_asn1() const;
+
+        std::vector<uint8_t> encode() const;
+
+        friend std::ostream& operator<<(std::ostream& os, const TBSCertificate& tbs_cert);
+    };
+
+    // https://datatracker.ietf.org/doc/html/rfc5280#appendix-A.1
+    //  Certificate  ::=  SEQUENCE  {
+    //      tbsCertificate       TBSCertificate,
+    //      signatureAlgorithm   AlgorithmIdentifier,
+    //      signature            BIT STRING
+    //  }
+    class Certificate {
+    private:
+        TBSCertificate _tbs_certificate;
+        AlgorithmIdentifier _signature_algorithm;
+        std::vector<uint8_t> _signature;
+
+    public:
+        Certificate() {}
+
+        Certificate(
+            TBSCertificate tbs_certificate,
+            AlgorithmIdentifier signature_algorithm,
+            std::vector<uint8_t> signature
+        ) :
+        _tbs_certificate(std::move(tbs_certificate)),
+        _signature_algorithm(std::move(signature_algorithm)),
+        _signature(std::move(signature)) {}
+
+        inline const TBSCertificate& get_tbs_certificate() const { return _tbs_certificate; }
+        inline const AlgorithmIdentifier& get_signature_algorithm() const { return _signature_algorithm; }
+        inline const std::vector<uint8_t>& get_signature() const { return _signature; }
+
+        ASN1Object to_asn1() const;
+
+        std::vector<uint8_t> encode() const;
+
+        // signs the certificate using given RSA private key
+        void sign(const RSAPrivateKey& private_key);
+
+        // verifies the signature using given CA certificate
+        // (used to retrieve the public key)
+        // this funciton may throw so it's intended to be wrapped inside a 'try-catch' clause
+        bool verify(const Certificate& ca) const;
+
+        friend std::ostream& operator<<(std::ostream& os, const Certificate& cert);
     };
 }

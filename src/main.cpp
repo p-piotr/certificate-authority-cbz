@@ -125,7 +125,7 @@ int main(int argc, char* argv[]){
     secure_zero_memory(DER_encoding);
     secure_zero_memory(base64_output);
 
-    test_signature_verification(certification_request);
+    std::cout << "VERIFICATION: " << std::boolalpha << certification_request.verify() << std::noboolalpha << std::endl;
 
     certification_request.to_asn1().print();
 

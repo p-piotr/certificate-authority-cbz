@@ -19,7 +19,7 @@ namespace CBZ::PKCS {
 
     using namespace ASN1;
 
-    const std::unordered_map<OID, ASN1Tag> attributeStringTypeMap = {
+    const std::unordered_map<oid_t, ASN1Tag> attributeStringTypeMap = {
         {"2.5.4.6",                PRINTABLE_STRING},   // countryName
         {"2.5.4.8",                UTF8_STRING},        // stateOrProvinceName
         {"2.5.4.7",                UTF8_STRING},        // localityName
@@ -63,15 +63,15 @@ namespace CBZ::PKCS {
     }
 
     std::vector<uint8_t> AlgorithmIdentifier::encode() const {
-        return this->to_asn1().encode();
+        return to_asn1().encode();
     }
 
     // Example: AlgorithmIdentifier = {algorithm: 1.2.840.113549.1.1.1, parameters:?}
     // I removed the parameters handling since their structure is dependent on the algorithm itself and there's no use in going into this rabbit hole
     std::ostream& operator<<(std::ostream& os, const PKCS::AlgorithmIdentifier& ai) {
-        os  << "AlgorithmIdentifier = {algorithm: "
+        os  << "AlgorithmIdentifier = { algorithm = "
             << ai.algorithm
-            << ", parameters:?} ";
+            << " , parameters = ? } ";
         return os;
     }
 
@@ -227,7 +227,7 @@ namespace CBZ::PKCS {
     }
 
     std::vector<uint8_t> Attribute::encode() const {
-        return this->to_asn1().encode();
+        return to_asn1().encode();
     }
 
     // Example: Attribute = { Type: 2.2.2.1, values = [ (tag: 22 "test"), (tag: 12 "meow"), (tag: 19 "TEST") ] }
@@ -238,8 +238,8 @@ namespace CBZ::PKCS {
         std::vector<uint8_t> 
         >;
 
-        os  << "Attribute = {"
-            << " Type: "
+        os  << "Attribute = { "
+            << " type = "
             << ATTR._type
             << ", values = [ ";
 
@@ -257,7 +257,7 @@ namespace CBZ::PKCS {
             if(!first) { os << ", "; }
             first = false;
 
-            os << "(tag: " << tag << " ";
+            os << "( tag = " << tag << ", ";
 
             // Detailed explaination of the std::visit code:
             //
@@ -295,16 +295,16 @@ namespace CBZ::PKCS {
                 } 
                 // byte vector
                 else if constexpr (std::is_same<T, std::vector<uint8_t>>::value){
-                    os << "bytes[ " << std::hex << std::setfill('0');
+                    os << "bytes [ " << std::hex << std::setfill('0');
                     // print each byte
                     for(uint8_t byte : arg){
                         os << " 0x" << std::setw(2) << std::setfill ('0') << static_cast<int>(byte);
                     }
 
-                    os << std::dec << " ]";
+                    os << std::dec << " ] ";
                 }
             }, val);
-            os << ")";
+            os << ") ";
         }
         os << " ] } ";
         return os;
@@ -341,16 +341,16 @@ namespace CBZ::PKCS {
     }
 
     std::vector<uint8_t> SubjectPublicKeyInfo::encode() const {
-        return this->to_asn1().encode();
+        return to_asn1().encode();
     }
 
     // Example: SubjectPublicKeyInfo = { AlgorithmIdentifier = {algorithm: 1.2.840.113549.1.1.1, parameters: 0x05 0x00} RSAPublicKey: = {n: 1234, e: 1234}}
     std::ostream& operator<<(std::ostream& os, const SubjectPublicKeyInfo& SPKI){
         os << "SubjectPublicKeyInfo = { "
             << SPKI._algorithm
-            << " "
+            << ", "
             << SPKI._subject_public_key
-            << "} ";
+            << " } ";
         return os;
     }
 
@@ -428,7 +428,7 @@ namespace CBZ::PKCS {
     }
 
     std::vector<uint8_t> AttributeTypeAndValue::encode() const {
-        return this->to_asn1().encode();
+        return to_asn1().encode();
     }
 
     // I decided not to include value_type in the output as I think it would add unnecessary clutter
@@ -436,11 +436,11 @@ namespace CBZ::PKCS {
         std::ostream& os,
         const PKCS::AttributeTypeAndValue& atav
     ) {
-        os << "AttributeTypeAndValue = {type: " 
+        os << "AttributeTypeAndValue = { type = " 
             << atav._type 
-            << ", value: " 
+            << ", value = " 
             << atav._value 
-            << "} ";
+            << " } ";
         return os;
     }
 
@@ -477,7 +477,7 @@ namespace CBZ::PKCS {
     }
 
     std::vector<uint8_t> RelativeDistinguishedName::encode() const {
-        return this->to_asn1().encode();
+        return to_asn1().encode();
     }
 
     // Example: RelativeDistinguishedName = { AttributeTypeAndValue = {type: 1.1.1.1, value: TEST}, AttributeTypeAndValue = {type: 2.2.2.2, value: TSET} }
@@ -492,7 +492,7 @@ namespace CBZ::PKCS {
             if (i + 1 < attrs.size()) os << ", ";
         }
 
-        os << " }";
+        os << " } ";
         return os;
     }
 
@@ -500,8 +500,8 @@ namespace CBZ::PKCS {
     RDNSequence::RDNSequence(
         std::vector<std::pair<std::string, std::string>> list
     ) {
-        for(auto& [OID, val] : list){
-            _rdn_sequence.emplace_back(std::move(OID), std::move(val));
+        for(auto& [oid_t, val] : list){
+            _rdn_sequence.emplace_back(std::move(oid_t), std::move(val));
         }
     }
 
@@ -537,7 +537,7 @@ namespace CBZ::PKCS {
     }
 
     std::vector<uint8_t> RDNSequence::encode() const {
-        return this->to_asn1().encode();
+        return to_asn1().encode();
     }
 
     // Example: RDNSequence = [ RelativeDistinguishedName = { AttributeTypeAndValue = {type: 1.1.1.1, value: TEST} }, RelativeDistinguishedName = { AttributeTypeAndValue = {type: 2.2.2.2, value: TSET} }, RelativeDistinguishedName = { AttributeTypeAndValue = {type: 3.3.3.3, value: SETT}, AttributeTypeAndValue = {type: 4.4.4.4, value: TTES} } ]
@@ -567,8 +567,8 @@ namespace CBZ::PKCS {
     : _subject_name(std::move(subject_name)),
     _subject_pkinfo(algorithm, std::move(n), std::move(e))
     {
-        for(auto& [OID, val] : attributes){
-            _attributes.emplace_back(std::move(OID), std::move(val));
+        for(auto& [oid_t, val] : attributes){
+            _attributes.emplace_back(std::move(oid_t), std::move(val));
         }
     }
 
@@ -579,7 +579,7 @@ namespace CBZ::PKCS {
 
         if (root_object.tag() != ASN1Tag::SEQUENCE || root_object.children().size() != 4) _semantics_failed();
         if (root_object.children()[0].tag() != ASN1Tag::INTEGER) _semantics_failed();
-        if (root_object.children()[3].tag() != ASN1Tag::CONSTRUCTED_TYPE) _semantics_failed();
+        if (root_object.children()[3].tag() != ASN1Tag::CONSTRUCTED_TYPE0) _semantics_failed();
 
         // decode
 
@@ -618,7 +618,7 @@ namespace CBZ::PKCS {
         for (const Attribute& attr : _attributes)
             attrs.push_back(attr.to_asn1());
         
-        components.push_back(ASN1Object(CONSTRUCTED_TYPE, std::move(attrs)));
+        components.push_back(ASN1Object(CONSTRUCTED_TYPE0, std::move(attrs)));
 
         return ASN1Sequence(
             std::move(components)
@@ -626,15 +626,15 @@ namespace CBZ::PKCS {
     }
 
     std::vector<uint8_t> CertificationRequestInfo::encode() const {
-        return this->to_asn1().encode();
+        return to_asn1().encode();
     }
 
     std::ostream& operator<<(std::ostream& os, const CertificationRequestInfo& cri){
-        os  << "CertificationRequest = {"
-            << "Version = "<< cri._version << ", "
+        os  << "CertificationRequestInfo = {"
+            << " Version = "<< cri._version << ", "
             << "subjectName = " << cri._subject_name << ", "
             << "subjectPKInfo = " << cri._subject_pkinfo << ", "
-            << "attributes = [";
+            << "attributes = [ ";
 
         // comma trailing prevention
         bool first = true;
@@ -646,7 +646,7 @@ namespace CBZ::PKCS {
             os << attr;
         }
 
-        os << "] } ";
+        os << " ] } ";
         return os;
     }
 
@@ -687,37 +687,55 @@ namespace CBZ::PKCS {
     }
 
     std::vector<uint8_t> CertificationRequest::encode() const {
-        return this->to_asn1().encode();
+        return to_asn1().encode();
     }
 
-    // generate signature for CSR
-    std::vector<uint8_t> CertificationRequest::sign(const RSAPrivateKey& private_key){
-        try {
-            _signature = Signature::RSASSA_PKCS1_V1_5_SIGN(
-                private_key,
-                _certification_request_info.encode()
-            );
-            return _signature;
-        } catch (std::runtime_error const& e) {
-            CBZ::Utils::print_nested(e);
-            exit(1);
+    // generate signature for the given CSR
+    // this function may throw and needs to be wrapped inside the try-catch clause
+    void CertificationRequest::sign(const RSAPrivateKey& private_key){
+        if (
+            uint32_t algorithm = _certification_request_info.get_subject_pkinfo().get_algorithm().algorithm;
+            algorithm != CSRSupportedAlgorithms::rsaEncryption
+        ) {
+            throw std::runtime_error("[CertificationRequest::sign] Unsupported encryption scheme");
         }
+        _signature = Signature::RSASSA_PKCS1_V1_5_SIGN(
+            private_key,
+            _certification_request_info.encode()
+        );
+    }
+
+    bool CertificationRequest::verify() const {
+        // get public key from certification certification request
+        const SubjectPublicKeyInfo& public_key_info = _certification_request_info.get_subject_pkinfo();
+        if (public_key_info.get_algorithm().algorithm != CSRSupportedAlgorithms::rsaEncryption) {
+            throw std::runtime_error("[Certificate::verify] Unsupported encryption scheme");
+        }
+        // get public key from certification certification request
+        const RSAPublicKey& public_key = get_public_key();
+        // get certifcationRequestInfo encoded as DER (that's the part of CSR that is actually signed)
+        const std::vector<uint8_t>& message = get_certification_request_info().encode();
+        // get signature
+        const std::vector<uint8_t>& signature = get_signature();
+        // verify signature
+        return Signature::RSASSA_PKCS1_V1_5_VERIFY(public_key, message, signature);
     }
 
     // Example:
     // CertificationRequestInfo = {Version = 0, subjectName = RDNSequence = [ RelativeDistinguishedName = { AttributeTypeAndValue = {type: 2.5.4.6, value: PL} }, RelativeDistinguishedName = { AttributeTypeAndValue = {type: 2.5.4.8, value: Lesser Poland} }, RelativeDistinguishedName = { AttributeTypeAndValue = {type: 2.5.4.10, value: AGH} } ], subjectPKInfo = SubjectPublicKeyInfo = { AlgorithmIdentifier = {algorithm: 1.2.840.113549.1.1.1, parameters: 0x05 0x00} RSAPublicKey: = {n: 1234567890, e: 987654321}}, attributes = [Attribute = { Type: 1.2.840.113549.1.1.1, values = [ (tag: 12 "example.com") ] }] }
     std::ostream& operator<<(std::ostream& os, const CertificationRequest& cr){
-        os  << "CertificationRequestInfo = { " 
+        os  << "CertificationRequest = { " 
             << cr._certification_request_info << ", "
             << cr._signature_algorithm << ", "
-            << "Signature: "
+            << "signature = "
+            << std::hex << std::setfill('0');
             
         // print signature's bytes
-            << std::hex << std::setfill('0');
         for(uint8_t byte : cr._signature)
             os << std::setw(2) << static_cast<int>(byte);
 
-        os << std::dec << " } ";
+        os << std::dec << std::setfill(' ');
+        os << " } ";
         return os;
     }
 
@@ -746,26 +764,26 @@ namespace CBZ::PKCS {
         std::vector<ASN1Object> children;
 
         // _not_before
-        _ASN1_helpers::_date_to_sdate(this->_not_before, &sdate);
+        _ASN1_helpers::_date_to_sdate(_not_before, &sdate);
         if (sdate.year >= 1950 && sdate.year <= 2049) {
-            children.push_back(ASN1UTCTime(this->_not_before));
+            children.push_back(ASN1UTCTime(_not_before));
         } else {
-            children.push_back(ASN1GeneralizedTime(this->_not_before));
+            children.push_back(ASN1GeneralizedTime(_not_before));
         }
         
         // _not_after
-        _ASN1_helpers::_date_to_sdate(this->_not_after, &sdate);
+        _ASN1_helpers::_date_to_sdate(_not_after, &sdate);
         if (sdate.year >= 1950 && sdate.year <= 2049) {
-            children.push_back(ASN1UTCTime(this->_not_before));
+            children.push_back(ASN1UTCTime(_not_before));
         } else {
-            children.push_back(ASN1GeneralizedTime(this->_not_before));
+            children.push_back(ASN1GeneralizedTime(_not_before));
         }
 
         return ASN1Sequence(std::move(children));
     }
 
     std::vector<uint8_t> Validity::encode() const {
-        return this->to_asn1().encode();
+        return to_asn1().encode();
     }
 
     std::ostream& operator<<(std::ostream& os, const Validity& validity) {
@@ -773,10 +791,10 @@ namespace CBZ::PKCS {
             return std::format("{:%b %d %Y %H:%M:%S}", date);
         };
 
-        os  << "Validity = {"
+        os  << "Validity = { "
             << "notBefore = " << _printable_date(validity._not_before) << ", "
             << "notAfter = " << _printable_date(validity._not_after)
-            << "} ";
+            << " } ";
         return os;
     }
 
@@ -795,22 +813,145 @@ namespace CBZ::PKCS {
     }
 
     std::vector<uint8_t> CertificateSerialNumber::encode() const {
-        return this->to_asn1().encode();
+        return to_asn1().encode();
     }
 
-    std::ostream& operator<<(std::ostream& os, CertificateSerialNumber csn) {
+    std::ostream& operator<<(std::ostream& os, const CertificateSerialNumber& csn) {
         os  << "CertificateSerialNumber = " << csn.get_serial_number()
             << " ";
         return os;
     }
 
-    const CBZ::Utils::BidirectionalMap<uint32_t, OID> CSRSupportedAlgorithms::algorithmMap = {
+    ASN1Object Extension::to_asn1() const {
+        return ASN1Sequence({
+            ASN1ObjectIdentifier(_extn_id),
+            ASN1Boolean(_critical),
+            ASN1OctetString(_extn_value)
+        });
+    }
+
+    std::vector<uint8_t> Extension::encode() const {
+        return to_asn1().encode();
+    }
+
+    std::ostream& operator<<(std::ostream& os, const Extension& ex) {
+        os  << "Extension = { "
+            << "extnID = " << ex._extn_id << ", "
+            << "critical = " << std::boolalpha << ex._critical << std::noboolalpha << ", "
+            << "extnValue = { "
+            << std::hex << std::setfill('0');
+
+        for(uint8_t byte : ex._extn_value)
+            os << std::setw(2) << static_cast<int>(byte);
+
+        os  << std::dec << std::setfill(' ')
+            << " } } ";
+        return os;
+    }
+
+    ASN1Object TBSCertificate::to_asn1() const {
+        std::vector<ASN1Object> extensions_asn1;
+        for (const Extension& ex : _extensions) {
+            extensions_asn1.push_back(ex.to_asn1());
+        }
+
+        return ASN1Sequence({
+            ASN1Object(CONSTRUCTED_TYPE0, {ASN1Integer(_version)}),
+            _certificate_serial_number.to_asn1(),
+            _signature.to_asn1(),
+            _issuer.to_asn1(),
+            _validity.to_asn1(),
+            _subject.to_asn1(),
+            _subject_public_key_info.to_asn1(),
+            ASN1Object(CONSTRUCTED_TYPE3, {ASN1Sequence(std::move(extensions_asn1))})
+        });
+    }
+
+    std::vector<uint8_t> TBSCertificate::encode() const {
+        return to_asn1().encode();
+    }
+
+    std::ostream& operator<<(std::ostream& os, const TBSCertificate& tbs_cert) {
+        os  << "TBSCertificate = { "
+            << "version = " << tbs_cert._version << ", "
+            << "serialNumber = " << tbs_cert._certificate_serial_number << ", "
+            << "signature = " << tbs_cert._signature << ", "
+            << "issuer = " << tbs_cert._issuer << ", "
+            << "validity = " << tbs_cert._validity << ", "
+            << "subject = " << tbs_cert._subject << ", "
+            << "subjectPublicKeyInfo = " << tbs_cert._subject_public_key_info << ", "
+            << "extensions = { ";
+        for (const Extension& ex : tbs_cert._extensions) {
+            os << ex << ", ";
+        }
+        os  << " } } ";
+        return os;
+    }
+
+    ASN1Object Certificate::to_asn1() const {
+        return ASN1Sequence({
+            _tbs_certificate.to_asn1(),
+            _signature_algorithm.to_asn1(),
+            ASN1BitString(_signature)
+        });
+    }
+
+    std::vector<uint8_t> Certificate::encode() const {
+        return to_asn1().encode();
+    }
+
+    // generates signature for the given certificate
+    // this function may throw and needs to be wrapped inside the try-catch clause
+    void Certificate::sign(const RSAPrivateKey& private_key){
+        if (
+            uint32_t algorithm = _tbs_certificate.get_subject_public_key_info().get_algorithm().algorithm;
+            algorithm != CSRSupportedAlgorithms::rsaEncryption
+        ) {
+            throw std::runtime_error("[Certificate::sign] Unsupported encryption scheme");
+        }
+        _signature = Signature::RSASSA_PKCS1_V1_5_SIGN(
+            private_key,
+            _tbs_certificate.encode()
+        );
+    }
+
+    bool Certificate::verify(const Certificate& ca) const {
+        // get public key from certification certification request
+        const SubjectPublicKeyInfo& public_key_info = ca._tbs_certificate.get_subject_public_key_info();
+        if (public_key_info.get_algorithm().algorithm != CSRSupportedAlgorithms::rsaEncryption) {
+            throw std::runtime_error("[Certificate::verify] Unsupported encryption scheme");
+        }
+        const RSAPublicKey& public_key = public_key_info.get_public_key();
+        // get certifcationRequestInfo encoded as DER (that's the part of CSR that is actually signed)
+        const std::vector<uint8_t>& message = get_tbs_certificate().encode();
+        // get signature
+        const std::vector<uint8_t>& signature = get_signature();
+        // verify signature
+        return Signature::RSASSA_PKCS1_V1_5_VERIFY(public_key, message, signature);
+    }
+
+    std::ostream& operator<<(std::ostream& os, const Certificate& cert) {
+        os  << "Certificate = { "
+            << "tbsCertificate = " << cert._tbs_certificate << ", "
+            << "signatureAlgorithm = " << cert._signature_algorithm << ", "
+            << "signature = "
+        // print signature's bytes
+            << std::hex << std::setfill('0');
+        for(uint8_t byte : cert._signature)
+            os << std::setw(2) << static_cast<int>(byte);
+
+        os << std::dec << std::setfill(' ');
+        os << " } ";
+        return os;
+    }
+
+    const CBZ::Utils::BidirectionalMap<uint32_t, oid_t> CSRSupportedAlgorithms::algorithmMap = {
         {rsaEncryption,             "1.2.840.113549.1.1.1"  },
         {sha256WithRSAEncryption,   "1.2.840.113549.1.1.11" },
         {sha256,                    "2.16.840.1.101.3.4.2.1"},
     };
 
-    const CBZ::Utils::BidirectionalMap<uint32_t, OID> ExtensionSupportedIDs::idMap = {
+    const CBZ::Utils::BidirectionalMap<uint32_t, oid_t> ExtensionSupportedIDs::idMap = {
         {authorityKeyIdentifier,    "2.5.29.35"},
         {subjectKeyIdentifier,      "2.5.29.14"},
         {basicConstraints,          "2.5.29.19"},
@@ -824,26 +965,26 @@ namespace CBZ::PKCS {
         using namespace HMACFunctions;
         using namespace EncryptionSchemes;
 
-        const OID RSAEncryption::oid = "1.2.840.113549.1.1.1";
-        const OID PBES2::oid = "1.2.840.113549.1.5.13";
-        const OID PBKDF2::oid = "1.2.840.113549.1.5.12";
-        const OID HMACWithSHA256::oid = "1.2.840.113549.2.9";
-        const OID AES::AES_128_CBC::oid = "2.16.840.1.101.3.4.1.2";
-        const OID AES::AES_256_CBC::oid = "2.16.840.1.101.3.4.1.42";
+        const oid_t RSAEncryption::oid = "1.2.840.113549.1.1.1";
+        const oid_t PBES2::oid = "1.2.840.113549.1.5.13";
+        const oid_t PBKDF2::oid = "1.2.840.113549.1.5.12";
+        const oid_t HMACWithSHA256::oid = "1.2.840.113549.2.9";
+        const oid_t AES::AES_128_CBC::oid = "2.16.840.1.101.3.4.1.2";
+        const oid_t AES::AES_256_CBC::oid = "2.16.840.1.101.3.4.1.42";
 
-        const std::unordered_map<OID, PrivateKeyAlgorithmsEnum> PrivateKeyAlgorithms::privateKeyAlgorithmsMap = {
+        const std::unordered_map<oid_t, PrivateKeyAlgorithmsEnum> PrivateKeyAlgorithms::privateKeyAlgorithmsMap = {
             { RSAEncryption::oid, PrivateKeyAlgorithmsEnum::rsaEncryption }
         };
-        const std::unordered_map<OID, EncryptionAlgorithmsEnum> EncryptionAlgorithms::encryptionAlgorithmsMap = {
+        const std::unordered_map<oid_t, EncryptionAlgorithmsEnum> EncryptionAlgorithms::encryptionAlgorithmsMap = {
             { PBES2::oid, EncryptionAlgorithmsEnum::pbes2 }
         };
-        const std::unordered_map<OID, KDFsEnum> KDFs::kdfsMap = {
+        const std::unordered_map<oid_t, KDFsEnum> KDFs::kdfsMap = {
             { PBKDF2::oid, KDFsEnum::pbkdf2 }
         };
-        const std::unordered_map<OID, HMACFunctionsEnum> HMACFunctions::hmacFunctionsMap = {
+        const std::unordered_map<oid_t, HMACFunctionsEnum> HMACFunctions::hmacFunctionsMap = {
             { HMACWithSHA256::oid, HMACFunctionsEnum::hmacWithSHA256 }
         };
-        const std::unordered_map<OID, EncryptionSchemesEnum> EncryptionSchemes::encryptionSchemesMap = {
+        const std::unordered_map<oid_t, EncryptionSchemesEnum> EncryptionSchemes::encryptionSchemesMap = {
             { AES::AES_128_CBC::oid, EncryptionSchemesEnum::aes_128_CBC },
             { AES::AES_256_CBC::oid, EncryptionSchemesEnum::aes_256_CBC }
         };
@@ -1139,7 +1280,8 @@ namespace CBZ::PKCS {
                         return ERR_OK;
                     }
                     default:
-                        throw std::runtime_error("[PKCS::PrivateKeyAlgorithms::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                        // throw std::runtime_error("[PKCS::PrivateKeyAlgorithms::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                        std::unreachable();
                 }
             }
 
@@ -1185,7 +1327,8 @@ namespace CBZ::PKCS {
                         return ERR_OK;
                     }
                     default:
-                        throw std::runtime_error("[PKCS::EncryptionAlgorithms::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                        // throw std::runtime_error("[PKCS::EncryptionAlgorithms::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                        std::unreachable();
                 }
             }
 
@@ -1230,7 +1373,8 @@ namespace CBZ::PKCS {
                         return ERR_OK;
                     }
                     default:
-                        throw std::runtime_error("[PKCS::KDFs::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                        // throw std::runtime_error("[PKCS::KDFs::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                        std::unreachable();
                 }
             }
 
@@ -1270,7 +1414,8 @@ namespace CBZ::PKCS {
                         return ERR_OK;
                     }
                     default:
-                        throw std::runtime_error("[PKCS::HMACFunctions::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                        // throw std::runtime_error("[PKCS::HMACFunctions::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                        std::unreachable();
                 }
             }
 
@@ -1320,7 +1465,8 @@ namespace CBZ::PKCS {
                         return ERR_OK;
                     }
                     default:
-                        throw std::runtime_error("[PKCS::EncryptionSchemes::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                        // throw std::runtime_error("[PKCS::EncryptionSchemes::extract_algorithm] Matched something in the map, but not exactly... call the cops should you see this");
+                        std::unreachable();
                 }
             }
 
