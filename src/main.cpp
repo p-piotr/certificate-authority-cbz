@@ -115,11 +115,9 @@ CBZ::PKCS::Certificate generate_self_signed_certificate(
             subject_info,
             SubjectPublicKeyInfo(CSRSupportedAlgorithms::rsaEncryption, RSAPublicKey(subject_private_key)),
             {
-                // change those arbitrary values to something more meaningful
                 Extension(ExtensionSupportedIDs::subjectKeyIdentifier, false, ASN1OctetString(
                     subject_key_identifier // note that we can't move since we'll use it below, too
                 ).encode()),
-                // the same as above
                 Extension(ExtensionSupportedIDs::authorityKeyIdentifier, false, ASN1Sequence({
                     ASN1Object(CONTEXT_SPECIFIC0, subject_key_identifier) // it's a self-signed cert => aurhority=subject
                 }).encode()),
@@ -166,11 +164,9 @@ CBZ::PKCS::Certificate generate_certificate(
             subject,
             subject_pk_info,
             {
-                // change those arbitrary values to something more meaningful
                 Extension(ExtensionSupportedIDs::subjectKeyIdentifier, false, ASN1OctetString(
                     std::move(subject_key_identifier)
                 ).encode()),
-                // the same as above
                 Extension(ExtensionSupportedIDs::authorityKeyIdentifier, false, ASN1Sequence({
                     ASN1Object(CONTEXT_SPECIFIC0, std::move(authority_key_identifier))
                 }).encode())
