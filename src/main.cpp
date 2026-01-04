@@ -81,48 +81,6 @@ void handle_arguments(
     }
 }
 
-enum class PKCSEntity {
-    PRIVATE_KEY,
-    ENCRYPTED_PRIVATE_KEY,
-    CSR,
-    CERTIFICATE
-};
-// modify that function so it asks whether to overwrite if the file exists
-void write_pkcs_to_file(const ASN1Object& root_object, PKCSEntity entity, std::string filepath) {
-    const std::string* header;
-    const std::string* footer;
-
-    switch (entity) {
-        case PKCSEntity::PRIVATE_KEY:
-            header = &Labels::private_key_header;
-            footer = &Labels::private_key_footer;
-            break;
-        case PKCSEntity::ENCRYPTED_PRIVATE_KEY:
-            header = &Labels::encrypted_private_key_header;
-            footer = &Labels::encrypted_private_key_footer;
-            break;
-        case PKCSEntity::CSR:
-            header = &Labels::csr_header;
-            footer = &Labels::csr_footer;
-            break;
-        case PKCSEntity::CERTIFICATE:
-            header = &Labels::certificate_header;
-            footer = &Labels::certificate_footer;
-            break;
-        default:
-            throw std::runtime_error("[write_pkcs_to_file] Unknown type");
-    }
-
-    std::vector<uint8_t> asn1_encoded = root_object.encode();
-    std::string base64 = Base64::encode(asn1_encoded);
-    std::ofstream entity_of(filepath); // this may leak data but i don't care yet
-    entity_of << *header << base64 << '\n' << *footer;
-    entity_of.flush();
-
-    secure_zero_memory(asn1_encoded);
-    secure_zero_memory(base64);
-}
-
 CBZ::PKCS::Certificate generate_self_signed_certificate(
     std::vector<std::pair<std::string, std::string>> subject_info,
     asn1date_t not_before,
@@ -284,7 +242,12 @@ int main(int argc, char* argv[]){
         ca_private_key
     );
 
-    write_pkcs_to_file(ca_certificate.to_asn1(), PKCSEntity::CERTIFICATE, ca_certificate_filepath);
+    std::vector<uint8_t> ca_certificate_asn1 = ca_certificate.to_asn1().encode();
+    std::string ca_certificate_asn1_b64 = Base64::encode(ca_certificate_asn1);
+    write_pkcs_to_file(ca_certificate_asn1_b64, PKCSEntity::CERTIFICATE, ca_certificate_filepath);
+    CBZ::Security::secure_zero_memory(ca_certificate_asn1);
+    CBZ::Security::secure_zero_memory(ca_certificate_asn1_b64);
+
     std::cout << "CA certificate written to " << ca_certificate_filepath << "\n";
     std::cout << "Signature verification: "
         << std::boolalpha << ca_certificate.verify(ca_certificate) << std::noboolalpha << "\n\n";
@@ -311,7 +274,12 @@ int main(int argc, char* argv[]){
     );
     subject_csr.sign(subject_private_key);
 
-    write_pkcs_to_file(subject_csr.to_asn1(), PKCSEntity::CSR, subject_csr_filepath);
+    std::vector<uint8_t> subject_csr_asn1 = subject_csr.to_asn1().encode();
+    std::string subject_csr_asn1_b64 = Base64::encode(subject_csr_asn1);
+    write_pkcs_to_file(subject_csr_asn1_b64, PKCSEntity::CSR, subject_csr_filepath);
+    CBZ::Security::secure_zero_memory(subject_csr_asn1);
+    CBZ::Security::secure_zero_memory(subject_csr_asn1_b64);
+
     std::cout << "CA certificate written to " << subject_csr_filepath << "\n";
     std::cout << "Signature verification: "
         << std::boolalpha << subject_csr.verify() << std::noboolalpha << "\n\n";
@@ -329,7 +297,12 @@ int main(int argc, char* argv[]){
         ca_private_key
     );
 
-    write_pkcs_to_file(subject_certificate.to_asn1(), PKCSEntity::CERTIFICATE, subject_certificate_filepath);
+    std::vector<uint8_t> subject_certificate_asn1 = subject_certificate.to_asn1().encode();
+    std::string subject_certificate_asn1_b64 = Base64::encode(subject_certificate_asn1);
+    write_pkcs_to_file(subject_certificate_asn1_b64, PKCSEntity::CERTIFICATE, subject_certificate_filepath);
+    CBZ::Security::secure_zero_memory(subject_certificate_asn1);
+    CBZ::Security::secure_zero_memory(subject_certificate_asn1_b64);
+
     std::cout << "CA certificate written to " << subject_certificate_filepath << std::endl;
     std::cout << "Signature verification: "
         << std::boolalpha << subject_certificate.verify(ca_certificate) << std::noboolalpha << std::endl;

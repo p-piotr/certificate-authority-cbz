@@ -8,7 +8,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include "utils/io.h"
-
+#include "pkcs/labels.h"
 
 namespace CBZ::Utils::IO {
 
@@ -145,4 +145,36 @@ namespace CBZ::Utils::IO {
         return result;
     }
 
+    // modify that function so it asks whether to overwrite if the file exists
+    void write_pkcs_to_file(const std::string& base64, PKCSEntity entity, std::string filepath) {
+        using namespace CBZ::PKCS;
+
+        const std::string* header;
+        const std::string* footer;
+
+        switch (entity) {
+            case PKCSEntity::PRIVATE_KEY:
+                header = &Labels::private_key_header;
+                footer = &Labels::private_key_footer;
+                break;
+            case PKCSEntity::ENCRYPTED_PRIVATE_KEY:
+                header = &Labels::encrypted_private_key_header;
+                footer = &Labels::encrypted_private_key_footer;
+                break;
+            case PKCSEntity::CSR:
+                header = &Labels::csr_header;
+                footer = &Labels::csr_footer;
+                break;
+            case PKCSEntity::CERTIFICATE:
+                header = &Labels::certificate_header;
+                footer = &Labels::certificate_footer;
+                break;
+            default:
+                throw std::runtime_error("[write_pkcs_to_file] Unknown type");
+        }
+
+        std::ofstream entity_of(filepath); // this may leak data but i don't care yet
+        entity_of << *header << base64 << '\n' << *footer;
+        entity_of.flush();
+    }
 } // namespace CBZ::Utils::IO

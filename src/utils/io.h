@@ -27,4 +27,11 @@ namespace CBZ::Utils::IO {
 	// e.g. { {"1.2.840.113549.1.9.7", "1234"} }
 	std::vector<std::pair<std::string,std::string>> ask_for_attrs_info();
 
+    enum class PKCSEntity {
+        PRIVATE_KEY,
+        ENCRYPTED_PRIVATE_KEY,
+        CSR,
+        CERTIFICATE
+    };
+    void write_pkcs_to_file(const std::string& base64, PKCSEntity entity, std::string filepath);
 }
