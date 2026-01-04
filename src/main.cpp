@@ -3,6 +3,7 @@
 #include <utility>
 #include <fstream>
 #include <sstream>
+#include <random>
 #include "utils/io.h"
 #include "pkcs/sign.h"
 #include "pkcs/pkcs.h"
@@ -11,6 +12,7 @@
 #include "utils/base64.h"
 #include "pkcs/private_key.h"
 #include "pkcs/labels.h"
+#include "hash/sha.h"
 
 using namespace CBZ;
 using namespace CBZ::Security;
@@ -81,15 +83,32 @@ void handle_arguments(
     }
 }
 
+mpz_class generate_id(mp_bitcnt_t bit_size) {
+    // as per https://gmplib.org/manual/Random-State-Initialization
+    // this will initialize a MT (Mersenne Twister) based generator
+    thread_local std::unique_ptr<gmp_randclass> rng = []() {
+        auto rng_ptr = std::make_unique<gmp_randclass>(gmp_randinit_default);
+        std::random_device rd;
+        rng_ptr->seed(rd());
+        return rng_ptr;
+    }();
+
+    return rng->get_z_bits(bit_size);
+}
+
 CBZ::PKCS::Certificate generate_self_signed_certificate(
     std::vector<std::pair<std::string, std::string>> subject_info,
     asn1date_t not_before,
     asn1date_t not_after,
     const RSAPrivateKey& subject_private_key
 ) {
+    std::vector<uint8_t> subject_key_identifier(CBZ::SHA::SHA1::DIGEST_SIZE);
+    std::vector<uint8_t> public_key_bitstring = RSAPublicKey(subject_private_key).to_asn1().value();
+    CBZ::SHA::SHA1::digest(public_key_bitstring, subject_key_identifier.data());
+
     Certificate ca_certificate = Certificate(
         TBSCertificate(
-            mpz_class("399428965409152426586363763062079902659407181241"), // change that ID to be auto-generated
+            generate_id(160),
             AlgorithmIdentifier(CSRSupportedAlgorithms::sha256WithRSAEncryption),
             subject_info,
             Validity(std::move(not_before), std::move(not_after)),
@@ -97,16 +116,12 @@ CBZ::PKCS::Certificate generate_self_signed_certificate(
             SubjectPublicKeyInfo(CSRSupportedAlgorithms::rsaEncryption, RSAPublicKey(subject_private_key)),
             {
                 // change those arbitrary values to something more meaningful
-                Extension(ExtensionSupportedIDs::subjectKeyIdentifier, false, ASN1OctetString({
-                    0x69, 0x69, 0xC6, 0x4D, 0x77, 0xAA, 0xCA, 0x07, 0xE2, 0xA1,
-                    0x95, 0x0E, 0x5A, 0x3C, 0xBF, 0xF9, 0xED, 0xB4, 0xD3, 0x19
-                }).encode()),
+                Extension(ExtensionSupportedIDs::subjectKeyIdentifier, false, ASN1OctetString(
+                    subject_key_identifier // note that we can't move since we'll use it below, too
+                ).encode()),
                 // the same as above
                 Extension(ExtensionSupportedIDs::authorityKeyIdentifier, false, ASN1Sequence({
-                    ASN1Object(CONTEXT_SPECIFIC0, std::vector<uint8_t>{
-                        0x69, 0x69, 0xC6, 0x4D, 0x77, 0xAA, 0xCA, 0x07, 0xE2, 0xA1,
-                        0x95, 0x0E, 0x5A, 0x3C, 0xBF, 0xF9, 0xED, 0xB4, 0xD3, 0x19
-                    })
+                    ASN1Object(CONTEXT_SPECIFIC0, subject_key_identifier) // it's a self-signed cert => aurhority=subject
                 }).encode()),
                 Extension(ExtensionSupportedIDs::basicConstraints, true, ASN1Sequence({ ASN1Boolean(true) }).encode())
             }
@@ -133,9 +148,18 @@ CBZ::PKCS::Certificate generate_certificate(
     const auto& subject_pk_info = csr.get_certification_request_info().get_subject_pkinfo();
     const auto& issuer = ca_certificate.get_tbs_certificate().get_subject();
 
+    std::vector<uint8_t> subject_key_identifier(CBZ::SHA::SHA1::DIGEST_SIZE);
+    std::vector<uint8_t> public_key_bitstring = subject_pk_info.get_public_key().to_asn1().value();
+    CBZ::SHA::SHA1::digest(public_key_bitstring, subject_key_identifier.data());
+
+    std::vector<uint8_t> authority_key_identifier(CBZ::SHA::SHA1::DIGEST_SIZE);
+    std::vector<uint8_t> authority_public_key_bitstring = 
+        ca_certificate.get_tbs_certificate().get_subject_public_key_info().get_public_key().to_asn1().value();
+    CBZ::SHA::SHA1::digest(authority_public_key_bitstring, authority_key_identifier.data());
+
     Certificate subject_certificate = Certificate(
         TBSCertificate(
-            mpz_class("277784947810927137764440751906145424334048061781"), // change that ID to be auto-generated
+            generate_id(160),
             AlgorithmIdentifier(CSRSupportedAlgorithms::sha256WithRSAEncryption),
             issuer,
             Validity(std::move(not_before), std::move(not_after)),
@@ -143,16 +167,12 @@ CBZ::PKCS::Certificate generate_certificate(
             subject_pk_info,
             {
                 // change those arbitrary values to something more meaningful
-                Extension(ExtensionSupportedIDs::subjectKeyIdentifier, false, ASN1OctetString({
-                    0x62, 0x51, 0x4F, 0x94, 0x93, 0x14, 0x4A, 0xB9, 0x8F, 0x9F,
-                    0xCE, 0x1E, 0xA8, 0x8B, 0x32, 0x95, 0x0D, 0xD8, 0x0A, 0x00
-                }).encode()),
+                Extension(ExtensionSupportedIDs::subjectKeyIdentifier, false, ASN1OctetString(
+                    std::move(subject_key_identifier)
+                ).encode()),
                 // the same as above
                 Extension(ExtensionSupportedIDs::authorityKeyIdentifier, false, ASN1Sequence({
-                    ASN1Object(CONTEXT_SPECIFIC0, std::vector<uint8_t>{
-                        0x69, 0x69, 0xC6, 0x4D, 0x77, 0xAA, 0xCA, 0x07, 0xE2, 0xA1,
-                        0x95, 0x0E, 0x5A, 0x3C, 0xBF, 0xF9, 0xED, 0xB4, 0xD3, 0x19
-                    })
+                    ASN1Object(CONTEXT_SPECIFIC0, std::move(authority_key_identifier))
                 }).encode())
             }
         ),
@@ -307,11 +327,6 @@ int main(int argc, char* argv[]){
     std::cout << "Signature verification: "
         << std::boolalpha << subject_certificate.verify(ca_certificate) << std::noboolalpha << std::endl;
     // verify yourself with `openssl verify -CAfile cacert.pem subcert.pem`
-
-
-    // TODO:
-    // 1. fix arbitrary values used in generate_self_signed_certificate and generate_certificate
-    // 2. move write_pkcs_to_file to a more sensible place (like utils/io.cpp)
 
     return 0;
 }
