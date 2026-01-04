@@ -103,8 +103,8 @@ CBZ::PKCS::Certificate generate_self_signed_certificate(
     const RSAPrivateKey& subject_private_key
 ) {
     std::vector<uint8_t> subject_key_identifier(CBZ::SHA::SHA1::DIGEST_SIZE);
-    std::vector<uint8_t> public_key_bitstring = RSAPublicKey(subject_private_key).to_asn1().value();
-    CBZ::SHA::SHA1::digest(public_key_bitstring, subject_key_identifier.data());
+    std::vector<uint8_t> subject_public_key_bitstring = RSAPublicKey(subject_private_key).to_asn1().value();
+    CBZ::SHA::SHA1::digest(subject_public_key_bitstring, subject_key_identifier.data());
 
     Certificate ca_certificate = Certificate(
         TBSCertificate(
@@ -149,8 +149,8 @@ CBZ::PKCS::Certificate generate_certificate(
     const auto& issuer = ca_certificate.get_tbs_certificate().get_subject();
 
     std::vector<uint8_t> subject_key_identifier(CBZ::SHA::SHA1::DIGEST_SIZE);
-    std::vector<uint8_t> public_key_bitstring = subject_pk_info.get_public_key().to_asn1().value();
-    CBZ::SHA::SHA1::digest(public_key_bitstring, subject_key_identifier.data());
+    std::vector<uint8_t> subject_public_key_bitstring = subject_pk_info.get_public_key().to_asn1().value();
+    CBZ::SHA::SHA1::digest(subject_public_key_bitstring, subject_key_identifier.data());
 
     std::vector<uint8_t> authority_key_identifier(CBZ::SHA::SHA1::DIGEST_SIZE);
     std::vector<uint8_t> authority_public_key_bitstring = 
