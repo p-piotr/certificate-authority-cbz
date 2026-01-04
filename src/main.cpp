@@ -115,9 +115,9 @@ void write_pkcs_to_file(const ASN1Object& root_object, PKCSEntity entity, std::s
 
     std::vector<uint8_t> asn1_encoded = root_object.encode();
     std::string base64 = Base64::encode(asn1_encoded);
-    std::ofstream ca_certificate_of(filepath); // this may leak data but i don't care yet
-    ca_certificate_of << *header << base64 << '\n' << *footer;
-    ca_certificate_of.flush();
+    std::ofstream entity_of(filepath); // this may leak data but i don't care yet
+    entity_of << *header << base64 << '\n' << *footer;
+    entity_of.flush();
 
     secure_zero_memory(asn1_encoded);
     secure_zero_memory(base64);
