@@ -225,7 +225,7 @@ namespace CBZ::ASN1 {
         while (offset_t < offset + root_object.length()) {
             auto child_object = decode_all(data, offset_t);
             offset_t += child_object.total_size();
-            root_object._children.push_back(std::move(child_object));
+            root_object.children().push_back(std::move(child_object));
         }
         // check if final offset matches root object's length - if not,
         // something's wrong - buffer is probably corrupted
@@ -426,7 +426,7 @@ namespace CBZ::ASN1 {
     // The ASN.1 OBJECT IDENTIFIER encoder - returns a binary representation of OBJECT IDENTIFIER (as a buffer)
     // Input:
     // @obj_id_str - OBJECT IDENTIFIER as a string (eg. "1.23.4567.89.0")
-    std::vector<uint8_t> ASN1Parser::object_identifier_encode(std::string const& obj_id_str) {
+    std::vector<uint8_t> ASN1Parser::object_identifier_encode(const oid_t& obj_id_str) {
         std::vector<mpz_class> integers; // holds the parsed integers from obj_id_str, eg. "1.23.4567.89.0" -> [1, 23, 4567, 89, 0]
         std::vector<uint8_t> result;
         std::string temp = ""; // temporary string holding digits of the current integer being parsed
@@ -471,9 +471,9 @@ namespace CBZ::ASN1 {
     // ASN.1 OBJECT IDENTIFIER decoder - outputs a string (eg. "1.23.4567.89.0")
     // Input:
     // @obj_id - vector containing binary representatoin of the OBJECT IDENTIFIER
-    std::string ASN1Parser::object_identifier_decode(std::vector<uint8_t> const& obj_id_bin) {
+    oid_t ASN1Parser::object_identifier_decode(std::vector<uint8_t> const& obj_id_bin) {
         std::string integer_str;
-        std::string result = "";
+        oid_t result = "";
         auto rb = obj_id_bin.crbegin();
         auto re = rb + 1;
 

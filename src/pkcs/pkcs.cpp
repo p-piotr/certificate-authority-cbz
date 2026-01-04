@@ -6,7 +6,9 @@
 #include <span>
 #include <variant>
 #include <utility>
+#include <tuple>
 #include <format>
+#include "pkcs/labels.h"
 #include "pkcs/pkcs.h"
 #include "pkcs/public_key.h"
 #include "pkcs/sign.h"
@@ -14,6 +16,7 @@
 #include "encryption/kdf.hpp"
 #include "encryption/aes.h"
 #include "utils/utils.hpp"
+#include "utils/base64.h"
 
 namespace CBZ::PKCS {
 
@@ -79,13 +82,14 @@ namespace CBZ::PKCS {
         std::string type,
         std::string value,
         ASN1Tag tag
-    ) : _type(std::move(type)) {
+    ) {
         if(tag != UTF8_STRING && tag != IA5_STRING && tag != PRINTABLE_STRING){
             throw std::runtime_error("[Attribute::Attribute(std::string, std::string, ASN1Tag)] Tag doesn't match the string type");
         }
         if(validate_string_type(value, tag) == false){
             throw std::runtime_error("[Attribute::Attribute(std::string, std::string, ASN1Tag)] attempt to create object with value that contains illegal characters");
         }
+        _type = std::move(type);
         _values.emplace_back(std::move(value), tag);
     }
 
@@ -109,7 +113,8 @@ namespace CBZ::PKCS {
     Attribute::Attribute(
         std::string type,
         std::initializer_list<std::pair<std::string, ASN1Tag>> list
-    ) : _type(std::move(type)) {
+    ) {
+        _type = std::move(type);
         _values.reserve(list.size());
         for (auto& v : list){
             if(v.second != UTF8_STRING && v.second != IA5_STRING && v.second != PRINTABLE_STRING){
@@ -125,7 +130,8 @@ namespace CBZ::PKCS {
     Attribute::Attribute(
         std::string type,
         std::initializer_list<std::string> list
-    ) : _type(std::move(type)) {
+    ) {
+        _type = std::move(type);
         _values.reserve(list.size());
         for (auto& v : list){
             ASN1Tag tag;
@@ -145,14 +151,16 @@ namespace CBZ::PKCS {
         std::string type,
         std::vector<uint8_t> value,
         ASN1Tag tag
-    ) : _type(std::move(type)) {
+    ) {
+        _type = std::move(type);
         _values.emplace_back(std::move(value), tag);
     }
 
     Attribute::Attribute(
         std::string type,
         std::vector<std::pair<std::vector<uint8_t>, ASN1Tag>> list
-    ) : _type(std::move(type)) {
+    ) {
+        _type = std::move(type);
         for (auto& v : list){
             _values.emplace_back(std::move(v.first), v.second);
         }
@@ -169,30 +177,32 @@ namespace CBZ::PKCS {
         if (root_object.children()[1].tag() != ASN1Tag::SET) _semantics_failed();
 
         // decode
-
-        std::vector<std::pair<variant_object, ASN1Tag>> values;
-
         try {
-            for (const ASN1Object& value : root_object.children()[1].children()) {
-                ASN1Tag tag = value.tag();
-                variant_object val;
+            for (ASN1Object& attr_value : root_object.children()[1].children()) {
+                ASN1Tag tag = attr_value.tag();
                 if (
                     tag == PRINTABLE_STRING
                     || tag == IA5_STRING
                     || tag == UTF8_STRING
                 ) {
-                    val = std::string(value.value().begin(), value.value().end());
+                    _values.emplace_back(
+                        std::piecewise_construct,
+                        std::forward_as_tuple(
+                            std::in_place_type<std::string>,
+                            attr_value.value().begin(),
+                            attr_value.value().end()
+                        ),
+                        std::forward_as_tuple(tag)
+                    );
                 } else {
-                    val = std::vector<uint8_t>(value.value().begin(), value.value().end());
+                    _values.emplace_back(std::move(attr_value.value()), tag);
                 }
-                values.emplace_back(std::move(val), tag);
             }
         } catch (const std::exception& e) {
             _semantics_failed();
         }
 
         _type = static_cast<const ASN1ObjectIdentifier&>(root_object.children()[0]).value();
-        _values = std::move(values);
     }
 
     ASN1Object Attribute::to_asn1() const {
@@ -318,19 +328,12 @@ namespace CBZ::PKCS {
         if (root_object.tag() != ASN1Tag::SEQUENCE) _semantics_failed();
 
         // decode
-
-        AlgorithmIdentifier algorithm;
-        RSAPublicKey subject_public_key;
-
         try {
-            algorithm = AlgorithmIdentifier(root_object.children()[0]);
-            subject_public_key = RSAPublicKey(root_object.children()[1]);
+            _algorithm = AlgorithmIdentifier(std::move(root_object.children()[0]));
+            _subject_public_key = RSAPublicKey(std::move(root_object.children()[1]));
         } catch (const std::exception &e) {
             _semantics_failed();
         }
-
-        _algorithm = std::move(algorithm);
-        _subject_public_key = std::move(subject_public_key);
     }
 
     ASN1Object SubjectPublicKeyInfo::to_asn1() const {
@@ -403,21 +406,14 @@ namespace CBZ::PKCS {
 
         // decode
         const std::vector<uint8_t>& value_vector = root_object.children()[1].value();
-        ASN1Tag value_type;
-        std::string type;
-        std::string value;
 
         try {
-            value_type = root_object.children()[1].tag();
-            type = static_cast<const ASN1ObjectIdentifier>(root_object.children()[0]).value();
-            value = std::string(value_vector.begin(), value_vector.end());
+            _value_type = root_object.children()[1].tag();
+            _type = static_cast<const ASN1ObjectIdentifier>(root_object.children()[0]).value();
+            _value = std::string(value_vector.begin(), value_vector.end());
         } catch (const std::exception& e) {
             _semantics_failed();
         }
-
-        _value_type = value_type;
-        _type = std::move(type);
-        _value = std::move(value);
     }
 
     ASN1Object AttributeTypeAndValue::to_asn1() const {
@@ -454,16 +450,13 @@ namespace CBZ::PKCS {
         // further checks will be performed by the set children themselves (in their constructor)
 
         // decode
-        std::vector<AttributeTypeAndValue> atavs;
         try {
-            for (const ASN1Object& child : root_object.children()) {
-                atavs.push_back(AttributeTypeAndValue(child));
+            for (ASN1Object& child : root_object.children()) {
+                _atavs.emplace_back(std::move(child));
             }
         } catch (const std::exception& e) {
             _semantics_failed();
         }
-
-        _atavs = std::move(atavs);
     }
 
     ASN1Object RelativeDistinguishedName::to_asn1() const {
@@ -515,16 +508,13 @@ namespace CBZ::PKCS {
         // further checks will be performed by the sequence children themselves (in their constructor)
 
         // decode
-        std::vector<RelativeDistinguishedName> rdn_sequence;
         try {
-            for (const ASN1Object& child : root_object.children()) {
-                rdn_sequence.push_back(RelativeDistinguishedName(child));
+            for (ASN1Object& child : root_object.children()) {
+                _rdn_sequence.emplace_back(std::move(child));
             }
         } catch (const std::exception& e) {
             _semantics_failed();
         }
-
-        _rdn_sequence = std::move(rdn_sequence);
     }
 
     ASN1Object RDNSequence::to_asn1() const {
@@ -562,10 +552,9 @@ namespace CBZ::PKCS {
         CSRSupportedAlgorithms::algorithm_t algorithm,
         RSAPublicKey public_key,
         std::vector<std::pair<std::string, std::string>> attributes
-    ) 
-    : _subject_name(std::move(subject_name)),
-    _subject_pkinfo(algorithm, std::move(public_key))
-    {
+    ) {
+        _subject_name = std::move(subject_name);
+        _subject_pkinfo = SubjectPublicKeyInfo(algorithm, std::move(public_key));
         for(auto& [oid_t, val] : attributes){
             _attributes.emplace_back(std::move(oid_t), std::move(val));
         }
@@ -587,23 +576,15 @@ namespace CBZ::PKCS {
             throw std::runtime_error("[CertificationRequestInfo::CertificationRequestInfo] version != 0");
         }
 
-        RDNSequence subject_name;
-        SubjectPublicKeyInfo subject_pkinfo;
-        std::vector<Attribute> attributes;
-
         try {
-            subject_name = RDNSequence(root_object.children()[1]);
-            subject_pkinfo = SubjectPublicKeyInfo(root_object.children()[2]);
-            for (const ASN1Object& attr : root_object.children()[3].children()) {
-                attributes.push_back(Attribute(attr));
+            _subject_name = RDNSequence(std::move(root_object.children()[1]));
+            _subject_pkinfo = SubjectPublicKeyInfo(std::move(root_object.children()[2]));
+            for (ASN1Object& attr : root_object.children()[3].children()) {
+                _attributes.emplace_back(std::move(attr));
             }
         } catch (const std::exception &e) {
             _semantics_failed();
         }
-
-        _subject_name = std::move(subject_name);
-        _subject_pkinfo = std::move(subject_pkinfo);
-        _attributes = std::move(attributes);
     }
 
     ASN1Object CertificationRequestInfo::to_asn1() const {
@@ -659,22 +640,50 @@ namespace CBZ::PKCS {
         if (root_object.children()[2].tag() != ASN1Tag::BIT_STRING) _semantics_failed();
 
         // decode
-
-        CertificationRequestInfo certification_request_info;
-        AlgorithmIdentifier signature_algorithm;
-        std::vector<uint8_t> signature;
-
         try {
-            certification_request_info = CertificationRequestInfo(root_object.children()[0]);
-            signature_algorithm = AlgorithmIdentifier(root_object.children()[1]);
-            signature = static_cast<const ASN1BitString&>(root_object.children()[2]).value();
+            _certification_request_info = CertificationRequestInfo(root_object.children()[0]);
+            _signature_algorithm = AlgorithmIdentifier(root_object.children()[1]);
+            _signature = static_cast<const ASN1BitString&>(root_object.children()[2]).value();
         } catch (const std::exception& e) {
             _semantics_failed();
         }
+    }
 
-        _certification_request_info = std::move(certification_request_info);
-        _signature_algorithm = std::move(signature_algorithm);
-        _signature = std::move(signature);
+    CertificationRequest CertificationRequest::from_base64_buffer(std::string&& csr_b64) {
+        bool h_c = CBZ::Utils::compare_header(csr_b64, Labels::csr_header);
+        bool f_c = CBZ::Utils::compare_footer(csr_b64, Labels::csr_footer);
+        if (!h_c || !f_c) {
+            CBZ::Security::secure_zero_memory(csr_b64);
+            throw std::runtime_error("[CertificationRequest::from_base64_buffer] CSR header/footer doesn't match the standard");
+        }
+        std::span<char> csr_asn1_b64 = std::span{
+            csr_b64.data() + Labels::csr_header.size(),
+            csr_b64.size() - (Labels::csr_header.size() + Labels::csr_footer.size())
+        };
+        std::vector<uint8_t> csr_asn1 = Base64::decode(csr_asn1_b64);
+        ASN1Object root_object = ASN1Object::decode(csr_asn1);
+
+        CBZ::Security::secure_zero_memory(csr_b64);
+        CBZ::Security::secure_zero_memory(csr_asn1);
+
+        return CertificationRequest(std::move(root_object));
+    }
+
+    CertificationRequest CertificationRequest::from_file(const std::string& filepath) {
+        std::string csr_b64;
+        size_t csrfile_size = CBZ::Utils::get_file_size(filepath.c_str());
+        csr_b64.resize(csrfile_size);
+
+        try {
+            CBZ::Security::secure_read_file(
+                filepath.c_str(),
+                std::as_writable_bytes(std::span{csr_b64})
+            );
+        } catch (const std::exception &e) {
+            std::throw_with_nested(std::runtime_error("[CertificationRequest::CertificationRequest] Could not read certification request from file"));
+        }
+
+        return from_base64_buffer(std::move(csr_b64));
     }
 
     ASN1Object CertificationRequest::to_asn1() const {
@@ -821,6 +830,43 @@ namespace CBZ::PKCS {
         return os;
     }
 
+    Extension::Extension(ASN1Object root_object) {
+        auto _semantics_failed = []() {
+            CBZ::Utils::universal_throw("[Extension::Extension] Semantic check failed");
+        };
+
+        // decode
+        if (root_object.tag() != ASN1Tag::SEQUENCE) _semantics_failed();
+        if (
+            root_object.children().size() == 3
+            && root_object.children()[0].tag() == ASN1Tag::OBJECT_IDENTIFIER
+            && root_object.children()[1].tag() == ASN1Tag::BOOLEAN
+            && root_object.children()[2].tag() == ASN1Tag::OCTET_STRING
+        ) {
+            _critical = static_cast<const ASN1Boolean&>(root_object.children()[1]).value();
+            _extn_value = root_object.children()[2].value();
+        }
+        else if (
+            root_object.children().size() == 2
+            && root_object.children()[0].tag() == ASN1Tag::OBJECT_IDENTIFIER
+            && root_object.children()[1].tag() == ASN1Tag::OCTET_STRING
+        ) {
+            _critical = false;
+            _extn_value = root_object.children()[1].value();
+        }
+        else {
+            _semantics_failed();
+        }
+
+        try {
+            _extn_id = ExtensionSupportedIDs::idMap.get_by_value(
+                static_cast<const ASN1ObjectIdentifier&>(root_object.children()[0]).value()
+            );
+        } catch (const std::out_of_range& e) {
+            CBZ::Utils::universal_throw("[Extension::Extension] Extension ID not supported");
+        }
+    }
+
     ASN1Object Extension::to_asn1() const {
         std::string oid;
         try {
@@ -862,6 +908,46 @@ namespace CBZ::PKCS {
         return os;
     }
 
+    TBSCertificate::TBSCertificate(ASN1Object root_object) {
+        auto _semantics_failed = []() {
+            CBZ::Utils::universal_throw("[TBSCertificate::TBSCertificate] Semantic check failed");
+        };
+
+        // we'll assume that issuerUniqueID and subjectUniqueID are not present
+        // if they are, this will throw
+        // theoritecally it should be able to handle it if they were there,
+        // but these fields are essentially "fossils of the past" and effectively abandoned
+        if (root_object.children().size() != 8) _semantics_failed();
+        if (
+            root_object.children()[0].tag() != ASN1Tag::CONSTRUCTED_TYPE0
+            || root_object.children()[0].children().size() != 1
+            || root_object.children()[0].children()[0].tag() != ASN1Tag::INTEGER
+        ) _semantics_failed();
+        if (
+            root_object.children()[7].tag() != ASN1Tag::CONSTRUCTED_TYPE3
+            || root_object.children()[7].children().size() != 1
+            || root_object.children()[7].children()[0].tag() != ASN1Tag::SEQUENCE
+        ) _semantics_failed();
+
+        _version = static_cast<int>(
+            static_cast<const ASN1Integer&>(root_object.children()[0].children()[0]).value().get_si()
+        );
+        try {
+            _certificate_serial_number = CertificateSerialNumber(std::move(root_object.children()[1]));
+            _signature = AlgorithmIdentifier(std::move(root_object.children()[2]));
+            _issuer = RDNSequence(std::move(root_object.children()[3]));
+            _validity = Validity(std::move(root_object.children()[4]));
+            _subject = RDNSequence(std::move(root_object.children()[5]));
+            _subject_public_key_info = SubjectPublicKeyInfo(std::move(root_object.children()[6]));
+
+            for (ASN1Object& extension : root_object.children()[7].children()[0].children()) {
+                _extensions.emplace_back(std::move(extension));
+            }
+        } catch (const std::exception& e) {
+            _semantics_failed();
+        }
+    }
+
     ASN1Object TBSCertificate::to_asn1() const {
         std::vector<ASN1Object> extensions_asn1;
         for (const Extension& ex : _extensions) {
@@ -899,6 +985,25 @@ namespace CBZ::PKCS {
         }
         os  << " } } ";
         return os;
+    }
+
+    Certificate::Certificate(ASN1Object root_object) {
+        auto _semantics_failed = []() {
+            CBZ::Utils::universal_throw("[Certificate::Certificate] Semantic check failed");
+        };
+
+        if (root_object.tag() != ASN1Tag::SEQUENCE) _semantics_failed();
+        if (root_object.children().size() != 3) _semantics_failed();
+        if (root_object.children()[2].tag() != ASN1Tag::BIT_STRING) _semantics_failed();
+
+        try {
+            _tbs_certificate = TBSCertificate(root_object.children()[0]);
+            _signature_algorithm = AlgorithmIdentifier(root_object.children()[1]);
+        } catch (const std::exception& e) {
+            _semantics_failed();
+        }
+
+        _signature = static_cast<const ASN1BitString&>(root_object.children()[2]).value();
     }
 
     ASN1Object Certificate::to_asn1() const {
@@ -943,6 +1048,43 @@ namespace CBZ::PKCS {
         return Signature::RSASSA_PKCS1_V1_5_VERIFY(public_key, message, signature);
     }
 
+    Certificate Certificate::from_base64_buffer(std::string&& certificate_b64) {
+        bool h_c = CBZ::Utils::compare_header(certificate_b64, Labels::certificate_header);
+        bool f_c = CBZ::Utils::compare_footer(certificate_b64, Labels::certificate_footer);
+        if (!h_c || !f_c) {
+            CBZ::Security::secure_zero_memory(certificate_b64);
+            throw std::runtime_error("[CertificationRequest::from_base64_buffer] CSR header/footer doesn't match the standard");
+        }
+        std::span<char> certificate_asn1_b64 = std::span{
+            certificate_b64.data() + Labels::certificate_header.size(),
+            certificate_b64.size() - (Labels::certificate_header.size() + Labels::certificate_footer.size())
+        };
+        std::vector<uint8_t> certificate_asn1 = Base64::decode(certificate_asn1_b64);
+        ASN1Object root_object = ASN1Object::decode(certificate_asn1);
+
+        CBZ::Security::secure_zero_memory(certificate_b64);
+        CBZ::Security::secure_zero_memory(certificate_asn1);
+
+        return Certificate(std::move(root_object));
+    }
+
+    Certificate Certificate::from_file(const std::string& filepath) {
+        std::string csr_b64;
+        size_t csrfile_size = CBZ::Utils::get_file_size(filepath.c_str());
+        csr_b64.resize(csrfile_size);
+
+        try {
+            CBZ::Security::secure_read_file(
+                filepath.c_str(),
+                std::as_writable_bytes(std::span{csr_b64})
+            );
+        } catch (const std::exception &e) {
+            std::throw_with_nested(std::runtime_error("[Certificate::Certificate] Could not read certificate from file"));
+        }
+
+        return from_base64_buffer(std::move(csr_b64));
+    }
+
     std::ostream& operator<<(std::ostream& os, const Certificate& cert) {
         os  << "Certificate = { "
             << "tbsCertificate = " << cert._tbs_certificate << ", "
@@ -964,7 +1106,7 @@ namespace CBZ::PKCS {
         {sha256,                    "2.16.840.1.101.3.4.2.1"},
     };
 
-    const CBZ::Utils::BidirectionalMap<uint32_t, oid_t> ExtensionSupportedIDs::idMap = {
+    const CBZ::Utils::BidirectionalMap<ExtensionSupportedIDs::id_t, oid_t> ExtensionSupportedIDs::idMap = {
         {authorityKeyIdentifier,    "2.5.29.35"},
         {subjectKeyIdentifier,      "2.5.29.14"},
         {basicConstraints,          "2.5.29.19"},

@@ -53,7 +53,7 @@ namespace CBZ::PKCS {
 
         const ASN1Object& version = root_object.children()[0];
         const ASN1Object& private_key_algorithm = root_object.children()[1];
-        ASN1Object& private_key = root_object._children[2];
+        ASN1Object& private_key = root_object.children()[2];
 
         if (version.tag() != ASN1Tag::INTEGER) { // 'version' must be of type INTEGER
             return ERR_SEMANTIC_CHECK_FAILED;
@@ -116,7 +116,7 @@ namespace CBZ::PKCS {
                 if (!_private_key_semantic_check(pk_sequence))
                     return ERR_SEMANTIC_CHECK_FAILED;
 
-                private_key._children.push_back(pk_sequence);
+                private_key.children().push_back(pk_sequence);
 
                 // ASN1Parser::decode_all takes a const reference, so since we want
                 // to replace _value with appropriately decoded _children
@@ -275,49 +275,15 @@ namespace CBZ::PKCS {
         );
     }
 
-    // Compares header at the beginning of given Base64 buffer
-    // with another specified header
-    bool _compare_header(const std::string& b64, const std::string& h) {
-        if (b64.size() < h.size())
-            return false;
-
-        int r = std::memcmp(
-            b64.data(),
-            h.data(),
-            h.size()
-        );
-
-        if (r == 0)
-            return true;
-        else return false;
-    }
-
-    // Compares footer at the end of given Base64 buffer
-    // with another specifier footer
-    bool _compare_footer(const std::string& b64, const std::string& f) {
-        if (b64.size() < f.size())
-            return false;
-
-        int r = std::memcmp(
-            b64.data() + (b64.size() - f.size()),
-            f.data(),
-            f.size()
-        );
-
-        if (r == 0)
-            return true;
-        else return false;
-    }
-
     RSAPrivateKey RSAPrivateKey::from_base64_buffer(std::string&& key_b64) {
-        int h_c = _compare_header(key_b64, Labels::private_key_header);
-        int f_c = _compare_footer(key_b64, Labels::private_key_footer);
+        bool h_c = CBZ::Utils::compare_header(key_b64, Labels::private_key_header);
+        bool f_c = CBZ::Utils::compare_footer(key_b64, Labels::private_key_footer);
         if (!h_c || !f_c) {
             // header/footer doesn't match
             // check whether given key is encrypted and if it is, handle appropriately
             // otherwise throw
-            h_c = _compare_header(key_b64, Labels::encrypted_private_key_header);
-            f_c = _compare_footer(key_b64, Labels::encrypted_private_key_footer);
+            h_c = CBZ::Utils::compare_header(key_b64, Labels::encrypted_private_key_header);
+            f_c = CBZ::Utils::compare_footer(key_b64, Labels::encrypted_private_key_footer);
             if (!h_c || !f_c) {
                 CBZ::Security::secure_zero_memory(key_b64);
                 throw std::runtime_error("[RSAPrivateKey::from_base64_buffer] RSA private key header/footer does not match the standard");
@@ -366,14 +332,14 @@ namespace CBZ::PKCS {
     }
 
     RSAPrivateKey RSAPrivateKey::from_base64_buffer_with_passphrase(std::string&& key_b64, std::string&& passphrase) {
-        int h_c = _compare_header(key_b64, Labels::encrypted_private_key_header);
-        int f_c = _compare_footer(key_b64, Labels::encrypted_private_key_footer);
+        bool h_c = CBZ::Utils::compare_header(key_b64, Labels::encrypted_private_key_header);
+        bool f_c = CBZ::Utils::compare_footer(key_b64, Labels::encrypted_private_key_footer);
         if (!h_c || !f_c) {
             // header/footer doesn't match
             // check whether given key is unencrypted and if it is, handle appropriately
             // otherwise throw
-            h_c = _compare_header(key_b64, Labels::private_key_header);
-            f_c = _compare_footer(key_b64, Labels::private_key_footer);
+            h_c = CBZ::Utils::compare_header(key_b64, Labels::private_key_header);
+            f_c = CBZ::Utils::compare_footer(key_b64, Labels::private_key_footer);
             if (!h_c || !f_c) {
                 CBZ::Security::secure_zero_memory(key_b64);
                 CBZ::Security::secure_zero_memory(passphrase);

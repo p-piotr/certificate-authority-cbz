@@ -107,53 +107,6 @@ namespace CBZ::Utils::IO {
         return result;
     }
 
-    // THIS MAY BE DELETED IN THE FORESEEABLE FUTURE
-    // This function is used to write Certificate Signing Request into a file
-    // It assumes that CSR have already beed DER encoded and base64 encoded
-    // @base64 - std::string to be written into the file
-    // @path - path to the file in write into
-    // If the file doesn't exist it will be created;
-    // If the file does exist the user will be prompted for permission to overwrite the file;
-    void write_csr_to_file(std::string const& base64, std::string const& path){
-        std::string header =     "-----BEGIN CERTIFICATE REQUEST-----\n";
-        std::string trailer =    "-----END CERTIFICATE REQUEST-----\n";
-
-        if(std::filesystem::exists(path)){
-            std::string input;
-            std::cout << "File already exists do you want to overwrite [y/N]: ";
-            getline(std::cin, input);
-            if(input.empty() || input[0] != 'y'){
-                return;
-            }
-        }
-
-        std::ofstream ofile(path.c_str());
-        if(!ofile.is_open()){
-            throw std::runtime_error("write_csr_to_file: Could not open the file \"" + path + "\" for writing");
-        }
-        ofile << header;
-
-        // write each base64 char
-        // we format it as it's often done so that every 64-th char is a newline
-        int i = 0;
-        for(auto ch : base64){
-            ofile << ch;
-            i++;
-            if(i == 64){
-                i = 0;
-                ofile << '\n';
-            }
-        }
-        if(i != 0){
-            ofile << '\n';
-        }
-
-        ofile << trailer;
-        ofile.close();
-
-        std::cout << "Writting into the file: " << path << " done" << std::endl;
-    }
-
     // This function is used to ask the user for information that will be included in the CSR
     // however this time it's asking for attibutes e.g. challenge passoword
     // Again a copy of what "$openssl req -new -key [keyfile] -out [outfile]" command asks for

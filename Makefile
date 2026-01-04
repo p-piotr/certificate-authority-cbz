@@ -52,23 +52,24 @@ endif
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c -O3 -Wall -DNDEBUG $< -o $@
 
 $(OBJ_DIR)/%-debug.o: $(SRC_DIR)/%.cpp
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(DEBUG_DEFS) -g -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(DEBUG_DEFS) -O0 -g -c $< -o $@
 
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	mkdir -p $(TARGET_DIR)
-	$(CXX) $(CXXFLAGS) $(OBJS) $(LIBS) -O3 -DNDEBUG -o $@
+	$(CXX) $(CXXFLAGS) $(OBJS) $(LIBS) -o $@
+	strip $@
 
 debug: $(DEBUG_TARGET)
 
 $(DEBUG_TARGET): $(DEBUG_OBJS)
 	mkdir -p $(TARGET_DIR)
-	$(CXX) $(CXXFLAGS) $(DEBUG_OBJS) $(LIBS) -O0 -g -o $@
+	$(CXX) $(CXXFLAGS) $(DEBUG_OBJS) $(LIBS) -o $@
 
 # removed $(DEBUG_OBJ_DIR) as it doesn't exists
 clean:

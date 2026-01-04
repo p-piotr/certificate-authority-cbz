@@ -88,12 +88,12 @@ namespace CBZ::PKCS {
         }
 
         // push the new sequence as a child of BIT STRING
-        root_object._children.push_back(pk_sequence);
+        root_object.children().push_back(pk_sequence);
         // zero-out the BIT STRING _value
         // (since we cannot have both _value and _children at the same time)
-        CBZ::Security::secure_zero_memory(root_object._value);
+        CBZ::Security::secure_zero_memory(root_object.value());
         // and finally, resize the _value to 0
-        root_object._value.resize(0);
+        root_object.value().resize(0);
 
         return ERR_OK;
     }

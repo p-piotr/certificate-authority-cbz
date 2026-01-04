@@ -259,6 +259,7 @@ namespace CBZ::PKCS {
         };
 
         // unordered map that maps algorithm_t types to it's correspoing OID
+        // it'd be better to replace uint32_t with algorithm_t, but i guess idc
         extern const CBZ::Utils::BidirectionalMap<uint32_t, oid_t> algorithmMap;
     }
 
@@ -273,7 +274,7 @@ namespace CBZ::PKCS {
             basicConstraints
         };
 
-        extern const CBZ::Utils::BidirectionalMap<uint32_t, oid_t> idMap;
+        extern const CBZ::Utils::BidirectionalMap<id_t, oid_t> idMap;
     }
 
     // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1
@@ -681,6 +682,9 @@ namespace CBZ::PKCS {
 
         CertificationRequest(ASN1Object root_object);
 
+        CertificationRequest(std::string filepath)
+            : CertificationRequest(from_file(filepath)) {}
+
         // << getters
         inline const CertificationRequestInfo& get_certification_request_info() const { return _certification_request_info; };
         inline const AlgorithmIdentifier& get_signature_algorithm() const { return _signature_algorithm; }
@@ -700,6 +704,10 @@ namespace CBZ::PKCS {
         // so it's intended to be wrapped inside a 'try-catch' clause
         bool verify() const;
 
+        static CertificationRequest from_base64_buffer(std::string&& csr_asn1_b64);
+
+        static CertificationRequest from_file(const std::string& filepath);
+        
         // << operator
         friend std::ostream& operator<<(std::ostream& os, const CertificationRequest& CR);
     };
@@ -792,6 +800,8 @@ namespace CBZ::PKCS {
             _extn_value = std::move(extn_value);
         }
 
+        Extension(ASN1Object root_object);
+
         inline ExtensionSupportedIDs::id_t get_extn_id() const { return _extn_id; }
         inline bool get_critical() const { return _critical; }
         inline const std::vector<uint8_t>& get_extn_value() const { return _extn_value; }
@@ -867,6 +877,8 @@ namespace CBZ::PKCS {
         _subject_public_key_info(std::move(subject_public_key_info)),
         _extensions(std::move(extensions)) {}
 
+        TBSCertificate(ASN1Object root_object);
+
         inline int get_version() const { return _version; }
         inline const CertificateSerialNumber& get_certificate_serial_number() const { return _certificate_serial_number; }
         inline const AlgorithmIdentifier& get_signature() const { return _signature; }
@@ -914,6 +926,11 @@ namespace CBZ::PKCS {
         _signature_algorithm(std::move(signature_algorithm)),
         _signature(std::move(signature)) {}
 
+        Certificate(std::string filepath)
+            : Certificate(from_file(std::move(filepath))) {}
+
+        Certificate(ASN1Object root_object);
+
         inline const TBSCertificate& get_tbs_certificate() const { return _tbs_certificate; }
         inline const AlgorithmIdentifier& get_signature_algorithm() const { return _signature_algorithm; }
         inline const std::vector<uint8_t>& get_signature() const { return _signature; }
@@ -929,6 +946,10 @@ namespace CBZ::PKCS {
         // (used to retrieve the public key)
         // this funciton may throw so it's intended to be wrapped inside a 'try-catch' clause
         bool verify(const Certificate& ca) const;
+
+        static Certificate from_base64_buffer(std::string&& certificate_b64);
+
+        static Certificate from_file(const std::string& filepath);
 
         friend std::ostream& operator<<(std::ostream& os, const Certificate& cert);
     };

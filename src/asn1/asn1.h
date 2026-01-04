@@ -11,22 +11,6 @@
 
 namespace CBZ {
 
-    // Question: why is ASN1 namespace declared 2 times + RSA namespace declaration in the middle of ASN1?
-    // Answer: https://en.wikipedia.org/wiki/Circular_dependency
-
-    // This namespace is defined in fully defined later on - forward declaration of ASN1Object for the function down below in the RSA namespace
-    namespace ASN1 { class ASN1Object; }
-
-    // This namespace is defined in "private_key.h" and "pkcs.h" - forward declaration of a function used as a friend in ASN1Object
-    namespace PKCS {
-        int _RSAPrivateKey_check_and_expand(
-            ASN1::ASN1Object& root_object
-        );
-        int _RSAPublicKey_check_and_expand(
-            ASN1::ASN1Object& root_object
-        );
-    }
-
     namespace ASN1 {
 
         // Chosen set of ASN.1 tags
@@ -148,13 +132,13 @@ namespace CBZ {
             //
             // Input:
             // @obj_id_str - OBJECT IDENTIFIER as a string (eg. "1.23.4567.89.0")
-            static std::vector<uint8_t> object_identifier_encode(const std::string& obj_id_str);
+            static std::vector<uint8_t> object_identifier_encode(const oid_t& obj_id_str);
 
             // ASN.1 OBJECT IDENTIFIER decoder - outputs a string (eg. "1.23.4567.89.0")
             //
             // Input:
             // @obj_id_data - buffer containing the OBJECT IDENTIFIER
-            static std::string object_identifier_decode(const std::vector<uint8_t>& obj_id_bin);
+            static oid_t object_identifier_decode(const std::vector<uint8_t>& obj_id_bin);
 
             // Encodes a GMP integer to the binary form, big-endian (ANS.1 compatibile), returning a buffer
             //
@@ -285,6 +269,10 @@ namespace CBZ {
                 return _children;
             }
 
+            inline std::vector<ASN1Object>& children() {
+                return _children;
+            }
+
             // Prints the ASN.1 tree in readable format - function prototype, most probably
             // won't be used so I don't really care about it
             void print(int = 0) const;
@@ -296,17 +284,6 @@ namespace CBZ {
             static inline ASN1Object decode(const std::vector<uint8_t>& data, size_t offset = 0) {
                 return ASN1Parser::decode_all(data, offset);
             }
-
-            // friends may take what's protected stuff instead of asking for it
-            // those friends need to be able to change the internal state of ASN1Object
-
-            friend class ASN1Parser;
-            friend int PKCS::_RSAPrivateKey_check_and_expand(
-                ASN1Object& root_object
-            );
-            friend int PKCS::_RSAPublicKey_check_and_expand(
-                ASN1Object& root_object
-            );
         };
 
 
@@ -324,7 +301,7 @@ namespace CBZ {
             }
 
             // Returns the ASN.1 OBJECT IDENTIFIER object value as a readable string (instead of default buffer)
-            inline std::string const value() const {
+            inline oid_t const value() const {
                 return ASN1Parser::object_identifier_decode(_value);
             }
 

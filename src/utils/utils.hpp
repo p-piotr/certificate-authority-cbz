@@ -130,4 +130,39 @@ namespace CBZ::Utils {
             return _reverse_map.end();
         }
     };
+
+    // Compares header at the beginning of given Base64 buffer
+    // with another specified header
+    inline bool compare_header(const std::string& b64, const std::string& h) {
+        if (b64.size() < h.size())
+            return false;
+
+        int r = std::memcmp(
+            b64.data(),
+            h.data(),
+            h.size()
+        );
+
+        if (r == 0)
+            return true;
+        else return false;
+    }
+
+    // Compares footer at the end of given Base64 buffer
+    // with another specifier footer
+    inline bool compare_footer(const std::string& b64, const std::string& f) {
+        if (b64.size() < f.size())
+            return false;
+
+        int r = std::memcmp(
+            b64.data() + (b64.size() - f.size()),
+            f.data(),
+            f.size()
+        );
+
+        if (r == 0)
+            return true;
+        else return false;
+    }
+
 }
