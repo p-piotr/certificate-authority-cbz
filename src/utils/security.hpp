@@ -141,7 +141,7 @@ namespace CBZ::Security {
         return diff == 0;
     }
 
-    // Securely reads contets from a file into an output buffer
+    // Securely reads contents from a file into an output buffer
     // 'Securely' means that the function does not leave behind
     // any uncleared intermediate buffers which may contain
     // leftover sensitive data

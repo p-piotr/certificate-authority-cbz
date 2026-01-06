@@ -685,7 +685,8 @@ namespace CBZ::ASN1 {
     }
 
     asn1date_t _ASN1_helpers::_vector_to_date(const std::vector<uint8_t> &date_bin) {
-        assert((date_bin.size() == 13 || date_bin.size() == 15) && "Date MUST be either 13 bytes (UTCTime), or 15 bytes (GeneralizedTime)");
+        size_t date_size = date_bin.size();
+        assert((date_size == 13 || date_size == 15) && "Date MUST be either 13 bytes (UTCTime), or 15 bytes (GeneralizedTime)");
 
         auto _d_h_r = [&](char ch1, char ch2) {
             return (ch1 - 0x30) * 10 + (ch2 - 0x30);
@@ -694,17 +695,21 @@ namespace CBZ::ASN1 {
         int idx = 0;
         int y = 0;
 
+        // quick check whether all elements are ascii digits (0x30 <= x <= 0x39)
+        for (size_t i = 0; i < date_size - 1 ; i++) {
+            if (date_bin[i] < 0x30 || date_bin[i] > 0x39) {
+                throw std::runtime_error("[_ASN1_helpers::_vector_to_date] Invalid date encoding (UTCTime)");
+            }
+        }
+
+        if (date_bin[date_size - 1] != 'Z') {
+            throw std::runtime_error("[_ASN1_helpers::_vector_to_date] Only Zulu timezone is handled (RFC 5280)");
+        }
+
         // check the date encoding and calculate year based on
         // date_bin size (UTCTime or GeneralizedTime)
-        if (date_bin.size() == 13) {
+        if (date_size == 13) {
             // UTCTime
-            // quick check whether all elements are ascii digits (0x30 <= x <= 0x39)
-            for (int i = 0; i < 12; i++) {
-                if (date_bin[i] < 0x30 || date_bin[i] > 0x39) {
-                    throw std::runtime_error("[_ASN1_helpers::_vector_to_date] Invalid date encoding (UTCTime)");
-                }
-            }
-
             char y_ltd = _d_h_r(date_bin[0], date_bin[1]); // last two digits of the year
             idx += 2;
             if (y_ltd >= 0 && y_ltd <= 49) {
@@ -712,15 +717,7 @@ namespace CBZ::ASN1 {
             } else {
                 y = 1900 + static_cast<int>(y_ltd);
             }
-        } else if (date_bin.size() == 15) {
-            // GeneralizedTime
-            // quick check whether all elements are ascii digits (0x30 <= x <= 0x39)
-            for (int i = 0; i < 14; i++) {
-                if (date_bin[i] < 0x30 || date_bin[i] > 0x39) {
-                    throw std::runtime_error("[_ASN1_helpers::_vector_to_date] Invalid date encoding (GeneralizedTime)");
-                }
-            }
-
+        } else if (date_size == 15) {
             for (; idx < 4; idx++) {
                 y *= 10;
                 y += static_cast<int>((date_bin[idx] - 0x30));
@@ -737,9 +734,6 @@ namespace CBZ::ASN1 {
         int s = static_cast<int>(_d_h_r(date_bin[idx], date_bin[idx+1]));
         idx += 2;
 
-        if (date_bin[idx] != 'Z') {
-            throw std::runtime_error("[_ASN1_helpers::_vector_to_date] Only Zulu timezone is handled (RFC 5280)");
-        }
 
         std::chrono::sys_days date_tp = std::chrono::sys_days{std::chrono::year_month_day{
             std::chrono::year(y), std::chrono::month(m), std::chrono::day(d)

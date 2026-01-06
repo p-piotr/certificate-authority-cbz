@@ -167,7 +167,7 @@ namespace CBZ::PKCS::Signature {
         }
     }
     // There are still maybe be some security issues
-    // 1. Bellcore/Lenstra Attacks
+    // 1. Bellcore/Lenstra Attacks <- I don't even remember what this was about
     // 2. Timing information leaking
     // 3. Private key should be zeroize after being used to prevent leaks UPDATE: NOW IT WILL BE
     // 4. Also additional checks might be added to test see if everything is ok with Private key
