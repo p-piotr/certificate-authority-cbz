@@ -1,6 +1,6 @@
 .vscode
-build
-scripts
+ca-cbz/build
+ca-cbz/scripts
 
 PoC1
 PoC2
