@@ -64,13 +64,13 @@ namespace CBZ {
             //
             // Input:
             // @size - size of object's data, in bytes
-            static size_t _ASN1Object_calculate_length_field_size(size_t size);
+            size_t _ASN1Object_calculate_length_field_size(size_t size);
 
             // This function takes size of object's data and returns an encoded length field
             //
             // Input:
             // @size - size of object's data, in bytes
-            static std::vector<uint8_t> _ASN1Object_encode_length_field(size_t size);
+            std::vector<uint8_t> _ASN1Object_encode_length_field(size_t size);
 
             // // ASN1ObjectIdentifier helper functions
             std::vector<uint8_t> _ASN1ObjectIdentifier_encode_single_integer(mpz_class integer);
