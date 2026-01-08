@@ -386,7 +386,7 @@ namespace CBZ::PKCS {
             throw std::runtime_error("[AttributeTypeAndValue::AttributeTypeAndValue(string, string, ASN1_tag)] Values different than strings that are currently not handled");
         }
 
-        if(validate_string_type(_value,_value_type) == false){
+        if(validate_string_type(value, value_type) == false){
             throw std::runtime_error("[AttributeTypeAndValue::AttributeTypeAndValue(string, string, ASN1_tag)] Attempt to create object with value that contains illegal characters");
         }
         _value_type = value_type;
