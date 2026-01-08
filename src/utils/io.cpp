@@ -146,7 +146,7 @@ namespace CBZ::Utils::IO {
     }
 
     // modify that function so it asks whether to overwrite if the file exists
-    void write_pkcs_to_file(const std::string& base64, PKCSEntity entity, std::string filepath) {
+    void write_pkcs_to_file(const std::string& base64, PKCSEntity entity, const std::string& filepath) {
         using namespace CBZ::PKCS;
 
         const std::string* header;

@@ -33,5 +33,5 @@ namespace CBZ::Utils::IO {
         CSR,
         CERTIFICATE
     };
-    void write_pkcs_to_file(const std::string& base64, PKCSEntity entity, std::string filepath);
+    void write_pkcs_to_file(const std::string& base64, PKCSEntity entity, const std::string& filepath);
 }

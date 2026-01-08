@@ -8,8 +8,8 @@ OBJ_DIR=build/obj
 OBJS=$(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
 DEBUG_OBJS=$(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%-debug.o)
 
-TARGET=$(TARGET_DIR)/poc
-DEBUG_TARGET=$(TARGET_DIR)/poc-debug
+TARGET=$(TARGET_DIR)/ca-cbz
+DEBUG_TARGET=$(TARGET_DIR)/ca-cbz-debug
 
 CXX=g++
 DEPFLAGS=-MMD -MP
