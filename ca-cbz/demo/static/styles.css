@@ -1,0 +1,114 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 800px;
+    margin: 50px auto;
+    padding: 20px;
+    background: #f5f5f5;
+}
+
+.container {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+h1 {
+    color: #2c5282;
+    margin-bottom: 10px;
+}
+
+.secure-badge {
+    display: inline-block;
+    background: #48bb78;
+    color: white;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-size: 14px;
+    margin-bottom: 20px;
+}
+
+.cert-section {
+    margin: 25px 0;
+    padding: 20px;
+    background: #f8f9fa;
+    border-left: 4px solid #3182ce;
+    border-radius: 4px;
+}
+
+.cert-section h2 {
+    margin-top: 0;
+    color: #2d3748;
+    font-size: 18px;
+}
+
+.cert-field {
+    margin: 12px 0;
+    padding: 10px;
+    background: white;
+    border-radius: 4px;
+}
+
+.cert-label {
+    font-weight: 600;
+    color: #4a5568;
+    display: block;
+    margin-bottom: 5px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.cert-value {
+    color: #1a202c;
+    font-family: "Monaco", "Courier New", monospace;
+    font-size: 14px;
+    word-break: break-all;
+}
+
+.cert-value.fingerprint {
+    font-size: 12px;
+}
+
+.expiry-warning {
+    background: #fff5f5;
+    color: #c53030;
+    padding: 15px;
+    border-radius: 6px;
+    margin: 20px 0;
+    border-left: 4px solid #fc8181;
+}
+
+.expiry-success {
+    background: #f0fff4;
+    color: #276749;
+    padding: 15px;
+    border-radius: 6px;
+    margin: 20px 0;
+    border-left: 4px solid #68d391;
+}
+
+.footer {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #e2e8f0;
+    text-align: center;
+    color: #718096;
+    font-size: 14px;
+}
+
+.footer p {
+    margin: 10px 0;
+}
+
+.server-info {
+    margin-top: 15px;
+    font-size: 12px;
+}
+
+.server-info code {
+    background: #edf2f7;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: "Monaco", "Courier New", monospace;
+}

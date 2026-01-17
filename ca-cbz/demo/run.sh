@@ -2,12 +2,13 @@
 set -e
 
 BASE_DIR="$PWD/local-ca"
-CA_NAME="Local Dev Root CA"
+CA_NAME="Demonstration CA"
 DOMAIN="localhost"
 PORT=4433
 
 CA_CBZ="../build/out/ca-cbz"
 CA_DIR="$BASE_DIR/ca"
+STATIC_DIR="$BASE_DIR/static"
 SITE_DIR="$BASE_DIR/site"
 CERTS="$BASE_DIR/certs"
 PRIVATE="$BASE_DIR/private"
@@ -21,56 +22,60 @@ SITE_CSR="$BASE_DIR/site.csr.pem"
 
 FIREFOX_PROFILES="$HOME/.mozilla/firefox"
 
-### CHECK ROOT ###
 if [[ $EUID -ne 0 ]]; then
-  echo "❌ Run as root (needed for trust store & /etc/hosts)"
+  echo "ERROR: Run as root (needed for trust store & /etc/hosts)"
   exit 1
 fi
 
 echo "Creating directories..."
 mkdir -p "$CERTS" "$PRIVATE"
-# chmod 700 "$PRIVATE"
+chmod 700 "$PRIVATE"
+echo
 
-echo "🔑 Generating CA key (encrypted)..."
+echo "Generating Encrypted CA key..."
 openssl genrsa -aes256 -out "$CA_KEY" 4096
-# chmod 400 "$CA_KEY"
+chmod 400 "$CA_KEY"
+echo
 
 echo "Generating CA certificate with ca-cbz..."
 sudo "$CA_CBZ" gen-self-signed-cert \
   --key "$CA_KEY" \
   --out "$CA_CERT" \
   --days 3650
+echo
+
 
 echo "Installing CA into system trust..."
 cp "$CA_CERT" /etc/ca-certificates/trust-source/anchors/demo-ca.crt
 update-ca-trust
+echo
 
-echo "Generating site key (encrypted)..."
+
+echo "Generating encrypted site key..."
 openssl genrsa -aes256 -out "$SITE_KEY" 2048
-# chmod 400 "$SITE_KEY"
+chmod 400 "$SITE_KEY"
+echo
+
 
 echo "Generating CSR with ca-cbz..."
 sudo "$CA_CBZ" gen-csr \
   --key "$SITE_KEY" \
   --out "$SITE_CSR"
+echo
 
 echo "Signing site certificate with ca-cbz..."
-echo "gen-cert \
-  --cacert $CA_CERT \
-  --cakey $CA_KEY \
-  --csr $SITE_CSR \
-  --out $SITE_CERT \
-  --days 825"
-
 sudo "$CA_CBZ" gen-cert \
   --cacert "$CA_CERT" \
   --cakey "$CA_KEY" \
   --csr "$SITE_CSR" \
   --out "$SITE_CERT" \
   --days 825
+echo
+chmod 600 "$SITE_CERT"
 
 echo "Updating /etc/hosts..."
 grep -q "$DOMAIN" /etc/hosts || echo "127.0.0.1 $DOMAIN" >> /etc/hosts
+echo
 
 echo "Installing CA into Firefox..."
 for profile in "$FIREFOX_PROFILES"/*.default*; do
@@ -78,35 +83,20 @@ for profile in "$FIREFOX_PROFILES"/*.default*; do
     certutil -A -n "$CA_NAME" -t "C,," -i "$CA_CERT" -d sql:"$profile"
   fi
 done
+echo
 
-echo "📄 Creating demo website..."
-cat > index.html <<EOF
-<!doctype html>
-<html>
-  <body>
-    <h1>🔒 Trusted HTTPS</h1>
-    <p>Certificate signed by <b>$CA_NAME</b></p>
-    <p>Generated with ca-cbz utility</p>
-  </body>
-</html>
-EOF
+echo "Starting HTTPS server with certificate display..."
+echo "https://$DOMAIN:$PORT"
+echo "Press Ctrl+C to stop"
+
+python3 server.py "$SITE_CERT" "$SITE_KEY" "$DOMAIN" "$PORT" "$CA_NAME"
+
+echo "#!/bin/bash" > rerun_server.sh
+echo "sudo python3 server.py $SITE_CERT $SITE_KEY $DOMAIN $PORT $CA_NAME" >> rerun_server.sh
+chmod +x rerun_server.sh
+
+
 
 echo "Starting HTTPS server..."
 echo "https://$DOMAIN:$PORT"
 echo "Press Ctrl+C to stop"
-
-python - <<EOF
-from http.server import HTTPServer, SimpleHTTPRequestHandler
-import ssl
-
-context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-context.load_cert_chain(
-    certfile="$SITE_CERT",
-    keyfile="$SITE_KEY",
-)
-
-httpd = HTTPServer(("0.0.0.0", $PORT), SimpleHTTPRequestHandler)
-httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
-
-httpd.serve_forever()
-EOF

@@ -1,7 +1,7 @@
 .vscode
 ca-cbz/build
 ca-cbz/scripts
-
+ca-cbz/demo/local-ca
 PoC1
 PoC2
 test.*

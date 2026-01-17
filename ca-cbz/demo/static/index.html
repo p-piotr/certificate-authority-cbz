@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trusted HTTPS - Certificate Info</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Trusted HTTPS Connection</h1>
+        <div class="expiry-{{ expiry_class }}">
+            <strong>{{ days_left }}</strong> days remaining
+        </div>
+
+        <div class="cert-section">
+            <h2>Certificate Information</h2>
+            
+            <div class="cert-field">
+                <span class="cert-label">Issued To</span>
+                <div class="cert-value">{{ subject }}</div>
+            </div>
+            
+            <div class="cert-field">
+                <span class="cert-label">Issued By</span>
+                <div class="cert-value">{{ issuer }}</div>
+            </div>
+            
+            <div class="cert-field">
+                <span class="cert-label">Valid From</span>
+                <div class="cert-value">{{ not_before }}</div>
+            </div>
+            
+            <div class="cert-field">
+                <span class="cert-label">Valid Until</span>
+                <div class="cert-value">{{ not_after }}</div>
+            </div>
+            
+            <div class="cert-field">
+                <span class="cert-label">Serial Number</span>
+                <div class="cert-value">{{ serial }}</div>
+            </div>
+            
+            <div class="cert-field">
+                <span class="cert-label">Fingerprint (SHA-256)</span>
+                <div class="cert-value fingerprint">{{ fingerprint }}</div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Certificate signed by <b>{{ ca_name }}</b></p>
+            <p class="server-info">
+                Server running on <code>https://{{ domain }}:{{ port }}</code>
+            </p>
+        </div>
+    </div>
+</body>
+</html>
