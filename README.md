@@ -76,7 +76,7 @@ Acts as the CA to sign a CSR. This generates the final public certificate for th
     --days 365
 ```
 
-### Components
+## Components
 
 **ASN.1 Parser**
 A custom parser for ASN.1/DER encoded files. It maps the binary input to C++ objects. To maintain performance, ASN.1 objects share the underlying memory buffer of the raw file to avoid unnecessary memory copying.
