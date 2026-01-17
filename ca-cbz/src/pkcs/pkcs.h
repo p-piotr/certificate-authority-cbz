@@ -271,7 +271,9 @@ namespace CBZ::PKCS {
         enum id_t : uint32_t {
             authorityKeyIdentifier = 0x6001,
             subjectKeyIdentifier,
-            basicConstraints
+            basicConstraints,
+            subjectAlternativeName,
+            extendedKeyUsage
         };
 
         extern const CBZ::Utils::BidirectionalMap<id_t, oid_t> idMap;

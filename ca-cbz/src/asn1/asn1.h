@@ -30,6 +30,8 @@ namespace CBZ {
             SEQUENCE = 0x30,
             SET = 0x31,
             CONTEXT_SPECIFIC0 = 0x80,
+            CONTEXT_SPECIFIC1 = 0x81,
+            CONTEXT_SPECIFIC2 = 0x82,
             CONSTRUCTED_TYPE0 = 0xA0,
             CONSTRUCTED_TYPE1 = 0xA1,
             CONSTRUCTED_TYPE2 = 0xA2,

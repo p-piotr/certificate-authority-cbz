@@ -1110,6 +1110,8 @@ namespace CBZ::PKCS {
         {authorityKeyIdentifier,    "2.5.29.35"},
         {subjectKeyIdentifier,      "2.5.29.14"},
         {basicConstraints,          "2.5.29.19"},
+        {subjectAlternativeName,    "2.5.29.17"},
+        {extendedKeyUsage,          "2.5.29.37"}
     };
 
     namespace PrivateKeySupportedAlgorithms {

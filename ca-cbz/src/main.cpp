@@ -134,6 +134,15 @@ CBZ::PKCS::Certificate generate_certificate(
     const auto& subject_pk_info = csr.get_certification_request_info().get_subject_pkinfo();
     const auto& issuer = ca_certificate.get_tbs_certificate().get_subject();
 
+    // extract common name from the CSR - it will feed the subjectAlternativeName extension
+    std::string common_name = "";
+    for (const RelativeDistinguishedName& rdn : subject.get_rdn_sequence()) {
+        const std::string& type = rdn.get_attributes()[0].get_type();
+        if (type == "2.5.4.3") { // commonName
+            common_name = rdn.get_attributes()[0].get_value();
+        }
+    }
+
     std::vector<uint8_t> subject_key_identifier(CBZ::SHA::SHA1::DIGEST_SIZE);
     std::vector<uint8_t> subject_public_key_bitstring = subject_pk_info.get_public_key().to_asn1().value();
     CBZ::SHA::SHA1::digest(subject_public_key_bitstring, subject_key_identifier.data());
@@ -157,6 +166,9 @@ CBZ::PKCS::Certificate generate_certificate(
                 ).encode()),
                 Extension(ExtensionSupportedIDs::authorityKeyIdentifier, false, ASN1Sequence({
                     ASN1Object(CONTEXT_SPECIFIC0, std::move(authority_key_identifier))
+                }).encode()),
+                Extension(ExtensionSupportedIDs::subjectAlternativeName, false, ASN1Sequence({
+                    ASN1Object(CONTEXT_SPECIFIC2, common_name)
                 }).encode())
             }
         ),
