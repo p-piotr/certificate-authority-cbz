@@ -383,6 +383,15 @@ int gen_cert(const Arguments& arguments) {
         return 1;
     }
 
+    // csr_path
+    try {
+        csr_path = arguments.at("--csr");
+    }
+    catch (const std::out_of_range& e) {
+        print_error("Parameter must have a value: '--csr'");
+        return 1;
+    }
+
     // out_cert_path
     try {
         out_cert_path = arguments.at("--out");
