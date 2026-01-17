@@ -330,8 +330,8 @@ int gen_csr(const Arguments& arguments) {
     }
 
     try {
-        std::vector<uint8_t> subject_csr_asn1 = subject_csr.to_asn1().encode();
-        std::string subject_csr_asn1_b64 = Base64::encode(subject_csr_asn1);
+        subject_csr_asn1 = subject_csr.to_asn1().encode();
+        subject_csr_asn1_b64 = Base64::encode(subject_csr_asn1);
     }
     catch (const std::exception& e) {
         std::cerr << "Error while encoding generated CSR\n";
