@@ -1,6 +1,6 @@
 # Certificate Authority CBZ
 
-A lightweight command-line utility for Linux written in C++ that functions as a simple Certificate Authority. It parses ASN.1/DER encoded files and generates Certificates and Certificate Signing Requests (CSRs).
+A lightweight command-line utility for Linux written in C++ that functions as a simple Certificate Authority. It parses ASN.1/DER encoded files, generating Certificates and Certificate Signing Requests (CSRs).
 
 This project was developed for a university Cryptography course to demonstrate low-level implementations of cryptographic standards without relying entirely on high-level abstraction libraries.
 
